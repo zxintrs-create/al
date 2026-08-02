@@ -19,7 +19,7 @@ ScreenGui.ResetOnSpawn = false
 ScreenGui.DisplayOrder = 100
 ScreenGui.Parent = PlayerGui
 
--- Sistem Drag Manual (Hanya untuk OpenMenu & Titik O)
+-- Sistem Drag Manual (Untuk OpenMenu & Titik O)
 local function makeDraggable(guiObject)
     local dragging = false
     local dragInput, dragStart, startPos
@@ -79,9 +79,9 @@ OpenMenuCorner.Parent = OpenMenuBtn
 makeDraggable(OpenMenuBtn)
 
 ---------------------------------------------------------
--- 3. TITIK KLIK (O)
+-- 3. TITIK KLIK (O) - BERBENTUK TEXTLABEL (TIDAK MENGHALANGI KLIK)
 ---------------------------------------------------------
-local TargetPoint = Instance.new("TextButton")
+local TargetPoint = Instance.new("TextLabel")
 TargetPoint.Name = "TargetPoint"
 TargetPoint.Size = UDim2.new(0, 36, 0, 36)
 TargetPoint.Position = UDim2.new(0.5, -18, 0.5, -18)
@@ -242,7 +242,7 @@ local GradientTween = TweenService:Create(
 GradientTween:Play()
 
 ---------------------------------------------------------
--- 6. LOGIKA AUTO CLICKER (DIJAMIN KERJA & RESPONTIF)
+-- 6. LOGIKA AUTO CLICKER (TEMBUS GAME + AMAN UNTUK MOBILE)
 ---------------------------------------------------------
 local isClicking = false
 
@@ -256,11 +256,10 @@ local function startAutoClicker()
             local exactX = pointPosition.X + (pointSize.X / 2)
             local exactY = pointPosition.Y + (pointSize.Y / 2) + topbarInset.Y
 
-            -- Eksekusi Klik Ganda (Touch Tap & Mouse Event)
-            VirtualInputManager:SendTouchTapEvent(exactX, exactY)
-            VirtualInputManager:SendMouseButtonEvent(exactX, exactY, 0, true, game, 1)
+            -- Klik tembus titik 'O' ke game
+            VirtualInputManager:SendMouseButtonEvent(exactX, exactY, 0, true, game, 0)
             task.wait(0.01)
-            VirtualInputManager:SendMouseButtonEvent(exactX, exactY, 0, false, game, 1)
+            VirtualInputManager:SendMouseButtonEvent(exactX, exactY, 0, false, game, 0)
 
             local userDelay = tonumber(SpeedInput.Text) or 0.1
             task.wait(math.max(userDelay, 0.01))
