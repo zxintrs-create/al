@@ -297,3 +297,15 @@ CloseButton.MouseButton1Click:Connect(function()
     MainFrame.Visible = false
     TargetPoint.Visible = false
 end)
+
+local Players = game:GetService("Players")
+local VirtualUser = game:GetService("VirtualUser")
+
+local LocalPlayer = Players.LocalPlayer or Players.PlayerAdded:Wait()
+
+LocalPlayer.Idled:Connect(function()
+    pcall(function()
+        VirtualUser:CaptureController()
+        VirtualUser:ClickButton2(Vector2.new())
+    end)
+end)
