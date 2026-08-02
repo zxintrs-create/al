@@ -58,7 +58,7 @@ local function makeDraggable(guiObject)
 end
 
 ---------------------------------------------------------
--- 2. TOMBOL OPEN MENU (🎭) - BISA DIGESER
+-- 2. TOMBOL OPEN MENU (🎭)
 ---------------------------------------------------------
 local OpenMenuBtn = Instance.new("TextButton")
 OpenMenuBtn.Name = "OpenMenuBtn"
@@ -79,7 +79,7 @@ OpenMenuCorner.Parent = OpenMenuBtn
 makeDraggable(OpenMenuBtn)
 
 ---------------------------------------------------------
--- 3. TITIK KLIK (O) - BISA DIGESER
+-- 3. TITIK KLIK (O) - DIBUAT PASSTHROUGH
 ---------------------------------------------------------
 local TargetPoint = Instance.new("TextButton")
 TargetPoint.Name = "TargetPoint"
@@ -102,7 +102,7 @@ TargetCorner.Parent = TargetPoint
 makeDraggable(TargetPoint)
 
 ---------------------------------------------------------
--- 4. PANEL GUI UTAMA - TIDAK BISA DIGESER (DIAM)
+-- 4. PANEL GUI UTAMA
 ---------------------------------------------------------
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
@@ -242,7 +242,7 @@ local GradientTween = TweenService:Create(
 GradientTween:Play()
 
 ---------------------------------------------------------
--- 6. LOGIKA & EVENT HANDLER
+-- 6. LOGIKA & EVENT HANDLER (AMAIN TOUCH SAFE)
 ---------------------------------------------------------
 local isClicking = false
 
@@ -256,6 +256,7 @@ local function startAutoClicker()
             local exactX = pointPosition.X + (pointSize.X / 2)
             local exactY = pointPosition.Y + (pointSize.Y / 2) + topbarInset.Y
 
+            -- Menggunakan VirtualInputManager khusus tanpa memblokir TouchGui
             VirtualInputManager:SendMouseButtonEvent(exactX, exactY, 0, true, game, 1)
             task.wait(0.01)
             VirtualInputManager:SendMouseButtonEvent(exactX, exactY, 0, false, game, 1)
