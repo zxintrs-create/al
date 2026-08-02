@@ -1,314 +1,217 @@
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
-local TweenService = game:GetService("TweenService")
+--[[   
+    ALDO KNIGHTXOz HUB - ULTIMATE TELEPORT SYSTEM  
+    Created by: Delta maker script  
+    Features: 20 Permanent Slots, Auto-Rejoin Load, Modern Aesthetic GUI  
+]]
 
-local Player = Players.LocalPlayer
-local PlayerGui = Player:WaitForChild("PlayerGui")
+local Players = game:GetService("Players")  
+local ReplicatedStorage = game:GetService("ReplicatedStorage")  
+local DataStoreService = game:GetService("DataStoreService")  
+local TweenService = game:GetService("TweenService")  
+local RunService = game:GetService("RunService")  
+local StarterGui = game:GetService("StarterGui")
 
-if PlayerGui:FindFirstChild("DeltaAutoWalkGUI") then
-    PlayerGui.DeltaAutoWalkGUI:Destroy()
+local Config = {  
+    HubName = "ALDO KNIGHTXOz HUB",  
+    MaxSlots = 20,  
+    DataStoreKey = "AldoKnightXOz_TP_v2",  
+    Theme = {  
+        Main = Color3.fromRGB(15, 15, 20),  
+        Secondary = Color3.fromRGB(25, 25, 35),  
+        Accent = Color3.fromRGB(0, 200, 255),  
+        Text = Color3.fromRGB(255, 255, 255),  
+        Danger = Color3.fromRGB(255, 60, 60),  
+        Success = Color3.fromRGB(60, 255, 120)  
+    }  
+}
+
+-- Networking Setup  
+local function setupNetwork()  
+    local folder = ReplicatedStorage:FindFirstChild("KnightXOzNet") or Instance.new("Folder", ReplicatedStorage)  
+    folder.Name = "KnightXOzNet"  
+      
+    local function getEvent(name, cls)  
+        local ev = folder:FindFirstChild(name) or Instance.new(cls, folder)  
+        ev.Name = name  
+        return ev  
+    end  
+      
+    return {  
+        Save = getEvent("SavePos", "RemoteEvent"),  
+        Load = getEvent("LoadPos", "RemoteEvent"),  
+        Delete = getEvent("DeletePos", "RemoteEvent"),  
+        Sync = getEvent("SyncData", "RemoteEvent")  
+    }  
 end
 
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "DeltaAutoWalkGUI"
-ScreenGui.ResetOnSpawn = false
-ScreenGui.Parent = PlayerGui
+local Net = setupNetwork()
 
-local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 320, 0, 380)
-MainFrame.Position = UDim2.new(0.5, -160, 0.5, -190)
-MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-MainFrame.BorderSizePixel = 0
-MainFrame.ClipsDescendants = true
-MainFrame.Parent = ScreenGui
+-- SERVER LOGIC  
+if RunService:IsServer() then  
+    local TPStore = DataStoreService:GetDataStore(Config.DataStoreKey)  
+    local GlobalData = {}
 
-local UICorner = Instance.new("UICorner")
-UICorner.CornerRadius = UDim.new(0, 10)
-UICorner.Parent = MainFrame
-
-local UIStroke = Instance.new("UIStroke")
-UIStroke.Color = Color3.fromRGB(80, 80, 80)
-UIStroke.Thickness = 1
-UIStroke.Parent = MainFrame
-
-local TopBar = Instance.new("Frame")
-TopBar.Size = UDim2.new(1, 0, 0, 40)
-TopBar.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-TopBar.BorderSizePixel = 0
-TopBar.Parent = MainFrame
-
-local TopBarCorner = Instance.new("UICorner")
-TopBarCorner.CornerRadius = UDim.new(0, 10)
-TopBarCorner.Parent = TopBar
-
-local Title = Instance.new("TextLabel")
-Title.Size = UDim2.new(1, -20, 1, 0)
-Title.Position = UDim2.new(0, 15, 0, 0)
-Title.BackgroundTransparency = 1
-Title.Font = Enum.Font.GothamBold
-Title.Text = "Delta | Auto-Walk & Recorder"
-Title.TextColor3 = Color3.fromRGB(255, 255, 255)
-Title.TextSize = 14
-Title.TextXAlignment = Enum.TextXAlignment.Left
-Title.Parent = TopBar
-
-local Content = Instance.new("ScrollingFrame")
-Content.Size = UDim2.new(1, -20, 1, -55)
-Content.Position = UDim2.new(0, 10, 0, 45)
-Content.BackgroundTransparency = 1
-Content.BorderSizePixel = 0
-Content.CanvasSize = UDim2.new(0, 0, 0, 450)
-Content.ScrollBarThickness = 4
-Content.Parent = MainFrame
-
-local UIListLayout = Instance.new("UIListLayout")
-UIListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-UIListLayout.Padding = UDim.new(0, 10)
-UIListLayout.Parent = Content
-
-local function CreateButton(name, text, color)
-    local btn = Instance.new("TextButton")
-    btn.Name = name
-    btn.Size = UDim2.new(1, 0, 0, 40)
-    btn.BackgroundColor3 = color or Color3.fromRGB(45, 45, 45)
-    btn.Font = Enum.Font.GothamSemibold
-    btn.Text = text
-    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    btn.TextSize = 13
-    btn.AutoButtonColor = false
-    
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 6)
-    corner.Parent = btn
-    
-    return btn
-end
-
-local function CreateToggle(name, text)
-    local frame = Instance.new("Frame")
-    frame.Name = name
-    frame.Size = UDim2.new(1, 0, 0, 40)
-    frame.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
-    
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 6)
-    corner.Parent = frame
-    
-    local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1, -60, 1, 0)
-    label.Position = UDim2.new(0, 15, 0, 0)
-    label.BackgroundTransparency = 1
-    label.Font = Enum.Font.GothamSemibold
-    label.Text = text
-    label.TextColor3 = Color3.fromRGB(255, 255, 255)
-    label.TextSize = 13
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    label.Parent = frame
-    
-    local toggleBtn = Instance.new("TextButton")
-    toggleBtn.Size = UDim2.new(0, 40, 0, 24)
-    toggleBtn.Position = UDim2.new(1, -50, 0.5, -12)
-    toggleBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-    toggleBtn.Text = ""
-    toggleBtn.AutoButtonColor = false
-    
-    local tCorner = Instance.new("UICorner")
-    tCorner.CornerRadius = UDim.new(1, 0)
-    tCorner.Parent = toggleBtn
-    
-    local circle = Instance.new("Frame")
-    circle.Size = UDim2.new(0, 18, 0, 18)
-    circle.Position = UDim2.new(0, 3, 0.5, -9)
-    circle.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
-    
-    local cCorner = Instance.new("UICorner")
-    cCorner.CornerRadius = UDim.new(1, 0)
-    cCorner.Parent = circle
-    circle.Parent = toggleBtn
-    
-    frame.Parent = Content
-    return frame, toggleBtn, circle
-end
-
-local ToggleWaypointBtn = CreateButton("ToggleWaypointBtn", "Add Waypoint at Position", Color3.fromRGB(50, 120, 200))
-ToggleWaypointBtn.Parent = Content
-
-local ClearWaypointsBtn = CreateButton("ClearWaypointsBtn", "Clear All Waypoints", Color3.fromRGB(180, 50, 50))
-ClearWaypointsBtn.Parent = Content
-
-local _, AutoWalkToggle, AutoWalkCircle = CreateToggle("AutoWalkToggle", "Enable Auto-Walk")
-local _, LoopToggle, LoopCircle = CreateToggle("LoopToggle", "Loop Waypoints")
-
-local RecordBtn = CreateButton("RecordBtn", "Start Recording Path", Color3.fromRGB(180, 120, 40))
-RecordBtn.Parent = Content
-
-local PlaybackBtn = CreateButton("PlaybackBtn", "Play Recorded Path", Color3.fromRGB(40, 150, 80))
-PlaybackBtn.Parent = Content
-
-local waypoints = {}
-local recordedPath = {}
-local isRecording = false
-local isPlaying = false
-local isAutoWalking = false
-local isLooping = false
-
-local function tweenColor(object, property, targetColor)
-    TweenService:Create(object, TweenInfo.new(0.2), { [property] = targetColor }):Play()
-end
-
-local function setToggleState(state, btn, circle)
-    if state then
-        tweenColor(btn, "BackgroundColor3", Color3.fromRGB(0, 170, 255))
-        TweenService:Create(circle, TweenInfo.new(0.2), { Position = UDim2.new(1, -21, 0.5, -9) }):Play()
-    else
-        tweenColor(btn, "BackgroundColor3", Color3.fromRGB(60, 60, 60))
-        TweenService:Create(circle, TweenInfo.new(0.2), { Position = UDim2.new(0, 3, 0.5, -9) }):Play()
+    local function getPlayerData(player)  
+        local success, data = pcall(function() return TPStore:GetAsync("User_" .. player.UserId) end)  
+        if success and data then return data end  
+          
+        -- Default data for new users  
+        local default = {}  
+        for i = 1, Config.MaxSlots do  
+            default[tostring(i)] = {Name = "Slot "..i, Saved = false, Pos = nil}  
+        end  
+        return default  
     end
-end
 
-ToggleWaypointBtn.MouseButton1Click:Connect(function()
-    local char = Player.Character
-    if char and char:FindFirstChild("HumanoidRootPart") then
-        local pos = char.HumanoidRootPart.Position
-        table.insert(waypoints, pos)
-        
-        local part = Instance.new("Part")
-        part.Size = Vector3.new(1, 1, 1)
-        part.Position = pos
-        part.Anchored = true
-        part.CanCollide = false
-        part.Material = Enum.Material.Neon
-        part.BrickColor = BrickColor.new("Cyan")
-        part.Parent = workspace
-        
-        local mesh = Instance.new("SpecialMesh")
-        mesh.MeshType = Enum.MeshType.Sphere
-        mesh.Scale = Vector3.new(1.5, 1.5, 1.5)
-        mesh.Parent = part
-    end
-end)
-
-ClearWaypointsBtn.MouseButton1Click:Connect(function()
-    waypoints = {}
-    isAutoWalking = false
-    setToggleState(false, AutoWalkToggle, AutoWalkCircle)
-end)
-
-AutoWalkToggle.MouseButton1Click:Connect(function()
-    isAutoWalking = not isAutoWalking
-    setToggleState(isAutoWalking, AutoWalkToggle, AutoWalkCircle)
-    
-    if isAutoWalking and #waypoints > 0 then
-        task.spawn(function()
-            local char = Player.Character
-            local humanoid = char and char:FindFirstChildOfClass("Humanoid")
-            
-            while isAutoWalking and char and humanoid do
-                for _, pos in ipairs(waypoints) do
-                    if not isAutoWalking then break end
-                    humanoid:MoveTo(pos)
-                    
-                    local reached = false
-                    local conn
-                    conn = RunService.Stepped:Connect(function()
-                        if not char or not char:FindFirstChild("HumanoidRootPart") then return end
-                        if (char.HumanoidRootPart.Position - pos).Magnitude < 4 then
-                            reached = true
-                            conn:Disconnect()
-                        end
-                    end)
-                    
-                    while not reached and isAutoWalking do
-                        task.wait(0.1)
-                    end
-                    if conn.Connected then conn:Disconnect() end
-                end
-                
-                if not isLooping then
-                    isAutoWalking = false
-                    setToggleState(false, AutoWalkToggle, AutoWalkCircle)
-                    break
-                end
-            end
-        end)
-    end
-end)
-
-LoopToggle.MouseButton1Click:Connect(function()
-    isLooping = not isLooping
-    setToggleState(isLooping, LoopToggle, LoopCircle)
-end)
-
-RecordBtn.MouseButton1Click:Connect(function()
-    isRecording = not isRecording
-    if isRecording then
-        recordedPath = {}
-        RecordBtn.Text = "Recording... (Click to Stop)"
-        tweenColor(RecordBtn, "BackgroundColor3", Color3.fromRGB(200, 50, 50))
-        
-        task.spawn(function()
-            while isRecording do
-                local char = Player.Character
-                if char and char:FindFirstChild("HumanoidRootPart") then
-                    table.insert(recordedPath, char.HumanoidRootPart.CFrame)
-                end
-                task.wait(0.2)
-            end
-        end)
-    else
-        RecordBtn.Text = "Start Recording Path"
-        tweenColor(RecordBtn, "BackgroundColor3", Color3.fromRGB(180, 120, 40))
-    end
-end)
-
-PlaybackBtn.MouseButton1Click:Connect(function()
-    if isPlaying or #recordedPath == 0 then return end
-    isPlaying = true
-    tweenColor(PlaybackBtn, "BackgroundColor3", Color3.fromRGB(80, 80, 80))
-    
-    task.spawn(function()
-        local char = Player.Character
-        local root = char and char:FindFirstChild("HumanoidRootPart")
-        
-        if root then
-            for _, cf in ipairs(recordedPath) do
-                if not char or not char:FindFirstChild("HumanoidRootPart") then break end
-                root.CFrame = cf
-                task.wait(0.2)
-            end
-        end
-        
-        isPlaying = false
-        tweenColor(PlaybackBtn, "BackgroundColor3", Color3.fromRGB(40, 150, 80))
+    Net.Save.OnServerEvent:Connect(function(player, slot)  
+        local data = getPlayerData(player)  
+        local char = player.Character  
+        if char and char:FindFirstChild("HumanoidRootPart") then  
+            local cf = char.HumanoidRootPart.CFrame  
+            data[tostring(slot)] = {  
+                Name = "Slot "..slot,  
+                Saved = true,  
+                Pos = {cf:GetComponents()}  
+            }  
+            pcall(function() TPStore:SetAsync("User_" .. player.UserId, data) end)  
+            Net.Sync:FireClient(player, data)  
+        end  
     end)
-end)
 
-local dragging, dragInput, dragStart, startPos
-TopBar.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        dragging = true
-        dragStart = input.Position
-        startPos = MainFrame.Position
-        
-        input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End then
-                dragging = false
-            end
-        end)
-    end
-end)
+    Net.Load.OnServerEvent:Connect(function(player, slot)  
+        local data = getPlayerData(player)  
+        local slotData = data[tostring(slot)]  
+        if slotData and slotData.Saved then  
+            local char = player.Character  
+            if char and char:FindFirstChild("HumanoidRootPart") then  
+                char.HumanoidRootPart.CFrame = CFrame.new(unpack(slotData.Pos))  
+            end  
+        end  
+    end)
 
-TopBar.InputChanged:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-        dragInput = input
-    end
-end)
+    Net.Delete.OnServerEvent:Connect(function(player, slot)  
+        local data = getPlayerData(player)  
+        data[tostring(slot)] = {Name = "Slot "..slot, Saved = false, Pos = nil}  
+        pcall(function() TPStore:SetAsync("User_" .. player.UserId, data) end)  
+        Net.Sync:FireClient(player, data)  
+    end)
 
-UserInputService.InputChanged:Connect(function(input)
-    if input == dragInput and dragging then
-        local delta = input.Position - dragStart
-        MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    Players.PlayerAdded:Connect(function(player)  
+        task.wait(2)  
+        Net.Sync:FireClient(player, getPlayerData(player))  
+    end)  
+end
+
+-- CLIENT GUI LOGIC  
+if RunService:IsClient() then  
+    local player = Players.LocalPlayer  
+      
+    local ScreenGui = Instance.new("ScreenGui", player.PlayerGui)  
+    ScreenGui.Name = "KnightXOzGui"  
+    ScreenGui.ResetOnSpawn = false
+
+    local MainFrame = Instance.new("Frame", ScreenGui)  
+    MainFrame.Size = UDim2.new(0, 400, 0, 500)  
+    MainFrame.Position = UDim2.new(0.5, -200, 0.5, -250)  
+    MainFrame.BackgroundColor3 = Config.Theme.Main  
+    MainFrame.BorderSizePixel = 0  
+    MainFrame.ClipsDescendants = true  
+      
+    Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 15)  
+    local Stroke = Instance.new("UIStroke", MainFrame)  
+    Stroke.Color = Config.Theme.Accent  
+    Stroke.Thickness = 2
+
+    local TopBar = Instance.new("Frame", MainFrame)  
+    TopBar.Size = UDim2.new(1, 0, 0, 50)  
+    TopBar.BackgroundColor3 = Config.Theme.Secondary  
+    TopBar.BorderSizePixel = 0  
+    Instance.new("UICorner", TopBar).CornerRadius = UDim.new(0, 15)
+
+    local Title = Instance.new("TextLabel", TopBar)  
+    Title.Size = UDim2.new(1, 0, 1, 0)  
+    Title.Text = Config.HubName  
+    Title.TextColor3 = Config.Theme.Text  
+    Title.Font = Enum.Font.GothamBold  
+    Title.TextSize = 18  
+    Title.BackgroundTransparency = 1
+
+    local Scroll = Instance.new("ScrollingFrame", MainFrame)  
+    Scroll.Size = UDim2.new(1, -20, 1, -70)  
+    Scroll.Position = UDim2.new(0, 10, 0, 60)  
+    Scroll.BackgroundTransparency = 1  
+    Scroll.CanvasSize = UDim2.new(0, 0, 0, Config.MaxSlots * 45)  
+    Scroll.ScrollBarThickness = 4  
+      
+    local Layout = Instance.new("UIListLayout", Scroll)  
+    Layout.Padding = UDim.new(0, 5)
+
+    local function createSlot(id)  
+        local SlotFrame = Instance.new("Frame", Scroll)  
+        SlotFrame.Size = UDim2.new(1, -10, 0, 40)  
+        SlotFrame.BackgroundColor3 = Config.Theme.Secondary  
+        Instance.new("UICorner", SlotFrame).CornerRadius = UDim.new(0, 8)
+
+        local Label = Instance.new("TextLabel", SlotFrame)  
+        Label.Size = UDim2.new(0, 100, 1, 0)  
+        Label.Position = UDim2.new(0, 10, 0, 0)  
+        Label.Text = "Slot "..id  
+        Label.TextColor3 = Config.Theme.Text  
+        Label.Font = Enum.Font.Gotham  
+        Label.TextXAlignment = Enum.TextXAlignment.Left  
+        Label.BackgroundTransparency = 1
+
+        local SaveBtn = Instance.new("TextButton", SlotFrame)  
+        SaveBtn.Size = UDim2.new(0, 60, 0, 30)  
+        SaveBtn.Position = UDim2.new(1, -180, 0.5, -15)  
+        SaveBtn.Text = "Save"  
+        SaveBtn.BackgroundColor3 = Config.Theme.Accent  
+        SaveBtn.Font = Enum.Font.GothamBold  
+        SaveBtn.TextColor3 = Config.Theme.Text  
+        Instance.new("UICorner", SaveBtn)
+
+        local LoadBtn = Instance.new("TextButton", SlotFrame)  
+        LoadBtn.Size = UDim2.new(0, 60, 0, 30)  
+        LoadBtn.Position = UDim2.new(1, -110, 0.5, -15)  
+        LoadBtn.Text = "Load"  
+        LoadBtn.BackgroundColor3 = Config.Theme.Success  
+        LoadBtn.Font = Enum.Font.GothamBold  
+        LoadBtn.TextColor3 = Config.Theme.Text  
+        Instance.new("UICorner", LoadBtn)
+
+        local DelBtn = Instance.new("TextButton", SlotFrame)  
+        DelBtn.Size = UDim2.new(0, 60, 0, 30)  
+        DelBtn.Position = UDim2.new(1, -50, 0.5, -15)  
+        DelBtn.Text = "Del"  
+        DelBtn.BackgroundColor3 = Config.Theme.Danger  
+        DelBtn.Font = Enum.Font.GothamBold  
+        DelBtn.TextColor3 = Config.Theme.Text  
+        Instance.new("UICorner", DelBtn)
+
+        SaveBtn.MouseButton1Click:Connect(function() Net.Save:FireServer(id) end)  
+        LoadBtn.MouseButton1Click:Connect(function() Net.Load:FireServer(id) end)  
+        DelBtn.MouseButton1Click:Connect(function() Net.Delete:FireServer(id) end)  
     end
-end)
+
+    for i = 1, Config.MaxSlots do createSlot(i) end
+
+    -- Draggable  
+    local dragging, dragInput, dragStart, startPos  
+    TopBar.InputBegan:Connect(function(input)  
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then  
+            dragging = true; dragStart = input.Position; startPos = MainFrame.Position  
+        end  
+    end)  
+    RunService.RenderStepped:Connect(function()  
+        if dragging and dragInput then  
+            local delta = dragInput.Position - dragStart  
+            MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)  
+        end  
+    end)  
+    game:GetService("UserInputService").InputChanged:Connect(function(input)  
+        if input.UserInputType == Enum.UserInputType.MouseMovement then dragInput = input end  
+    end)  
+    game:GetService("UserInputService").InputEnded:Connect(function(input)  
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end  
+    end)  
+end  
