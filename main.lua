@@ -1,59 +1,38 @@
--- ====================================================================
--- SCRIPT NAME : ALDO KNIGHTXOz HUB - AUTO CLICKER SYSTEM
--- AUTHOR      : ALDO KNIGHTXOz
--- DESCRIPTION : Complete Local Auto Clicker with Draggable GUI & Precision 'O'
--- ====================================================================
-
------------------------------------------------------------------------
--- SECTION 1: IMPORT SERVICES & PLAYER VARIABLES
------------------------------------------------------------------------
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local VirtualInputManager = game:GetService("VirtualInputManager")
 local GuiService = game:GetService("GuiService")
 local TweenService = game:GetService("TweenService")
-local RunService = game:GetService("RunService")
 
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
------------------------------------------------------------------------
--- SECTION 2: CLEANUP EXISTING GUI
------------------------------------------------------------------------
--- Membersihkan instance lama agar tidak terjadi duplikasi GUI di layar
+-- Clean GUI lama jika ada
 if PlayerGui:FindFirstChild("AldoKnightXOzHub") then
     PlayerGui.AldoKnightXOzHub:Destroy()
 end
 
------------------------------------------------------------------------
--- SECTION 3: CREATE MAIN SCREENGUI CONTAINER
------------------------------------------------------------------------
+-- 1. SCREEN GUI UTAMA
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "AldoKnightXOzHub"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.DisplayOrder = 100
-ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.Parent = PlayerGui
 
------------------------------------------------------------------------
--- SECTION 4: CUSTOM DRAGGABLE SYSTEM (SMOOTH & ANTI-BUG)
------------------------------------------------------------------------
--- System drag kustom agar GUI dan Titik O bisa digeser tanpa bentrok dengan Roblox
-local function attachDraggableSystem(guiObject)
-    local isDragging = false
-    local dragInput = nil
-    local dragStartPos = nil
-    local startGuiPos = nil
+-- Sistem Drag
+local function makeDraggable(guiObject)
+    local dragging = false
+    local dragInput, dragStart, startPos
 
     guiObject.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            isDragging = true
-            dragStartPos = input.Position
-            startGuiPos = guiObject.Position
+            dragging = true
+            dragStart = input.Position
+            startPos = guiObject.Position
 
             input.Changed:Connect(function()
                 if input.UserInputState == Enum.UserInputState.End then
-                    isDragging = false
+                    dragging = false
                 end
             end)
         end
@@ -66,63 +45,71 @@ local function attachDraggableSystem(guiObject)
     end)
 
     UserInputService.InputChanged:Connect(function(input)
-        if input == dragInput and isDragging then
-            local deltaPosition = input.Position - dragStartPos
+        if input == dragInput and dragging then
+            local delta = input.Position - dragStart
             guiObject.Position = UDim2.new(
-                startGuiPos.X.Scale,
-                startGuiPos.X.Offset + deltaPosition.X,
-                startGuiPos.Y.Scale,
-                startGuiPos.Y.Offset + deltaPosition.Y
+                startPos.X.Scale,
+                startPos.X.Offset + delta.X,
+                startPos.Y.Scale,
+                startPos.Y.Offset + delta.Y
             )
         end
     end)
 end
 
------------------------------------------------------------------------
--- SECTION 5: CREATE TARGET POINT BUTTON ("O")
------------------------------------------------------------------------
+---------------------------------------------------------
+-- 2. TOMBOL OPEN MENU (🎭)
+---------------------------------------------------------
+local OpenMenuBtn = Instance.new("TextButton")
+OpenMenuBtn.Name = "OpenMenuBtn"
+OpenMenuBtn.Size = UDim2.new(0, 45, 0, 45)
+OpenMenuBtn.Position = UDim2.new(0.02, 0, 0.4, 0)
+OpenMenuBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 45)
+OpenMenuBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+OpenMenuBtn.Text = "🎭"
+OpenMenuBtn.TextSize = 22
+OpenMenuBtn.Active = true
+OpenMenuBtn.ZIndex = 300
+OpenMenuBtn.Parent = ScreenGui
+
+local OpenMenuCorner = Instance.new("UICorner")
+OpenMenuCorner.CornerRadius = UDim.new(0, 10)
+OpenMenuCorner.Parent = OpenMenuBtn
+
+makeDraggable(OpenMenuBtn)
+
+---------------------------------------------------------
+-- 3. TITIK KLIK (O)
+---------------------------------------------------------
 local TargetPoint = Instance.new("TextButton")
 TargetPoint.Name = "TargetPoint"
 TargetPoint.Size = UDim2.new(0, 36, 0, 36)
 TargetPoint.Position = UDim2.new(0.5, -18, 0.5, -18)
 TargetPoint.BackgroundColor3 = Color3.fromRGB(235, 45, 45)
-TargetPoint.BorderColor3 = Color3.fromRGB(255, 255, 255)
-TargetPoint.BorderSizePixel = 1
 TargetPoint.TextColor3 = Color3.fromRGB(255, 255, 255)
 TargetPoint.Text = "O"
 TargetPoint.Font = Enum.Font.SourceSansBold
 TargetPoint.TextSize = 24
 TargetPoint.Active = true
-TargetPoint.AutoButtonColor = false
 TargetPoint.ZIndex = 200
 TargetPoint.Parent = ScreenGui
 
--- Rounded Circle Frame
 local TargetCorner = Instance.new("UICorner")
 TargetCorner.CornerRadius = UDim.new(1, 0)
 TargetCorner.Parent = TargetPoint
 
--- Stroke Effect untuk Titik O
-local TargetStroke = Instance.new("UIStroke")
-TargetStroke.Thickness = 2
-TargetStroke.Color = Color3.fromRGB(255, 255, 255)
-TargetStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-TargetStroke.Parent = TargetPoint
+makeDraggable(TargetPoint)
 
--- Pasang sistem drag pada titik O
-attachDraggableSystem(TargetPoint)
-
------------------------------------------------------------------------
--- SECTION 6: CREATE MAIN PANEL FRAME ("ALDO KNIGHTXOz HUB")
------------------------------------------------------------------------
+---------------------------------------------------------
+-- 4. PANEL GUI UTAMA ("ALDO KNIGHTXOz HUB")
+---------------------------------------------------------
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 260, 0, 195)
-MainFrame.Position = UDim2.new(0.05, 0, 0.3, 0)
+MainFrame.Size = UDim2.new(0, 260, 0, 220)
+MainFrame.Position = UDim2.new(0.1, 0, 0.3, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 24)
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
-MainFrame.ClipsDescendants = false
 MainFrame.ZIndex = 10
 MainFrame.Parent = ScreenGui
 
@@ -130,17 +117,9 @@ local MainCorner = Instance.new("UICorner")
 MainCorner.CornerRadius = UDim.new(0, 10)
 MainCorner.Parent = MainFrame
 
-local MainStroke = Instance.new("UIStroke")
-MainStroke.Thickness = 1.5
-MainStroke.Color = Color3.fromRGB(60, 60, 80)
-MainStroke.Parent = MainFrame
+makeDraggable(MainFrame)
 
--- Pasang sistem drag pada Panel Utama
-attachDraggableSystem(MainFrame)
-
------------------------------------------------------------------------
--- SECTION 7: CREATE TITLE BAR & HEADER
------------------------------------------------------------------------
+-- Line 1: Header / Title Label
 local TitleLabel = Instance.new("TextLabel")
 TitleLabel.Name = "TitleLabel"
 TitleLabel.Size = UDim2.new(1, 0, 0, 40)
@@ -157,9 +136,7 @@ local TitleCorner = Instance.new("UICorner")
 TitleCorner.CornerRadius = UDim.new(0, 10)
 TitleCorner.Parent = TitleLabel
 
------------------------------------------------------------------------
--- SECTION 8: CREATE CLOSE BUTTON (X)
------------------------------------------------------------------------
+-- Tombol Close (X) di Pojok Kanan Atas Header
 local CloseButton = Instance.new("TextButton")
 CloseButton.Name = "CloseButton"
 CloseButton.Size = UDim2.new(0, 26, 0, 26)
@@ -177,39 +154,66 @@ local CloseCorner = Instance.new("UICorner")
 CloseCorner.CornerRadius = UDim.new(0, 6)
 CloseCorner.Parent = CloseButton
 
------------------------------------------------------------------------
--- SECTION 9: CREATE SPEED INPUT BOX
------------------------------------------------------------------------
+-- Line 2: Auto Clicker Sub-Title
+local SubTitleLabel = Instance.new("TextLabel")
+SubTitleLabel.Name = "SubTitleLabel"
+SubTitleLabel.Size = UDim2.new(1, 0, 0, 25)
+SubTitleLabel.Position = UDim2.new(0, 0, 0, 45)
+SubTitleLabel.BackgroundTransparency = 1
+SubTitleLabel.TextColor3 = Color3.fromRGB(200, 200, 220)
+SubTitleLabel.Text = "Auto clicker"
+SubTitleLabel.Font = Enum.Font.GothamSemibold
+SubTitleLabel.TextSize = 13
+SubTitleLabel.ZIndex = 12
+SubTitleLabel.Parent = MainFrame
+
+-- Line 3: Set Speed Box
+local SpeedFrame = Instance.new("Frame")
+SpeedFrame.Name = "SpeedFrame"
+SpeedFrame.Size = UDim2.new(0.88, 0, 0, 36)
+SpeedFrame.Position = UDim2.new(0.06, 0, 0.40, 0)
+SpeedFrame.BackgroundColor3 = Color3.fromRGB(32, 32, 44)
+SpeedFrame.ZIndex = 12
+SpeedFrame.Parent = MainFrame
+
+local SpeedFrameCorner = Instance.new("UICorner")
+SpeedFrameCorner.CornerRadius = UDim.new(0, 6)
+SpeedFrameCorner.Parent = SpeedFrame
+
+local SetLabel = Instance.new("TextLabel")
+SetLabel.Name = "SetLabel"
+SetLabel.Size = UDim2.new(0.3, 0, 1, 0)
+SetLabel.Position = UDim2.new(0.05, 0, 0, 0)
+SetLabel.BackgroundTransparency = 1
+SetLabel.TextColor3 = Color3.fromRGB(150, 150, 180)
+SetLabel.Text = "Set"
+SetLabel.Font = Enum.Font.Gotham
+SetLabel.TextSize = 12
+SetLabel.ZIndex = 13
+SetLabel.TextXAlignment = Enum.TextXAlignment.Left
+SetLabel.Parent = SpeedFrame
+
 local SpeedInput = Instance.new("TextBox")
 SpeedInput.Name = "SpeedInput"
-SpeedInput.Size = UDim2.new(0.88, 0, 0, 36)
-SpeedInput.Position = UDim2.new(0.06, 0, 0.32, 0)
-SpeedInput.BackgroundColor3 = Color3.fromRGB(32, 32, 44)
-SpeedInput.BorderColor3 = Color3.fromRGB(50, 50, 70)
+SpeedInput.Size = UDim2.new(0.6, 0, 1, 0)
+SpeedInput.Position = UDim2.new(0.35, 0, 0, 0)
+SpeedInput.BackgroundTransparency = 1
 SpeedInput.TextColor3 = Color3.fromRGB(255, 255, 255)
-SpeedInput.PlaceholderColor3 = Color3.fromRGB(150, 150, 170)
-SpeedInput.PlaceholderText = "Delay Klik Detik (ex: 0.1)"
-SpeedInput.Text = "0.1"
-SpeedInput.Font = Enum.Font.Gotham
-SpeedInput.TextSize = 12
-SpeedInput.ZIndex = 12
-SpeedInput.ClearTextOnFocus = false
-SpeedInput.Parent = MainFrame
+SpeedInput.Text = "00.1"
+SpeedInput.Font = Enum.Font.GothamBold
+SpeedInput.TextSize = 13
+SpeedInput.ZIndex = 13
+SpeedInput.TextXAlignment = Enum.TextXAlignment.Right
+SpeedInput.Parent = SpeedFrame
 
-local SpeedCorner = Instance.new("UICorner")
-SpeedCorner.CornerRadius = UDim.new(0, 6)
-SpeedCorner.Parent = SpeedInput
-
------------------------------------------------------------------------
--- SECTION 10: CREATE PLAY/OFF TOGGLE BUTTON
------------------------------------------------------------------------
+-- Line 4: PLAY Button
 local ToggleButton = Instance.new("TextButton")
 ToggleButton.Name = "ToggleButton"
 ToggleButton.Size = UDim2.new(0.88, 0, 0, 40)
-ToggleButton.Position = UDim2.new(0.06, 0, 0.64, 0)
+ToggleButton.Position = UDim2.new(0.06, 0, 0.68, 0)
 ToggleButton.BackgroundColor3 = Color3.fromRGB(220, 50, 50)
 ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-ToggleButton.Text = "STATUS: OFF"
+ToggleButton.Text = "PLAY"
 ToggleButton.Font = Enum.Font.GothamBold
 ToggleButton.TextSize = 14
 ToggleButton.ZIndex = 12
@@ -220,9 +224,9 @@ local ToggleCorner = Instance.new("UICorner")
 ToggleCorner.CornerRadius = UDim.new(0, 6)
 ToggleCorner.Parent = ToggleButton
 
------------------------------------------------------------------------
--- SECTION 11: UIGRADIENT PRO ANIMATION ENGINE
------------------------------------------------------------------------
+---------------------------------------------------------
+-- 5. ANIMASI GRADIENT
+---------------------------------------------------------
 local TitleGradient = Instance.new("UIGradient")
 TitleGradient.Color = ColorSequence.new({
     ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 230, 255)),
@@ -231,7 +235,6 @@ TitleGradient.Color = ColorSequence.new({
 })
 TitleGradient.Parent = TitleLabel
 
--- Loop Animasi Rotasi Gradient
 local GradientTween = TweenService:Create(
     TitleGradient,
     TweenInfo.new(3, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, -1),
@@ -239,56 +242,54 @@ local GradientTween = TweenService:Create(
 )
 GradientTween:Play()
 
------------------------------------------------------------------------
--- SECTION 12: AUTO CLICKER LOGIC & PRECISION SYSTEM
------------------------------------------------------------------------
+---------------------------------------------------------
+-- 6. LOGIKA & EVENT HANDLER
+---------------------------------------------------------
 local isClicking = false
 
-local function executePrecisionClick()
+-- Fungsi Auto Clicker
+local function startAutoClicker()
     task.spawn(function()
         while isClicking do
-            -- Mengatasi offset topbar Roblox agar titik klik 100% pas di tengah 'O'
             local topbarInset = GuiService:GetGuiInset()
             local pointPosition = TargetPoint.AbsolutePosition
             local pointSize = TargetPoint.AbsoluteSize
             
-            local calculateExactX = pointPosition.X + (pointSize.X / 2)
-            local calculateExactY = pointPosition.Y + (pointSize.Y / 2) + topbarInset.Y
+            local exactX = pointPosition.X + (pointSize.X / 2)
+            local exactY = pointPosition.Y + (pointSize.Y / 2) + topbarInset.Y
 
-            -- Eksekusi Klik Mouse Virtual (Press & Release)
-            VirtualInputManager:SendMouseButtonEvent(calculateExactX, calculateExactY, 0, true, game, 1)
+            VirtualInputManager:SendMouseButtonEvent(exactX, exactY, 0, true, game, 1)
             task.wait(0.01)
-            VirtualInputManager:SendMouseButtonEvent(calculateExactX, calculateExactY, 0, false, game, 1)
+            VirtualInputManager:SendMouseButtonEvent(exactX, exactY, 0, false, game, 1)
 
-            -- Membaca Delay Kecepatan dari TextBox
             local userDelay = tonumber(SpeedInput.Text) or 0.1
             task.wait(math.max(userDelay, 0.01))
         end
     end)
 end
 
------------------------------------------------------------------------
--- SECTION 13: EVENT LISTENERS & CONNECTIONS
------------------------------------------------------------------------
--- Handler Tombol Status ON / OFF
+-- Toggle Play / Stop
 ToggleButton.MouseButton1Click:Connect(function()
     isClicking = not isClicking
     
     if isClicking then
-        ToggleButton.Text = "STATUS: ON (PLAY)"
+        ToggleButton.Text = "STOP"
         ToggleButton.BackgroundColor3 = Color3.fromRGB(40, 190, 80)
-        executePrecisionClick()
+        startAutoClicker()
     else
-        ToggleButton.Text = "STATUS: OFF"
+        ToggleButton.Text = "PLAY"
         ToggleButton.BackgroundColor3 = Color3.fromRGB(220, 50, 50)
     end
 end)
 
--- Handler Tombol Close (X)
+-- Toggle Open / Close Menu (🎭)
+OpenMenuBtn.MouseButton1Click:Connect(function()
+    MainFrame.Visible = not MainFrame.Visible
+    TargetPoint.Visible = MainFrame.Visible
+end)
+
+-- Tombol Close (X)
 CloseButton.MouseButton1Click:Connect(function()
     isClicking = false
     ScreenGui:Destroy()
 end)
-
--- Finish Setup Notification
-print("ALDO KNIGHTXOz HUB Loaded Successfully!")
