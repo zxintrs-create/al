@@ -19,7 +19,7 @@ ScreenGui.ResetOnSpawn = false
 ScreenGui.DisplayOrder = 100
 ScreenGui.Parent = PlayerGui
 
--- Sistem Drag
+-- Sistem Drag Manual (Hanya untuk OpenMenu & Titik O)
 local function makeDraggable(guiObject)
     local dragging = false
     local dragInput, dragStart, startPos
@@ -58,7 +58,7 @@ local function makeDraggable(guiObject)
 end
 
 ---------------------------------------------------------
--- 2. TOMBOL OPEN MENU (🎭)
+-- 2. TOMBOL OPEN MENU (🎭) - BISA DIGESER
 ---------------------------------------------------------
 local OpenMenuBtn = Instance.new("TextButton")
 OpenMenuBtn.Name = "OpenMenuBtn"
@@ -79,7 +79,7 @@ OpenMenuCorner.Parent = OpenMenuBtn
 makeDraggable(OpenMenuBtn)
 
 ---------------------------------------------------------
--- 3. TITIK KLIK (O)
+-- 3. TITIK KLIK (O) - BISA DIGESER
 ---------------------------------------------------------
 local TargetPoint = Instance.new("TextButton")
 TargetPoint.Name = "TargetPoint"
@@ -91,6 +91,7 @@ TargetPoint.Text = "O"
 TargetPoint.Font = Enum.Font.SourceSansBold
 TargetPoint.TextSize = 24
 TargetPoint.Active = true
+TargetPoint.Visible = false
 TargetPoint.ZIndex = 200
 TargetPoint.Parent = ScreenGui
 
@@ -101,7 +102,7 @@ TargetCorner.Parent = TargetPoint
 makeDraggable(TargetPoint)
 
 ---------------------------------------------------------
--- 4. PANEL GUI UTAMA ("ALDO KNIGHTXOz HUB")
+-- 4. PANEL GUI UTAMA - TIDAK BISA DIGESER (DIAM)
 ---------------------------------------------------------
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
@@ -110,6 +111,7 @@ MainFrame.Position = UDim2.new(0.1, 0, 0.3, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 24)
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
+MainFrame.Visible = false
 MainFrame.ZIndex = 10
 MainFrame.Parent = ScreenGui
 
@@ -117,13 +119,10 @@ local MainCorner = Instance.new("UICorner")
 MainCorner.CornerRadius = UDim.new(0, 10)
 MainCorner.Parent = MainFrame
 
-makeDraggable(MainFrame)
-
--- Line 1: Header / Title Label
+-- Header / Title
 local TitleLabel = Instance.new("TextLabel")
 TitleLabel.Name = "TitleLabel"
 TitleLabel.Size = UDim2.new(1, 0, 0, 40)
-TitleLabel.Position = UDim2.new(0, 0, 0, 0)
 TitleLabel.BackgroundColor3 = Color3.fromRGB(28, 28, 38)
 TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 TitleLabel.Text = "ALDO KNIGHTXOz HUB"
@@ -136,7 +135,7 @@ local TitleCorner = Instance.new("UICorner")
 TitleCorner.CornerRadius = UDim.new(0, 10)
 TitleCorner.Parent = TitleLabel
 
--- Tombol Close (X) di Pojok Kanan Atas Header
+-- Tombol Close (X)
 local CloseButton = Instance.new("TextButton")
 CloseButton.Name = "CloseButton"
 CloseButton.Size = UDim2.new(0, 26, 0, 26)
@@ -154,7 +153,7 @@ local CloseCorner = Instance.new("UICorner")
 CloseCorner.CornerRadius = UDim.new(0, 6)
 CloseCorner.Parent = CloseButton
 
--- Line 2: Auto Clicker Sub-Title
+-- Sub-Title
 local SubTitleLabel = Instance.new("TextLabel")
 SubTitleLabel.Name = "SubTitleLabel"
 SubTitleLabel.Size = UDim2.new(1, 0, 0, 25)
@@ -167,7 +166,7 @@ SubTitleLabel.TextSize = 13
 SubTitleLabel.ZIndex = 12
 SubTitleLabel.Parent = MainFrame
 
--- Line 3: Set Speed Box
+-- Set Speed Box
 local SpeedFrame = Instance.new("Frame")
 SpeedFrame.Name = "SpeedFrame"
 SpeedFrame.Size = UDim2.new(0.88, 0, 0, 36)
@@ -206,7 +205,7 @@ SpeedInput.ZIndex = 13
 SpeedInput.TextXAlignment = Enum.TextXAlignment.Right
 SpeedInput.Parent = SpeedFrame
 
--- Line 4: PLAY Button
+-- PLAY Button
 local ToggleButton = Instance.new("TextButton")
 ToggleButton.Name = "ToggleButton"
 ToggleButton.Size = UDim2.new(0.88, 0, 0, 40)
@@ -247,7 +246,6 @@ GradientTween:Play()
 ---------------------------------------------------------
 local isClicking = false
 
--- Fungsi Auto Clicker
 local function startAutoClicker()
     task.spawn(function()
         while isClicking do
@@ -282,10 +280,11 @@ ToggleButton.MouseButton1Click:Connect(function()
     end
 end)
 
--- Toggle Open / Close Menu (🎭)
+-- Open / Close Menu (🎭)
 OpenMenuBtn.MouseButton1Click:Connect(function()
-    MainFrame.Visible = not MainFrame.Visible
-    TargetPoint.Visible = MainFrame.Visible
+    local isVisible = not MainFrame.Visible
+    MainFrame.Visible = isVisible
+    TargetPoint.Visible = isVisible
 end)
 
 -- Tombol Close (X)
