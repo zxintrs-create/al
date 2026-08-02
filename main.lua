@@ -79,7 +79,7 @@ OpenMenuCorner.Parent = OpenMenuBtn
 makeDraggable(OpenMenuBtn)
 
 ---------------------------------------------------------
--- 3. TITIK KLIK (O) - DIBUAT PASSTHROUGH
+-- 3. TITIK KLIK (O)
 ---------------------------------------------------------
 local TargetPoint = Instance.new("TextButton")
 TargetPoint.Name = "TargetPoint"
@@ -242,7 +242,7 @@ local GradientTween = TweenService:Create(
 GradientTween:Play()
 
 ---------------------------------------------------------
--- 6. LOGIKA & EVENT HANDLER (AMAIN TOUCH SAFE)
+-- 6. LOGIKA & EVENT HANDLER (METODE FIX TOUCH & MOBILE)
 ---------------------------------------------------------
 local isClicking = false
 
@@ -256,10 +256,10 @@ local function startAutoClicker()
             local exactX = pointPosition.X + (pointSize.X / 2)
             local exactY = pointPosition.Y + (pointSize.Y / 2) + topbarInset.Y
 
-            -- Menggunakan VirtualInputManager khusus tanpa memblokir TouchGui
-            VirtualInputManager:SendMouseButtonEvent(exactX, exactY, 0, true, game, 1)
+            -- Menggunakan VirtualInputManager via TouchTap agar sistem Mobile tidak menganggapnya Mouse
+            VirtualInputManager:SendTouchEvent(1, Enum.UserInputState.Begin, Vector2.new(exactX, exactY))
             task.wait(0.01)
-            VirtualInputManager:SendMouseButtonEvent(exactX, exactY, 0, false, game, 1)
+            VirtualInputManager:SendTouchEvent(1, Enum.UserInputState.End, Vector2.new(exactX, exactY))
 
             local userDelay = tonumber(SpeedInput.Text) or 0.1
             task.wait(math.max(userDelay, 0.01))
@@ -291,5 +291,9 @@ end)
 -- Tombol Close (X)
 CloseButton.MouseButton1Click:Connect(function()
     isClicking = false
-    ScreenGui:Destroy()
+    ToggleButton.Text = "PLAY"
+    ToggleButton.BackgroundColor3 = Color3.fromRGB(220, 50, 50)
+    
+    MainFrame.Visible = false
+    TargetPoint.Visible = false
 end)
