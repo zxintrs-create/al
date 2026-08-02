@@ -13,7 +13,7 @@ local Config = {
     WalkSpeed = 16, -- Standard speed to avoid detection  
     JumpPower = 50,  
     SmartJump = true,  
-    -- Update coordinates based on actual map camps  
+    -- Waypoint data: {Vector3 position, Label}
     Waypoints = {  
         {Vector3.new(450, 15, 450), "Camp Alpha"},  
         {Vector3.new(1200, 45, 1100), "Base Camp"},  
@@ -38,41 +38,8 @@ local function detectWall()
     return result ~= nil  
 end
 
--- MAIN ENGINE  
-local function startExpedition()  
-    local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()  
-    local hum = char:WaitForChild("Humanoid")  
-    local hrp = char:WaitForChild("HumanoidRootPart")  
-      
-    hum.WalkSpeed = Config.WalkSpeed
-
-    while IsWalking do  
-        local target = Config.Waypoints[CurrentWaypointIndex]  
-        if not target then   
-            print(" Expedition Complete: You reached the South Pole!")  
-            IsWalking = false  
-            break   
-        end  
-          
-        -- Move towards target  
-        hum:MoveTo(target)  
-          
-        -- Auto-Jump Logic  
-        if Config.SmartJump and detectWall() then  
-            hum.Jump = true  
-        end  
-          
-        -- Check distance to next waypoint  
-        if (hrp.Position - target).Magnitude < 6 then  
-            CurrentWaypointIndex = CurrentWaypointIndex + 1  
-        end  
-          
-        task.wait(0.1)  
-    end  
-end
-
--- PROFESSIONAL MODERN GUI  
-local ScreenGui = Instance.new("ScreenGui", LocalPlayer.PlayerGui)  
+-- GUI SETUP
+local ScreenGui = Instance.new("ScreenGui", LocalPlayer:WaitForChild("PlayerGui"))  
 local MainFrame = Instance.new("Frame", ScreenGui)  
 MainFrame.Size = UDim2.new(0, 200, 0, 100)  
 MainFrame.Position = UDim2.new(0.5, -100, 0.8, 0)  
@@ -94,14 +61,55 @@ ToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
 ToggleBtn.TextColor3 = Color3.new(1, 1, 1)  
 Instance.new("UICorner", ToggleBtn)
 
+-- MAIN ENGINE  
+local function startExpedition()  
+    local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()  
+    local hum = char:WaitForChild("Humanoid")  
+    local hrp = char:WaitForChild("HumanoidRootPart")  
+      
+    hum.WalkSpeed = Config.WalkSpeed
+
+    while IsWalking do  
+        local waypointData = Config.Waypoints[CurrentWaypointIndex]  
+        
+        -- Jika semua waypoint selesai
+        if not waypointData then   
+            print("Expedition Complete: You reached the South Pole!")  
+            IsWalking = false  
+            CurrentWaypointIndex = 1 -- Reset indeks
+            ToggleBtn.Text = "Start Expedition"  
+            ToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 255)  
+            break   
+        end  
+        
+        local targetPosition = waypointData[1] -- Mengambil Vector3 dari tabel
+          
+        -- Move towards target  
+        hum:MoveTo(targetPosition)  
+          
+        -- Auto-Jump Logic  
+        if Config.SmartJump and detectWall() then  
+            hum.Jump = true  
+        end  
+          
+        -- Check distance to next waypoint  
+        if (hrp.Position - targetPosition).Magnitude < 6 then  
+            CurrentWaypointIndex = CurrentWaypointIndex + 1  
+        end  
+          
+        task.wait(0.1)  
+    end  
+end
+
+-- BUTTON EVENT LISTENER
 ToggleBtn.MouseButton1Click:Connect(function()  
     IsWalking = not IsWalking  
     if IsWalking then  
         ToggleBtn.Text = "Stop Expedition"  
         ToggleBtn.BackgroundColor3 = Color3.fromRGB(255, 80, 80)  
-        startExpedition()  
+        task.spawn(startExpedition) -- Memanggil loop di thread baru
     else  
         ToggleBtn.Text = "Start Expedition"  
         ToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 255)  
     end  
-end)  
+end)
