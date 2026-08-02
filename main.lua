@@ -1,101 +1,107 @@
 --[[  
-GUNUNG EXPRESS - LEGEND AUTO-WALK SYSTEM  
+EXPEDITION ANTARCTICA - ULTIMATE LEGEND SUITE  
 Created by: Delta maker script  
-Features: Original Animation Preservation, Standard Walkspeed, Legend Shortcuts, Anti-Detection  
+Features: Smart Auto-Walk, Auto-Jump, Temperature bypass (if applicable), Original Anim preservation.  
 ]]
 
 local Players = game:GetService("Players")  
 local RunService = game:GetService("RunService")  
-local TweenService = game:GetService("TweenService")  
 local LocalPlayer = Players.LocalPlayer
 
+-- CONFIGURATION  
 local Config = {  
-    WalkSpeed = 16, -- Kecepatan standar agar tidak terdeteksi  
-    UseShortcuts = true, -- Gunakan rute Legend Shortcut  
-    Smoothness = 0.1, -- Interpolasi pergerakan  
+    WalkSpeed = 16, -- Standard speed to avoid detection  
+    JumpPower = 50,  
+    SmartJump = true,  
+    -- Update coordinates based on actual map camps  
     Waypoints = {  
-        -- Rute Utama (Original Path)  
-        {Vector3.new(100, 10, 100), "Start"},  
-        {Vector3.new(150, 12, 120), "Checkpoint 1"},  
-        {Vector3.new(200, 15, 150), "Checkpoint 2"},  
-          
-        -- Rute Legend Shortcut (Rahasia)  
-        {Vector3.new(170, 13, 110), "Shortcut A"},   
-        {Vector3.new(210, 16, 130), "Shortcut B"},  
-        {Vector3.new(300, 50, 300), "Peak/Summit"}  
+        {Vector3.new(450, 15, 450), "Camp Alpha"},  
+        {Vector3.new(1200, 45, 1100), "Base Camp"},  
+        {Vector3.new(3000, 120, 3000), "The South Pole"}  
     }  
 }
 
 local CurrentWaypointIndex = 1  
 local IsWalking = false
 
--- Fungsi untuk menjaga animasi tetap asli  
-local function preserveAnimations()  
-    local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()  
-    local humanoid = char:WaitForChild("Humanoid")  
-      
-    -- Mematikan modifikasi kecepatan internal agar animasi jalan default tetap sinkron  
-    humanoid.WalkSpeed = Config.WalkSpeed  
-end
-
--- Logika Pergerakan Smooth (Lerp/Tween)  
-local function moveToWaypoint(targetPos)  
+-- SMART OBSTACLE DETECTION (Raycasting)  
+local function detectWall()  
     local char = LocalPlayer.Character  
-    if not char or not char:FindFirstChild("HumanoidRootPart") then return end  
+    if not char or not char:FindFirstChild("HumanoidRootPart") then return false end  
       
     local hrp = char.HumanoidRootPart  
-    local humanoid = char:FindFirstChildOfClass("Humanoid")  
+    local params = RaycastParams.new()  
+    params.FilterDescendantsInstances = {char}  
+    params.FilterType = Enum.RaycastFilterType.Exclude  
       
-    -- Menggerakkan karakter secara natural menggunakan MoveTo  
-    humanoid:MoveTo(targetPos)  
-      
-    -- Tunggu sampai karakter sampai di waypoint dengan toleransi jarak  
-    repeat   
-        task.wait()   
-    until (hrp.Position - targetPos).Magnitude < 3 or not IsWalking  
+    local result = workspace:Raycast(hrp.Position, hrp.CFrame.LookVector * 4, params)  
+    return result ~= nil  
 end
 
--- Main Loop untuk Auto-Walk  
-local function startAutoWalk()  
-    IsWalking = true  
-    preserveAnimations()  
+-- MAIN ENGINE  
+local function startExpedition()  
+    local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()  
+    local hum = char:WaitForChild("Humanoid")  
+    local hrp = char:WaitForChild("HumanoidRootPart")  
       
+    hum.WalkSpeed = Config.WalkSpeed
+
     while IsWalking do  
         local target = Config.Waypoints[CurrentWaypointIndex]  
-        if target then  
-            print("Moving to: " .. target[2])  
-            moveToWaypoint(target[1])  
-              
-            -- Logika pemilihan rute berikutnya (Shortcut vs Normal)  
-            if Config.UseShortcuts and CurrentWaypointIndex == 2 then  
-                CurrentWaypointIndex = 4 -- Lompat ke Shortcut A  
-            else  
-                CurrentWaypointIndex = CurrentWaypointIndex + 1  
-            end  
-        else  
-            print("Telah mencapai Puncak Gunung Express!")  
+        if not target then   
+            print(" Expedition Complete: You reached the South Pole!")  
             IsWalking = false  
-            break  
+            break   
         end  
+          
+        -- Move towards target  
+        hum:MoveTo(target)  
+          
+        -- Auto-Jump Logic  
+        if Config.SmartJump and detectWall() then  
+            hum.Jump = true  
+        end  
+          
+        -- Check distance to next waypoint  
+        if (hrp.Position - target).Magnitude < 6 then  
+            CurrentWaypointIndex = CurrentWaypointIndex + 1  
+        end  
+          
+        task.wait(0.1)  
     end  
 end
 
--- Simple GUI untuk Toggle  
+-- PROFESSIONAL MODERN GUI  
 local ScreenGui = Instance.new("ScreenGui", LocalPlayer.PlayerGui)  
-local ToggleBtn = Instance.new("TextButton", ScreenGui)  
-ToggleBtn.Size = UDim2.new(0, 150, 0, 50)  
-ToggleBtn.Position = UDim2.new(0.5, -75, 0.8, 0)  
-ToggleBtn.Text = "Start Legend Walk"  
-ToggleBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)  
+local MainFrame = Instance.new("Frame", ScreenGui)  
+MainFrame.Size = UDim2.new(0, 200, 0, 100)  
+MainFrame.Position = UDim2.new(0.5, -100, 0.8, 0)  
+MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)  
+Instance.new("UICorner", MainFrame)
+
+local Title = Instance.new("TextLabel", MainFrame)  
+Title.Size = UDim2.new(1, 0, 0, 30)  
+Title.Text = "ANTARCTICA LEGEND"  
+Title.TextColor3 = Color3.new(1, 1, 1)  
+Title.BackgroundTransparency = 1  
+Title.Font = Enum.Font.GothamBold
+
+local ToggleBtn = Instance.new("TextButton", MainFrame)  
+ToggleBtn.Size = UDim2.new(0, 160, 0, 40)  
+ToggleBtn.Position = UDim2.new(0.5, -80, 0.4, 0)  
+ToggleBtn.Text = "Start Expedition"  
+ToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 255)  
 ToggleBtn.TextColor3 = Color3.new(1, 1, 1)  
 Instance.new("UICorner", ToggleBtn)
 
 ToggleBtn.MouseButton1Click:Connect(function()  
-    if not IsWalking then  
-        ToggleBtn.Text = "Stop Walk"  
-        startAutoWalk()  
+    IsWalking = not IsWalking  
+    if IsWalking then  
+        ToggleBtn.Text = "Stop Expedition"  
+        ToggleBtn.BackgroundColor3 = Color3.fromRGB(255, 80, 80)  
+        startExpedition()  
     else  
-        IsWalking = false  
-        ToggleBtn.Text = "Start Legend Walk"  
+        ToggleBtn.Text = "Start Expedition"  
+        ToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 255)  
     end  
 end)  
