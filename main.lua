@@ -1,234 +1,314 @@
---[[  
-DELTA ULTIMATE FRAMEWORK V2: PRECISION AUTO-WALK & MASTER GUI  
-Fixes: Frame Overlap, Stuttering Animations, Teleport-to-Start,   
-Floating Toggle Button, and Dynamic UI Scaling.  
-]]
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
 
-local Config = {  
-    -- Movement  
-    RecordInterval = 0.05, -- Faster recording for smoother playback  
-    PlaybackSmoothness = 0.1,  
-      
-    -- GUI Appearance  
-    Theme = "Galaxy Purple",  
-    MainFrameSize = UDim2.new(0, 400, 0, 500),  
-    HoverScale = 1.03,  
-    ClickScale = 0.97,  
-      
-    -- Button Asset  
-    ToggleIcon = "rbxassetid://101640388423900",  
-      
-    -- Animations  
-    AnimationSpeed = 0.4,  
-    RainbowSpeed = 1.5,  
-}
+local Player = Players.LocalPlayer
+local PlayerGui = Player:WaitForChild("PlayerGui")
 
-local Themes = {  
-    ["Galaxy Purple"] = { Main = Color3.fromRGB(120, 0, 255), Secondary = Color3.fromRGB(255, 0, 255), Accent = Color3.fromRGB(20, 0, 40), Text = Color3.fromRGB(255, 255, 255) },  
-    ["Blue Neon"] = { Main = Color3.fromRGB(0, 150, 255), Secondary = Color3.fromRGB(0, 255, 255), Accent = Color3.fromRGB(0, 0, 30), Text = Color3.fromRGB(255, 255, 255) },  
-}
-
-local TweenService = game:GetService("TweenService")  
-local RunService = game:GetService("RunService")  
-local Players = game:GetService("Players")  
-local HttpService = game:GetService("HttpService")
-
-local LocalPlayer = Players.LocalPlayer  
-local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()  
-local Humanoid = Character:WaitForChild("Humanoid")  
-local RootPart = Character:WaitForChild("HumanoidRootPart")  
-local CurrentTheme = Themes[Config.Theme]
-
-local Recording = false  
-local Playing = false  
-local PathData = {}  
-local StartPosition = nil
-
--- =============================================================================  
--- ADVANCED ANIMATION ENGINE  
--- =============================================================================  
-local Engine = {}
-
-function Engine.Tween(obj, time, props)  
-    TweenService:Create(obj, TweenInfo.new(time, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), props):Play()  
+if PlayerGui:FindFirstChild("DeltaAutoWalkGUI") then
+    PlayerGui.DeltaAutoWalkGUI:Destroy()
 end
 
-function Engine.ApplyButtonEffects(btn)  
-    local originalSize = btn.Size  
-    btn.MouseEnter:Connect(function()  
-        Engine.Tween(btn, Config.AnimationSpeed, {Size = UDim2.new(originalSize.X.Scale * Config.HoverScale, 0, originalSize.Y.Scale * Config.HoverScale, 0)})  
-    end)  
-    btn.MouseLeave:Connect(function()  
-        Engine.Tween(btn, Config.AnimationSpeed, {Size = originalSize})  
-    end)  
-    btn.MouseButton1Down:Connect(function()  
-        Engine.Tween(btn, 0.1, {Size = UDim2.new(originalSize.X.Scale * Config.ClickScale, 0, originalSize.Y.Scale * Config.ClickScale, 0)})  
-    end)  
-    btn.MouseButton1Up:Connect(function()  
-        Engine.Tween(btn, 0.1, {Size = originalSize})  
-    end)  
-end
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "DeltaAutoWalkGUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = PlayerGui
 
--- =============================================================================  
--- PRECISION WALK SYSTEM (NO STUTTER)  
--- =============================================================================  
-local WalkS = {}
-
-function WalkS.Start()  
-    PathData = {}  
-    StartPosition = RootPart.CFrame  
-    Recording = true  
-    Playing = false  
-end
-
-function WalkS.Stop()  
-    Recording = false  
-end
-
-function WalkS.Rollback()  
-    if #PathData > 0 then  
-        local last = PathData[#PathData]  
-        RootPart.CFrame = last.CFrame  
-    end  
-end
-
-function WalkS.Play()  
-    if #PathData == 0 then return end  
-    Playing = true  
-    Recording = false
-
-    -- FIXED: Immediate Teleport to Start  
-    RootPart.CFrame = StartPosition  
-    task.wait(0.3)
-
-    for _, point in ipairs(PathData) do  
-        if not Playing then break end  
-          
-        -- Original Animations are kept by using MoveTo and not anchoring  
-        Humanoid.WalkSpeed = point.Speed  
-        Humanoid:MoveTo(point.CFrame.Position)  
-          
-        -- Wait precisely until reach or timeout to avoid lagging/stuttering  
-        local alpha = 0  
-        while (RootPart.Position - point.CFrame.Position).Magnitude > 0.5 and alpha < 20 do  
-            alpha = alpha + 0.05  
-            task.wait(0.05)  
-        end  
-    end  
-    Playing = false  
-end
-
-RunService.Heartbeat:Connect(function()  
-    if Recording then  
-        table.insert(PathData, {  
-            CFrame = RootPart.CFrame,  
-            Speed = Humanoid.WalkSpeed  
-        })  
-        task.wait(Config.RecordInterval)  
-    end  
-end)
-
--- =============================================================================  
--- MODERN MODULAR GUI  
--- =============================================================================  
-local Gui = Instance.new("ScreenGui", LocalPlayer.PlayerGui)  
-Gui.Name = "DeltaUltimate_V2"  
-Gui.ResetOnSpawn = false
-
--- Floating Toggle Button  
-local ToggleBtn = Instance.new("ImageButton", Gui)  
-ToggleBtn.Size = UDim2.new(0, 50, 0, 50)  
-ToggleBtn.Position = UDim2.new(0.9, 0, 0.5, 0)  
-ToggleBtn.BackgroundColor3 = CurrentTheme.Main  
-ToggleBtn.Image = Config.ToggleIcon  
-local TCorner = Instance.new("UICorner", ToggleBtn)  
-TCorner.CornerRadius = UDim.new(1, 0)
-
-local MainFrame = Instance.new("Frame", Gui)  
-MainFrame.Size = Config.MainFrameSize  
-MainFrame.Position = UDim2.new(0.5, -200, 0.5, -250)  
-MainFrame.BackgroundColor3 = CurrentTheme.Accent  
-MainFrame.Visible = false  
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 320, 0, 380)
+MainFrame.Position = UDim2.new(0.5, -160, 0.5, -190)
+MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+MainFrame.BorderSizePixel = 0
 MainFrame.ClipsDescendants = true
+MainFrame.Parent = ScreenGui
 
-local MCorner = Instance.new("UICorner", MainFrame)  
-MCorner.CornerRadius = UDim.new(0, 20)  
-local MStroke = Instance.new("UIStroke", MainFrame)  
-MStroke.Thickness = 3  
-MStroke.Color = CurrentTheme.Main
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(0, 10)
+UICorner.Parent = MainFrame
 
-local Title = Instance.new("TextLabel", MainFrame)  
-Title.Size = UDim2.new(1, 0, 0, 60)  
-Title.Text = "DELTA WALK PRECISION"  
-Title.TextColor3 = CurrentTheme.Text  
-Title.BackgroundTransparency = 1  
-Title.Font = Enum.Font.GothamBold  
-Title.TextSize = 22
+local UIStroke = Instance.new("UIStroke")
+UIStroke.Color = Color3.fromRGB(80, 80, 80)
+UIStroke.Thickness = 1
+UIStroke.Parent = MainFrame
 
-local Container = Instance.new("ScrollingFrame", MainFrame)  
-Container.Size = UDim2.new(1, -40, 1, -80)  
-Container.Position = UDim2.new(0, 20, 0, 70)  
-Container.BackgroundTransparency = 1  
-Container.ScrollBarThickness = 4
+local TopBar = Instance.new("Frame")
+TopBar.Size = UDim2.new(1, 0, 0, 40)
+TopBar.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+TopBar.BorderSizePixel = 0
+TopBar.Parent = MainFrame
 
-local List = Instance.new("UIListLayout", Container)  
-List.Padding = UDim.new(0, 12)  
-List.HorizontalAlignment = Enum.HorizontalAlignment.Center
+local TopBarCorner = Instance.new("UICorner")
+TopBarCorner.CornerRadius = UDim.new(0, 10)
+TopBarCorner.Parent = TopBar
 
-local function CreateBtn(txt, cb)  
-    local b = Instance.new("TextButton", Container)  
-    b.Size = UDim2.new(1, 0, 0, 45)  
-    b.BackgroundColor3 = CurrentTheme.Main  
-    b.Text = txt  
-    b.TextColor3 = CurrentTheme.Text  
-    b.Font = Enum.Font.GothamMedium  
-    b.TextSize = 16  
-      
-    Instance.new("UICorner", b).CornerRadius = UDim.new(0, 10)  
-    local s = Instance.new("UIStroke", b)   
-    s.Color = CurrentTheme.Secondary  
-    s.Thickness = 2  
-      
-    Engine.ApplyButtonEffects(b)  
-    b.MouseButton1Click:Connect(cb)  
-    return b  
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, -20, 1, 0)
+Title.Position = UDim2.new(0, 15, 0, 0)
+Title.BackgroundTransparency = 1
+Title.Font = Enum.Font.GothamBold
+Title.Text = "Delta | Auto-Walk & Recorder"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.TextSize = 14
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.Parent = TopBar
+
+local Content = Instance.new("ScrollingFrame")
+Content.Size = UDim2.new(1, -20, 1, -55)
+Content.Position = UDim2.new(0, 10, 0, 45)
+Content.BackgroundTransparency = 1
+Content.BorderSizePixel = 0
+Content.CanvasSize = UDim2.new(0, 0, 0, 450)
+Content.ScrollBarThickness = 4
+Content.Parent = MainFrame
+
+local UIListLayout = Instance.new("UIListLayout")
+UIListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+UIListLayout.Padding = UDim.new(0, 10)
+UIListLayout.Parent = Content
+
+local function CreateButton(name, text, color)
+    local btn = Instance.new("TextButton")
+    btn.Name = name
+    btn.Size = UDim2.new(1, 0, 0, 40)
+    btn.BackgroundColor3 = color or Color3.fromRGB(45, 45, 45)
+    btn.Font = Enum.Font.GothamSemibold
+    btn.Text = text
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.TextSize = 13
+    btn.AutoButtonColor = false
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 6)
+    corner.Parent = btn
+    
+    return btn
 end
 
-CreateBtn("⏺ Start/Stop Recording", function()  
-    if not Recording then WalkS.Start() else WalkS.Stop() end  
+local function CreateToggle(name, text)
+    local frame = Instance.new("Frame")
+    frame.Name = name
+    frame.Size = UDim2.new(1, 0, 0, 40)
+    frame.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 6)
+    corner.Parent = frame
+    
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, -60, 1, 0)
+    label.Position = UDim2.new(0, 15, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Font = Enum.Font.GothamSemibold
+    label.Text = text
+    label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    label.TextSize = 13
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = frame
+    
+    local toggleBtn = Instance.new("TextButton")
+    toggleBtn.Size = UDim2.new(0, 40, 0, 24)
+    toggleBtn.Position = UDim2.new(1, -50, 0.5, -12)
+    toggleBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+    toggleBtn.Text = ""
+    toggleBtn.AutoButtonColor = false
+    
+    local tCorner = Instance.new("UICorner")
+    tCorner.CornerRadius = UDim.new(1, 0)
+    tCorner.Parent = toggleBtn
+    
+    local circle = Instance.new("Frame")
+    circle.Size = UDim2.new(0, 18, 0, 18)
+    circle.Position = UDim2.new(0, 3, 0.5, -9)
+    circle.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
+    
+    local cCorner = Instance.new("UICorner")
+    cCorner.CornerRadius = UDim.new(1, 0)
+    cCorner.Parent = circle
+    circle.Parent = toggleBtn
+    
+    frame.Parent = Content
+    return frame, toggleBtn, circle
+end
+
+local ToggleWaypointBtn = CreateButton("ToggleWaypointBtn", "Add Waypoint at Position", Color3.fromRGB(50, 120, 200))
+ToggleWaypointBtn.Parent = Content
+
+local ClearWaypointsBtn = CreateButton("ClearWaypointsBtn", "Clear All Waypoints", Color3.fromRGB(180, 50, 50))
+ClearWaypointsBtn.Parent = Content
+
+local _, AutoWalkToggle, AutoWalkCircle = CreateToggle("AutoWalkToggle", "Enable Auto-Walk")
+local _, LoopToggle, LoopCircle = CreateToggle("LoopToggle", "Loop Waypoints")
+
+local RecordBtn = CreateButton("RecordBtn", "Start Recording Path", Color3.fromRGB(180, 120, 40))
+RecordBtn.Parent = Content
+
+local PlaybackBtn = CreateButton("PlaybackBtn", "Play Recorded Path", Color3.fromRGB(40, 150, 80))
+PlaybackBtn.Parent = Content
+
+local waypoints = {}
+local recordedPath = {}
+local isRecording = false
+local isPlaying = false
+local isAutoWalking = false
+local isLooping = false
+
+local function tweenColor(object, property, targetColor)
+    TweenService:Create(object, TweenInfo.new(0.2), { [property] = targetColor }):Play()
+end
+
+local function setToggleState(state, btn, circle)
+    if state then
+        tweenColor(btn, "BackgroundColor3", Color3.fromRGB(0, 170, 255))
+        TweenService:Create(circle, TweenInfo.new(0.2), { Position = UDim2.new(1, -21, 0.5, -9) }):Play()
+    else
+        tweenColor(btn, "BackgroundColor3", Color3.fromRGB(60, 60, 60))
+        TweenService:Create(circle, TweenInfo.new(0.2), { Position = UDim2.new(0, 3, 0.5, -9) }):Play()
+    end
+end
+
+ToggleWaypointBtn.MouseButton1Click:Connect(function()
+    local char = Player.Character
+    if char and char:FindFirstChild("HumanoidRootPart") then
+        local pos = char.HumanoidRootPart.Position
+        table.insert(waypoints, pos)
+        
+        local part = Instance.new("Part")
+        part.Size = Vector3.new(1, 1, 1)
+        part.Position = pos
+        part.Anchored = true
+        part.CanCollide = false
+        part.Material = Enum.Material.Neon
+        part.BrickColor = BrickColor.new("Cyan")
+        part.Parent = workspace
+        
+        local mesh = Instance.new("SpecialMesh")
+        mesh.MeshType = Enum.MeshType.Sphere
+        mesh.Scale = Vector3.new(1.5, 1.5, 1.5)
+        mesh.Parent = part
+    end
 end)
 
-CreateBtn("▶ Play Auto Walk", function()  
-    WalkS.Play()  
+ClearWaypointsBtn.MouseButton1Click:Connect(function()
+    waypoints = {}
+    isAutoWalking = false
+    setToggleState(false, AutoWalkToggle, AutoWalkCircle)
 end)
 
-CreateBtn("↩ Rollback Position", function()  
-    WalkS.Rollback()  
+AutoWalkToggle.MouseButton1Click:Connect(function()
+    isAutoWalking = not isAutoWalking
+    setToggleState(isAutoWalking, AutoWalkToggle, AutoWalkCircle)
+    
+    if isAutoWalking and #waypoints > 0 then
+        task.spawn(function()
+            local char = Player.Character
+            local humanoid = char and char:FindFirstChildOfClass("Humanoid")
+            
+            while isAutoWalking and char and humanoid do
+                for _, pos in ipairs(waypoints) do
+                    if not isAutoWalking then break end
+                    humanoid:MoveTo(pos)
+                    
+                    local reached = false
+                    local conn
+                    conn = RunService.Stepped:Connect(function()
+                        if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+                        if (char.HumanoidRootPart.Position - pos).Magnitude < 4 then
+                            reached = true
+                            conn:Disconnect()
+                        end
+                    end)
+                    
+                    while not reached and isAutoWalking do
+                        task.wait(0.1)
+                    end
+                    if conn.Connected then conn:Disconnect() end
+                end
+                
+                if not isLooping then
+                    isAutoWalking = false
+                    setToggleState(false, AutoWalkToggle, AutoWalkCircle)
+                    break
+                end
+            end
+        end)
+    end
 end)
 
-CreateBtn("💾 Save File", function()  
-    writefile("DeltaWalk_Save.json", HttpService:JSONEncode(PathData))  
+LoopToggle.MouseButton1Click:Connect(function()
+    isLooping = not isLooping
+    setToggleState(isLooping, LoopToggle, LoopCircle)
 end)
 
-CreateBtn("🗑 Remove File", function()  
-    delfile("DeltaWalk_Save.json")  
+RecordBtn.MouseButton1Click:Connect(function()
+    isRecording = not isRecording
+    if isRecording then
+        recordedPath = {}
+        RecordBtn.Text = "Recording... (Click to Stop)"
+        tweenColor(RecordBtn, "BackgroundColor3", Color3.fromRGB(200, 50, 50))
+        
+        task.spawn(function()
+            while isRecording do
+                local char = Player.Character
+                if char and char:FindFirstChild("HumanoidRootPart") then
+                    table.insert(recordedPath, char.HumanoidRootPart.CFrame)
+                end
+                task.wait(0.2)
+            end
+        end)
+    else
+        RecordBtn.Text = "Start Recording Path"
+        tweenColor(RecordBtn, "BackgroundColor3", Color3.fromRGB(180, 120, 40))
+    end
 end)
 
--- Open/Close Logic  
-ToggleBtn.MouseButton1Click:Connect(function()  
-    MainFrame.Visible = not MainFrame.Visible  
-    if MainFrame.Visible then  
-        MainFrame.Size = UDim2.new(0, 0, 0, 0)  
-        Engine.Tween(MainFrame, 0.5, {Size = Config.MainFrameSize})  
-    end  
+PlaybackBtn.MouseButton1Click:Connect(function()
+    if isPlaying or #recordedPath == 0 then return end
+    isPlaying = true
+    tweenColor(PlaybackBtn, "BackgroundColor3", Color3.fromRGB(80, 80, 80))
+    
+    task.spawn(function()
+        local char = Player.Character
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        
+        if root then
+            for _, cf in ipairs(recordedPath) do
+                if not char or not char:FindFirstChild("HumanoidRootPart") then break end
+                root.CFrame = cf
+                task.wait(0.2)
+            end
+        end
+        
+        isPlaying = false
+        tweenColor(PlaybackBtn, "BackgroundColor3", Color3.fromRGB(40, 150, 80))
+    end)
 end)
 
--- Rainbow Effect  
-spawn(function()  
-    while task.wait(0.1) do  
-        local hue = tick() * 0.1 % 1  
-        MStroke.Color = Color3.fromHSV(hue, 0.8, 1)  
-    end  
+local dragging, dragInput, dragStart, startPos
+TopBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = MainFrame.Position
+        
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
 end)
 
-print("Delta Ultimate V2 Loaded: Smooth Animations Enabled!") 
+TopBar.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+        dragInput = input
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        local delta = input.Position - dragStart
+        MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end)
