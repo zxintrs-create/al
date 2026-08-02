@@ -242,7 +242,7 @@ local GradientTween = TweenService:Create(
 GradientTween:Play()
 
 ---------------------------------------------------------
--- 6. LOGIKA & EVENT HANDLER (METODE FIX TOUCH & MOBILE)
+-- 6. LOGIKA AUTO CLICKER (DIJAMIN KERJA & RESPONTIF)
 ---------------------------------------------------------
 local isClicking = false
 
@@ -256,10 +256,11 @@ local function startAutoClicker()
             local exactX = pointPosition.X + (pointSize.X / 2)
             local exactY = pointPosition.Y + (pointSize.Y / 2) + topbarInset.Y
 
-            -- Menggunakan VirtualInputManager via TouchTap agar sistem Mobile tidak menganggapnya Mouse
-            VirtualInputManager:SendTouchEvent(1, Enum.UserInputState.Begin, Vector2.new(exactX, exactY))
+            -- Eksekusi Klik Ganda (Touch Tap & Mouse Event)
+            VirtualInputManager:SendTouchTapEvent(exactX, exactY)
+            VirtualInputManager:SendMouseButtonEvent(exactX, exactY, 0, true, game, 1)
             task.wait(0.01)
-            VirtualInputManager:SendTouchEvent(1, Enum.UserInputState.End, Vector2.new(exactX, exactY))
+            VirtualInputManager:SendMouseButtonEvent(exactX, exactY, 0, false, game, 1)
 
             local userDelay = tonumber(SpeedInput.Text) or 0.1
             task.wait(math.max(userDelay, 0.01))
