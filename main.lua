@@ -1,5 +1,7 @@
----AutoWalk & Recorder  
-    Features: Smooth Movement, Original Animations, Record/Play/Rollback, File Save/Remove 
+--[[   
+    Delta Advanced AutoWalk & Recorder  
+    Features: Smooth Movement, Original Animations, Record/Play/Rollback, File Save/Remove  
+]]
 
 local Players = game:GetService("Players")  
 local RunService = game:GetService("RunService")  
