@@ -1,7 +1,5 @@
 --[[  
-ANIME VANGUARD MOBILE EDITION - DELTA SCRIPT  
-Created by: Delta maker script  
-Specialty: Fully Touch-Compatible, Anime Flight, Mobile UI  
+ANIME VANGUARD MOBILE EDITION - SUPERHERO FLY (EMOTE VERSION)
 ]]
 
 local Players = game:GetService("Players")  
@@ -10,127 +8,138 @@ local TweenService = game:GetService("TweenService")
 local LocalPlayer = Players.LocalPlayer
 
 local FlyConfig = {  
-NormalSpeed = 60,  
-SuperSpeed = 150,  
-Flying = false,  
-CurrentSpeed = 60  
+    Speed = 80,  
+    Flying = false  
+}
+
+-- ID Animasi / Emote
+local AnimIds = {  
+    FlyIdle = "rbxassetid://139058906415119", -- Diam di udara / Mendarat
+    FlyMove = "rbxassetid://117931620432186"  -- Saat Analog diarahkan
 }
 
 local BV, BG
+local activeIdleTrack, activeMoveTrack
 
--- Mobile UI Setup  
-local ScreenGui = Instance.new("ScreenGui", LocalPlayer.PlayerGui)  
-ScreenGui.Name = "DeltaMobileFly"
+-- 1. Setup Mobile UI (1 Tombol "PLAY FLY")
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "SuperheroFlyUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
-local function createBtn(name, pos, text, color)  
-    local btn = Instance.new("TextButton", ScreenGui)  
-    btn.Name = name  
-    btn.Size = UDim2.new(0, 70, 0, 70)  
-    btn.Position = pos  
-    btn.Text = text  
-    btn.BackgroundColor3 = color  
-    btn.TextColor3 = Color3.new(1, 1, 1)  
-    btn.Font = Enum.Font.GothamBold  
-    btn.TextSize = 14  
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(1, 0)  
-    return btn  
+local MainBtn = Instance.new("TextButton", ScreenGui)  
+MainBtn.Name = "FlyToggleBtn"  
+MainBtn.Size = UDim2.new(0, 120, 0, 50)  
+MainBtn.Position = UDim2.new(0.8, 0, 0.5, 0)  
+MainBtn.Text = "PLAY FLY"  
+MainBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 100)  
+MainBtn.TextColor3 = Color3.new(1, 1, 1)  
+MainBtn.Font = Enum.Font.GothamBold  
+MainBtn.TextSize = 14  
+Instance.new("UICorner", MainBtn).CornerRadius = UDim.new(0.3, 0)
+
+-- 2. Load Animasi Ke Character
+local function setupAnimations(hum)
+    local animator = hum:FindFirstChildOfClass("Animator") or Instance.new("Animator", hum)
+    
+    local animIdle = Instance.new("Animation")
+    animIdle.AnimationId = AnimIds.FlyIdle
+    
+    local animMove = Instance.new("Animation")
+    animMove.AnimationId = AnimIds.FlyMove
+    
+    activeIdleTrack = animator:LoadAnimation(animIdle)
+    activeMoveTrack = animator:LoadAnimation(animMove)
+    
+    -- Priority Action agar menimpa gerakan/pose standar
+    activeIdleTrack.Priority = Enum.AnimationPriority.Action
+    activeMoveTrack.Priority = Enum.AnimationPriority.Action
 end
 
-local ToggleBtn = createBtn("Toggle", UDim2.new(0.8, 0, 0.6, 0), "FLY", Color3.fromRGB(40, 40, 40))  
-local BoostBtn = createBtn("Boost", UDim2.new(0.8, 0, 0.75, 0), "BOOST", Color3.fromRGB(255, 100, 0))  
-local UpBtn = createBtn("Up", UDim2.new(0.7, 0, 0.75, 0), "UP", Color3.fromRGB(40, 40, 40))  
-local DownBtn = createBtn("Down", UDim2.new(0.7, 0, 0.9, 0), "DOWN", Color3.fromRGB(40, 40, 40))
-
--- Logic for Mobile Input  
-local MobileInputs = {Up = false, Down = false, Boost = false}
-
-UpBtn.MouseButton1Down:Connect(function() MobileInputs.Up = true end)  
-UpBtn.MouseButton1Up:Connect(function() MobileInputs.Up = false end)  
-DownBtn.MouseButton1Down:Connect(function() MobileInputs.Down = true end)  
-DownBtn.MouseButton1Up:Connect(function() MobileInputs.Down = false end)  
-BoostBtn.MouseButton1Down:Connect(function() MobileInputs.Boost = true end)  
-BoostBtn.MouseButton1Up:Connect(function() MobileInputs.Boost = false end)
-
-local function applyAnimeTilt(char, moveDir)  
-    local targetCFrame = BG.CFrame  
-    if moveDir.Magnitude > 0 then  
-        targetCFrame = targetCFrame * CFrame.Angles(math.rad(-15), 0, 0)  
-    end  
-    TweenService:Create(BG, TweenInfo.new(0.3), {CFrame = targetCFrame}):Play()  
+local function stopAnimations()
+    if activeIdleTrack then activeIdleTrack:Stop() end
+    if activeMoveTrack then activeMoveTrack:Stop() end
 end
 
+-- 3. Logika Utama Terbang
 local function startFly()  
     local char = LocalPlayer.Character  
     if not char or not char:FindFirstChild("HumanoidRootPart") then return end  
     local hrp = char.HumanoidRootPart  
     local hum = char:FindFirstChildOfClass("Humanoid")
 
-    BV = Instance.new("BodyVelocity", hrp)  
+    if not hum then return end
+
+    setupAnimations(hum)
+
+    BV = Instance.new("BodyVelocity")  
     BV.MaxForce = Vector3.new(math.huge, math.huge, math.huge)  
     BV.Velocity = Vector3.new(0, 0, 0)
+    BV.Parent = hrp
 
-    BG = Instance.new("BodyGyro", hrp)  
+    BG = Instance.new("BodyGyro")  
     BG.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)  
     BG.CFrame = hrp.CFrame
+    BG.Parent = hrp
 
     hum.PlatformStand = true
 
     task.spawn(function()  
+        local isMovingAnim = false
+
         while FlyConfig.Flying do  
             local camera = workspace.CurrentCamera  
-            local moveDir = Vector3.new(0, 0, 0)  
-              
-            -- Use Humanoid MoveDirection for W/A/S/D emulation on Mobile  
-            moveDir = hum.MoveDirection 
+            local moveDir = hum.MoveDirection -- Membaca pergerakan Analog Mobile
 
-            if MobileInputs.Up then moveDir += Vector3.new(0, 1, 0) end  
-            if MobileInputs.Down then moveDir -= Vector3.new(0, 1, 0) end
-
-            FlyConfig.CurrentSpeed = MobileInputs.Boost and FlyConfig.SuperSpeed or FlyConfig.NormalSpeed
-
+            -- JIKA ANALOG DIARAHKAN (BERGERAK)
             if moveDir.Magnitude > 0 then  
-                BV.Velocity = moveDir.Unit * FlyConfig.CurrentSpeed  
-                applyAnimeTilt(char, moveDir)  
+                BV.Velocity = moveDir.Unit * FlyConfig.Speed  
+                
+                -- Karakter miring ke depan mengikuti arah kamera
+                BG.CFrame = camera.CFrame * CFrame.Angles(math.rad(-60), 0, 0)
+                
+                -- Mainkan animasi bergerak (ID: 117931620432186)
+                if not isMovingAnim then
+                    isMovingAnim = true
+                    if activeIdleTrack then activeIdleTrack:Stop() end
+                    if activeMoveTrack then activeMoveTrack:Play() end
+                end
+
+            -- JIKA ANALOG DIAM (DI UDARA)
             else  
                 BV.Velocity = Vector3.new(0, 0, 0)  
+                BG.CFrame = camera.CFrame
+                
+                -- Mainkan animasi diam/mendarat (ID: 139058906415119)
+                if isMovingAnim or not activeIdleTrack.IsPlaying then
+                    isMovingAnim = false
+                    if activeMoveTrack then activeMoveTrack:Stop() end
+                    if activeIdleTrack then activeIdleTrack:Play() end
+                end
             end
 
-            BG.CFrame = camera.CFrame  
             RunService.RenderStepped:Wait()  
         end  
-        BV:Destroy()  
-        BG:Destroy()  
+
+        -- Bersihkan saat Fly dimatikan
+        stopAnimations()
+        if BV then BV:Destroy() end  
+        if BG then BG:Destroy() end  
         hum.PlatformStand = false  
     end)  
 end
 
-ToggleBtn.MouseButton1Click:Connect(function()  
+-- 4. Event Tombol UI
+MainBtn.MouseButton1Click:Connect(function()  
     FlyConfig.Flying = not FlyConfig.Flying  
-    ToggleBtn.Text = FlyConfig.Flying and "STOP" or "FLY"  
-    ToggleBtn.BackgroundColor3 = FlyConfig.Flying and Color3.fromRGB(200, 0, 0) or Color3.fromRGB(40, 40, 40)  
-    if FlyConfig.Flying then startFly() end  
-end)  
-
--- [ ANIMATION MODULE FOR ALDO KNIGHTXOz HUB ] --  
--- Tambahkan bagian ini di dalam script utamamu atau jalankan bersamaan
-
-local AnimIds = {  
-    FlyIdle = "rbxassetid://1234567890", -- Ganti dengan ID Animasi Idle Terbang  
-    FlyMove = "rbxassetid://0987654321", -- Ganti dengan ID Animasi Bergerak Terbang  
-    FlyTakeOff = "rbxassetid://1122334455" -- Ganti dengan ID Animasi Take Off  
-}
-
-local function playAnimation(animId)  
-    local char = LocalPlayer.Character  
-    if not char then return end  
-    local hum = char:FindFirstChildOfClass("Humanoid")  
-    if not hum then return end  
-      
-    local anim = Instance.new("Animation")  
-    anim.AnimationId = animId  
-    local loadAnim = hum:LoadAnimation(anim)  
-    loadAnim:Play()  
-    return loadAnim  
-end
-
--- Panggil fungsi playAnimation(AnimIds.FlyMove) di dalam loop Flight Engine agar animasi berjalan!  
+    
+    if FlyConfig.Flying then
+        MainBtn.Text = "STOP"  
+        MainBtn.BackgroundColor3 = Color3.fromRGB(200, 40, 40)
+        startFly() 
+    else
+        MainBtn.Text = "PLAY FLY"  
+        MainBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 100)
+        stopAnimations()
+    end  
+end)
