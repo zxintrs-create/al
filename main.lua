@@ -1,311 +1,136 @@
-local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
-local VirtualInputManager = game:GetService("VirtualInputManager")
-local GuiService = game:GetService("GuiService")
-local TweenService = game:GetService("TweenService")
+--[[  
+ANIME VANGUARD MOBILE EDITION - DELTA SCRIPT  
+Created by: Delta maker script  
+Specialty: Fully Touch-Compatible, Anime Flight, Mobile UI  
+]]
 
+local Players = game:GetService("Players")  
+local RunService = game:GetService("RunService")  
+local TweenService = game:GetService("TweenService")  
 local LocalPlayer = Players.LocalPlayer
-local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
--- Clean GUI lama jika ada
-if PlayerGui:FindFirstChild("AldoKnightXOzHub") then
-    PlayerGui.AldoKnightXOzHub:Destroy()
+local FlyConfig = {  
+NormalSpeed = 60,  
+SuperSpeed = 150,  
+Flying = false,  
+CurrentSpeed = 60  
+}
+
+local BV, BG
+
+-- Mobile UI Setup  
+local ScreenGui = Instance.new("ScreenGui", LocalPlayer.PlayerGui)  
+ScreenGui.Name = "DeltaMobileFly"
+
+local function createBtn(name, pos, text, color)  
+    local btn = Instance.new("TextButton", ScreenGui)  
+    btn.Name = name  
+    btn.Size = UDim2.new(0, 70, 0, 70)  
+    btn.Position = pos  
+    btn.Text = text  
+    btn.BackgroundColor3 = color  
+    btn.TextColor3 = Color3.new(1, 1, 1)  
+    btn.Font = Enum.Font.GothamBold  
+    btn.TextSize = 14  
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(1, 0)  
+    return btn  
 end
 
--- 1. SCREEN GUI UTAMA
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "AldoKnightXOzHub"
-ScreenGui.ResetOnSpawn = false
-ScreenGui.DisplayOrder = 100
-ScreenGui.Parent = PlayerGui
+local ToggleBtn = createBtn("Toggle", UDim2.new(0.8, 0, 0.6, 0), "FLY", Color3.fromRGB(40, 40, 40))  
+local BoostBtn = createBtn("Boost", UDim2.new(0.8, 0, 0.75, 0), "BOOST", Color3.fromRGB(255, 100, 0))  
+local UpBtn = createBtn("Up", UDim2.new(0.7, 0, 0.75, 0), "UP", Color3.fromRGB(40, 40, 40))  
+local DownBtn = createBtn("Down", UDim2.new(0.7, 0, 0.9, 0), "DOWN", Color3.fromRGB(40, 40, 40))
 
--- Sistem Drag Manual (Untuk OpenMenu & Titik O)
-local function makeDraggable(guiObject)
-    local dragging = false
-    local dragInput, dragStart, startPos
+-- Logic for Mobile Input  
+local MobileInputs = {Up = false, Down = false, Boost = false}
 
-    guiObject.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true
-            dragStart = input.Position
-            startPos = guiObject.Position
+UpBtn.MouseButton1Down:Connect(function() MobileInputs.Up = true end)  
+UpBtn.MouseButton1Up:Connect(function() MobileInputs.Up = false end)  
+DownBtn.MouseButton1Down:Connect(function() MobileInputs.Down = true end)  
+DownBtn.MouseButton1Up:Connect(function() MobileInputs.Down = false end)  
+BoostBtn.MouseButton1Down:Connect(function() MobileInputs.Boost = true end)  
+BoostBtn.MouseButton1Up:Connect(function() MobileInputs.Boost = false end)
 
-            input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then
-                    dragging = false
-                end
-            end)
-        end
-    end)
-
-    guiObject.InputChanged:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-            dragInput = input
-        end
-    end)
-
-    UserInputService.InputChanged:Connect(function(input)
-        if input == dragInput and dragging then
-            local delta = input.Position - dragStart
-            guiObject.Position = UDim2.new(
-                startPos.X.Scale,
-                startPos.X.Offset + delta.X,
-                startPos.Y.Scale,
-                startPos.Y.Offset + delta.Y
-            )
-        end
-    end)
+local function applyAnimeTilt(char, moveDir)  
+    local targetCFrame = BG.CFrame  
+    if moveDir.Magnitude > 0 then  
+        targetCFrame = targetCFrame * CFrame.Angles(math.rad(-15), 0, 0)  
+    end  
+    TweenService:Create(BG, TweenInfo.new(0.3), {CFrame = targetCFrame}):Play()  
 end
 
----------------------------------------------------------
--- 2. TOMBOL OPEN MENU (🎭)
----------------------------------------------------------
-local OpenMenuBtn = Instance.new("TextButton")
-OpenMenuBtn.Name = "OpenMenuBtn"
-OpenMenuBtn.Size = UDim2.new(0, 45, 0, 45)
-OpenMenuBtn.Position = UDim2.new(0.02, 0, 0.4, 0)
-OpenMenuBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 45)
-OpenMenuBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-OpenMenuBtn.Text = "🎭"
-OpenMenuBtn.TextSize = 22
-OpenMenuBtn.Active = true
-OpenMenuBtn.ZIndex = 300
-OpenMenuBtn.Parent = ScreenGui
+local function startFly()  
+    local char = LocalPlayer.Character  
+    if not char or not char:FindFirstChild("HumanoidRootPart") then return end  
+    local hrp = char.HumanoidRootPart  
+    local hum = char:FindFirstChildOfClass("Humanoid")
 
-local OpenMenuCorner = Instance.new("UICorner")
-OpenMenuCorner.CornerRadius = UDim.new(0, 10)
-OpenMenuCorner.Parent = OpenMenuBtn
+    BV = Instance.new("BodyVelocity", hrp)  
+    BV.MaxForce = Vector3.new(math.huge, math.huge, math.huge)  
+    BV.Velocity = Vector3.new(0, 0, 0)
 
-makeDraggable(OpenMenuBtn)
+    BG = Instance.new("BodyGyro", hrp)  
+    BG.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)  
+    BG.CFrame = hrp.CFrame
 
----------------------------------------------------------
--- 3. TITIK KLIK (O) - BERBENTUK TEXTLABEL (TIDAK MENGHALANGI KLIK)
----------------------------------------------------------
-local TargetPoint = Instance.new("TextLabel")
-TargetPoint.Name = "TargetPoint"
-TargetPoint.Size = UDim2.new(0, 36, 0, 36)
-TargetPoint.Position = UDim2.new(0.5, -18, 0.5, -18)
-TargetPoint.BackgroundColor3 = Color3.fromRGB(235, 45, 45)
-TargetPoint.TextColor3 = Color3.fromRGB(255, 255, 255)
-TargetPoint.Text = "O"
-TargetPoint.Font = Enum.Font.SourceSansBold
-TargetPoint.TextSize = 24
-TargetPoint.Active = true
-TargetPoint.Visible = false
-TargetPoint.ZIndex = 200
-TargetPoint.Parent = ScreenGui
+    hum.PlatformStand = true
 
-local TargetCorner = Instance.new("UICorner")
-TargetCorner.CornerRadius = UDim.new(1, 0)
-TargetCorner.Parent = TargetPoint
+    task.spawn(function()  
+        while FlyConfig.Flying do  
+            local camera = workspace.CurrentCamera  
+            local moveDir = Vector3.new(0, 0, 0)  
+              
+            -- Use Humanoid MoveDirection for W/A/S/D emulation on Mobile  
+            moveDir = hum.MoveDirection 
 
-makeDraggable(TargetPoint)
+            if MobileInputs.Up then moveDir += Vector3.new(0, 1, 0) end  
+            if MobileInputs.Down then moveDir -= Vector3.new(0, 1, 0) end
 
----------------------------------------------------------
--- 4. PANEL GUI UTAMA
----------------------------------------------------------
-local MainFrame = Instance.new("Frame")
-MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 260, 0, 220)
-MainFrame.Position = UDim2.new(0.1, 0, 0.3, 0)
-MainFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 24)
-MainFrame.BorderSizePixel = 0
-MainFrame.Active = true
-MainFrame.Visible = false
-MainFrame.ZIndex = 10
-MainFrame.Parent = ScreenGui
+            FlyConfig.CurrentSpeed = MobileInputs.Boost and FlyConfig.SuperSpeed or FlyConfig.NormalSpeed
 
-local MainCorner = Instance.new("UICorner")
-MainCorner.CornerRadius = UDim.new(0, 10)
-MainCorner.Parent = MainFrame
+            if moveDir.Magnitude > 0 then  
+                BV.Velocity = moveDir.Unit * FlyConfig.CurrentSpeed  
+                applyAnimeTilt(char, moveDir)  
+            else  
+                BV.Velocity = Vector3.new(0, 0, 0)  
+            end
 
--- Header / Title
-local TitleLabel = Instance.new("TextLabel")
-TitleLabel.Name = "TitleLabel"
-TitleLabel.Size = UDim2.new(1, 0, 0, 40)
-TitleLabel.BackgroundColor3 = Color3.fromRGB(28, 28, 38)
-TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-TitleLabel.Text = "ALDO KNIGHTXOz HUB"
-TitleLabel.Font = Enum.Font.GothamBold
-TitleLabel.TextSize = 13
-TitleLabel.ZIndex = 11
-TitleLabel.Parent = MainFrame
-
-local TitleCorner = Instance.new("UICorner")
-TitleCorner.CornerRadius = UDim.new(0, 10)
-TitleCorner.Parent = TitleLabel
-
--- Tombol Close (X)
-local CloseButton = Instance.new("TextButton")
-CloseButton.Name = "CloseButton"
-CloseButton.Size = UDim2.new(0, 26, 0, 26)
-CloseButton.Position = UDim2.new(1, -33, 0, 7)
-CloseButton.BackgroundColor3 = Color3.fromRGB(230, 45, 45)
-CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-CloseButton.Text = "X"
-CloseButton.Font = Enum.Font.GothamBold
-CloseButton.TextSize = 13
-CloseButton.ZIndex = 15
-CloseButton.Active = true
-CloseButton.Parent = MainFrame
-
-local CloseCorner = Instance.new("UICorner")
-CloseCorner.CornerRadius = UDim.new(0, 6)
-CloseCorner.Parent = CloseButton
-
--- Sub-Title
-local SubTitleLabel = Instance.new("TextLabel")
-SubTitleLabel.Name = "SubTitleLabel"
-SubTitleLabel.Size = UDim2.new(1, 0, 0, 25)
-SubTitleLabel.Position = UDim2.new(0, 0, 0, 45)
-SubTitleLabel.BackgroundTransparency = 1
-SubTitleLabel.TextColor3 = Color3.fromRGB(200, 200, 220)
-SubTitleLabel.Text = "Auto clicker"
-SubTitleLabel.Font = Enum.Font.GothamSemibold
-SubTitleLabel.TextSize = 13
-SubTitleLabel.ZIndex = 12
-SubTitleLabel.Parent = MainFrame
-
--- Set Speed Box
-local SpeedFrame = Instance.new("Frame")
-SpeedFrame.Name = "SpeedFrame"
-SpeedFrame.Size = UDim2.new(0.88, 0, 0, 36)
-SpeedFrame.Position = UDim2.new(0.06, 0, 0.40, 0)
-SpeedFrame.BackgroundColor3 = Color3.fromRGB(32, 32, 44)
-SpeedFrame.ZIndex = 12
-SpeedFrame.Parent = MainFrame
-
-local SpeedFrameCorner = Instance.new("UICorner")
-SpeedFrameCorner.CornerRadius = UDim.new(0, 6)
-SpeedFrameCorner.Parent = SpeedFrame
-
-local SetLabel = Instance.new("TextLabel")
-SetLabel.Name = "SetLabel"
-SetLabel.Size = UDim2.new(0.3, 0, 1, 0)
-SetLabel.Position = UDim2.new(0.05, 0, 0, 0)
-SetLabel.BackgroundTransparency = 1
-SetLabel.TextColor3 = Color3.fromRGB(150, 150, 180)
-SetLabel.Text = "Set"
-SetLabel.Font = Enum.Font.Gotham
-SetLabel.TextSize = 12
-SetLabel.ZIndex = 13
-SetLabel.TextXAlignment = Enum.TextXAlignment.Left
-SetLabel.Parent = SpeedFrame
-
-local SpeedInput = Instance.new("TextBox")
-SpeedInput.Name = "SpeedInput"
-SpeedInput.Size = UDim2.new(0.6, 0, 1, 0)
-SpeedInput.Position = UDim2.new(0.35, 0, 0, 0)
-SpeedInput.BackgroundTransparency = 1
-SpeedInput.TextColor3 = Color3.fromRGB(255, 255, 255)
-SpeedInput.Text = "00.1"
-SpeedInput.Font = Enum.Font.GothamBold
-SpeedInput.TextSize = 13
-SpeedInput.ZIndex = 13
-SpeedInput.TextXAlignment = Enum.TextXAlignment.Right
-SpeedInput.Parent = SpeedFrame
-
--- PLAY Button
-local ToggleButton = Instance.new("TextButton")
-ToggleButton.Name = "ToggleButton"
-ToggleButton.Size = UDim2.new(0.88, 0, 0, 40)
-ToggleButton.Position = UDim2.new(0.06, 0, 0.68, 0)
-ToggleButton.BackgroundColor3 = Color3.fromRGB(220, 50, 50)
-ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-ToggleButton.Text = "PLAY"
-ToggleButton.Font = Enum.Font.GothamBold
-ToggleButton.TextSize = 14
-ToggleButton.ZIndex = 12
-ToggleButton.Active = true
-ToggleButton.Parent = MainFrame
-
-local ToggleCorner = Instance.new("UICorner")
-ToggleCorner.CornerRadius = UDim.new(0, 6)
-ToggleCorner.Parent = ToggleButton
-
----------------------------------------------------------
--- 5. ANIMASI GRADIENT
----------------------------------------------------------
-local TitleGradient = Instance.new("UIGradient")
-TitleGradient.Color = ColorSequence.new({
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 230, 255)),
-    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(170, 50, 255)),
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(0, 230, 255))
-})
-TitleGradient.Parent = TitleLabel
-
-local GradientTween = TweenService:Create(
-    TitleGradient,
-    TweenInfo.new(3, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, -1),
-    { Rotation = 360 }
-)
-GradientTween:Play()
-
----------------------------------------------------------
--- 6. LOGIKA AUTO CLICKER (TEMBUS GAME + AMAN UNTUK MOBILE)
----------------------------------------------------------
-local isClicking = false
-
-local function startAutoClicker()
-    task.spawn(function()
-        while isClicking do
-            local topbarInset = GuiService:GetGuiInset()
-            local pointPosition = TargetPoint.AbsolutePosition
-            local pointSize = TargetPoint.AbsoluteSize
-            
-            local exactX = pointPosition.X + (pointSize.X / 2)
-            local exactY = pointPosition.Y + (pointSize.Y / 2) + topbarInset.Y
-
-            -- Klik tembus titik 'O' ke game
-            VirtualInputManager:SendMouseButtonEvent(exactX, exactY, 0, true, game, 0)
-            task.wait(0.01)
-            VirtualInputManager:SendMouseButtonEvent(exactX, exactY, 0, false, game, 0)
-
-            local userDelay = tonumber(SpeedInput.Text) or 0.1
-            task.wait(math.max(userDelay, 0.01))
-        end
-    end)
+            BG.CFrame = camera.CFrame  
+            RunService.RenderStepped:Wait()  
+        end  
+        BV:Destroy()  
+        BG:Destroy()  
+        hum.PlatformStand = false  
+    end)  
 end
 
--- Toggle Play / Stop
-ToggleButton.MouseButton1Click:Connect(function()
-    isClicking = not isClicking
-    
-    if isClicking then
-        ToggleButton.Text = "STOP"
-        ToggleButton.BackgroundColor3 = Color3.fromRGB(40, 190, 80)
-        startAutoClicker()
-    else
-        ToggleButton.Text = "PLAY"
-        ToggleButton.BackgroundColor3 = Color3.fromRGB(220, 50, 50)
-    end
-end)
+ToggleBtn.MouseButton1Click:Connect(function()  
+    FlyConfig.Flying = not FlyConfig.Flying  
+    ToggleBtn.Text = FlyConfig.Flying and "STOP" or "FLY"  
+    ToggleBtn.BackgroundColor3 = FlyConfig.Flying and Color3.fromRGB(200, 0, 0) or Color3.fromRGB(40, 40, 40)  
+    if FlyConfig.Flying then startFly() end  
+end)  
 
--- Open / Close Menu (🎭)
-OpenMenuBtn.MouseButton1Click:Connect(function()
-    local isVisible = not MainFrame.Visible
-    MainFrame.Visible = isVisible
-    TargetPoint.Visible = isVisible
-end)
+-- [ ANIMATION MODULE FOR ALDO KNIGHTXOz HUB ] --  
+-- Tambahkan bagian ini di dalam script utamamu atau jalankan bersamaan
 
--- Tombol Close (X)
-CloseButton.MouseButton1Click:Connect(function()
-    isClicking = false
-    ToggleButton.Text = "PLAY"
-    ToggleButton.BackgroundColor3 = Color3.fromRGB(220, 50, 50)
-    
-    MainFrame.Visible = false
-    TargetPoint.Visible = false
-end)
+local AnimIds = {  
+    FlyIdle = "rbxassetid://1234567890", -- Ganti dengan ID Animasi Idle Terbang  
+    FlyMove = "rbxassetid://0987654321", -- Ganti dengan ID Animasi Bergerak Terbang  
+    FlyTakeOff = "rbxassetid://1122334455" -- Ganti dengan ID Animasi Take Off  
+}
 
-local Players = game:GetService("Players")
-local VirtualUser = game:GetService("VirtualUser")
+local function playAnimation(animId)  
+    local char = LocalPlayer.Character  
+    if not char then return end  
+    local hum = char:FindFirstChildOfClass("Humanoid")  
+    if not hum then return end  
+      
+    local anim = Instance.new("Animation")  
+    anim.AnimationId = animId  
+    local loadAnim = hum:LoadAnimation(anim)  
+    loadAnim:Play()  
+    return loadAnim  
+end
 
-local LocalPlayer = Players.LocalPlayer or Players.PlayerAdded:Wait()
-
-LocalPlayer.Idled:Connect(function()
-    pcall(function()
-        VirtualUser:CaptureController()
-        VirtualUser:ClickButton2(Vector2.new())
-    end)
-end)
+-- Panggil fungsi playAnimation(AnimIds.FlyMove) di dalam loop Flight Engine agar animasi berjalan!  
