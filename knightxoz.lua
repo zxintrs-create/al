@@ -1,6 +1,6 @@
--- [[ DELTA ULTIMATE AUTO-WALK V3: SMOOTH LINE FIX ]] --  
+-- [[ DELTA ULTIMATE AUTO-WALK V3: ULTIMATE FIXED EDITION ]] --  
 -- Developed by Delta maker script for Aldo Tzy  
--- Features: Modern Premium UI, Smooth Visual Line, Timeline Stitching, Precise Playback & Animation Support
+-- Features: Modern Premium UI, Smooth Visual Line, Timeline Stitching, Perfect Playback & Animation Support
 
 local RunService = game:GetService("RunService")  
 local UserInputService = game:GetService("UserInputService")  
@@ -15,7 +15,7 @@ local Humanoid = Character:WaitForChild("Humanoid")
 -- // CONFIG & STATE // --  
 local CFG = {  
     NodeInterval = 0.1,  
-    MinDistance = 0.8, -- Filter jarak minimal agar garis tidak ada bengkokan kecil/jitter  
+    MinDistance = 0.8, -- Filter jarak minimal agar garis mulus tanpa bengkokan kecil  
     LineColor = Color3.fromRGB(0, 255, 255),  
     AccentColor = Color3.fromRGB(170, 0, 255),  
 }
@@ -120,9 +120,9 @@ local function clearVisuals()
     state.visualNodes = {}  
 end
 
--- // CORE ENGINE // --
+-- // CORE ENGINE // --  
 
--- RECORDING WITH DISTANCE FILTER (SMOOTH LINES)  
+-- RECORDING  
 RunService.Heartbeat:Connect(function()  
     if not state.isRecording then return end  
       
@@ -130,7 +130,6 @@ RunService.Heartbeat:Connect(function()
     local cf = RootPart.CFrame  
     local st = Humanoid:GetState()  
       
-    -- Capture active animation IDs  
     local activeAnims = {}  
     local animator = Humanoid:FindFirstChildOfClass("Animator")  
     if animator then  
@@ -147,7 +146,6 @@ RunService.Heartbeat:Connect(function()
         local lastNode = state.timeline[#state.timeline]  
         local dist = (cf.Position - lastNode.CFrame.Position).Magnitude  
           
-        -- Rekam hanya jika interval waktu terpenuhi DAN jarak melampaui MinDistance  
         if (now - lastNode.T >= CFG.NodeInterval) and (dist >= CFG.MinDistance) then  
             drawLine(lastNode.CFrame.Position, cf.Position)  
             table.insert(state.timeline, {T = now, CFrame = cf, State = st, Animations = activeAnims})  
@@ -155,7 +153,7 @@ RunService.Heartbeat:Connect(function()
     end  
 end)
 
--- PLAYBACK  
+-- PLAYBACK ENGINE (SMOOTH, NO STUTTER, SINGLE JUMP FIX)  
 local function startPlayback()  
     if #state.timeline < 2 or state.isPlaying then return end  
     state.isPlaying = true  
@@ -167,9 +165,10 @@ local function startPlayback()
     RootPart.CFrame = state.timeline[1].CFrame  
       
     local currentIndex = 1  
+    local lastJumpIndex = 0  
     local connection  
       
-    connection = RunService.RenderStepped:Connect(function()  
+    connection = RunService.Heartbeat:Connect(function()  
         if not state.isPlaying then  
             connection:Disconnect()  
             return  
@@ -209,7 +208,9 @@ local function startPlayback()
             Humanoid:Move(Vector3.new(0, 0, 0), false)  
         end  
           
-        if currentData.State == Enum.HumanoidStateType.Jumping then  
+        -- Single-trigger Jump Fix (Hanya lompat 1 kali per node transisi)  
+        if currentData.State == Enum.HumanoidStateType.Jumping and currentIndex ~= lastJumpIndex then  
+            lastJumpIndex = currentIndex  
             Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)  
             RootPart.AssemblyLinearVelocity = Vector3.new(RootPart.AssemblyLinearVelocity.X, 35, RootPart.AssemblyLinearVelocity.Z)  
         end  
