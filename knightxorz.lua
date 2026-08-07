@@ -1,4 +1,4 @@
--- [[ ALDO KNIGHTXORZ V4.18 MASTER ENTERPRISE EDITION ]] --
+-- [[ ALDO KNIGHTXORZ V4.18 MASTER ENTERPRISE FULL EDITION ]] --
 print("I'M KNIGHTXORZ")
 
 local RunService = game:GetService("RunService")
@@ -255,6 +255,290 @@ end)
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
 MainFrame.Size = UDim2.new(0.9, 0, 0.45, 0)
+MainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+MainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Visible = true
+MainFrame.ZIndex = 2
+MainFrame.Parent = ScreenGui
+
+local MainGradient = Instance.new("UIGradient")
+MainGradient.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(20, 20, 35)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(60, 0, 90))
+})
+MainGradient.Rotation = 45
+MainGradient.Parent = MainFrame
+
+local Shadow = Instance.new("ImageLabel")
+Shadow.Name = "Shadow"
+Shadow.Size = UDim2.new(1, 40, 1, 40)
+Shadow.Position = UDim2.new(0, -20, 0, -20)
+Shadow.BackgroundTransparency = 1
+Shadow.Image = "rbxassetid://5554236805"
+Shadow.ImageTransparency = 0.5
+Shadow.ZIndex = 1
+Shadow.Parent = MainFrame
+
+-- Toggle MainFrame Visibility dengan Animasi Buka/Tutup & Pencegahan Konflik Drag
+local openMoved = false
+
+table.insert(currentConnections, OpenMenu.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch then
+        openMoved = true
+    end
+end))
+
+table.insert(currentConnections, OpenMenu.MouseButton1Click:Connect(function()
+    if openMoved then
+        openMoved = false
+        return
+    end
+    
+    if not MainFrame.Visible then
+        MainFrame.Visible = true
+        MainFrame.Size = UDim2.new(0, 0, 0, 0)
+
+        TweenService:Create(
+            MainFrame,
+            TweenInfo.new(0.35, Enum.EasingStyle.Back),
+            {Size = UDim2.new(0.9, 0, 0.45, 0)}
+        ):Play()
+    else
+        TweenService:Create(
+            MainFrame,
+            TweenInfo.new(0.25),
+            {Size = UDim2.new(0, 0, 0, 0)}
+        ):Play()
+
+        task.wait(0.25)
+        MainFrame.Visible = false
+    end
+end))
+
+-- Dragging logic khusus untuk OpenMenu
+local openDragging, openDragStart, openStartPos
+table.insert(currentConnections, OpenMenu.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        openDragging = true
+        openDragStart = input.Position
+        openStartPos = OpenMenu.Position
+        openMoved = false
+        local changedConn
+        changedConn = input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                openDragging = false
+                if changedConn then changedConn:Disconnect() end
+            end
+        end)
+    end
+end))
+
+table.insert(currentConnections, UserInputService.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+        if openDragging then
+            local delta = input.Position - openDragStart
+            if delta.Magnitude > 5 then
+                openMoved = true
+            end
+            OpenMenu.Position = UDim2.new(openStartPos.X.Scale, openStartPos.X.Offset + delta.X, openStartPos.Y.Scale, openStartPos.Y.Offset + delta.Y)
+        end
+    end
+end))
+
+local Corner = Instance.new("UICorner")
+Corner.CornerRadius = UDim.new(0, 12)
+Corner.Parent = MainFrame
+
+local Stroke = Instance.new("UIStroke")
+Stroke.Thickness = 2
+Stroke.Color = CFG.AccentColor
+Stroke.Parent = MainFrame
+
+-- Top Bar Header
+local Title = Instance.new("TextLabel")
+Title.Name = "TitleHeader"
+Title.Size = UDim2.new(0, 300, 0, 42)
+Title.Position = UDim2.new(0, 12, 0, 0)
+Title.Text = "ALDO KNIGHTXORZ V4.18"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.Font = Enum.Font.GothamBold
+Title.TextSize = 14
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.BackgroundTransparency = 1
+Title.ZIndex = 3
+Title.Parent = MainFrame
+
+local StatusLabel = Instance.new("TextLabel")
+StatusLabel.Name = "StatusLabel"
+StatusLabel.Size = UDim2.new(0, 260, 0, 42)
+StatusLabel.Position = UDim2.new(0, 280, 0, 0)
+StatusLabel.Text = "Status: IDLE | File: 1"
+StatusLabel.TextColor3 = CFG.LineColor
+StatusLabel.Font = Enum.Font.GothamBold
+StatusLabel.TextSize = 11
+StatusLabel.TextXAlignment = Enum.TextXAlignment.Left
+StatusLabel.BackgroundTransparency = 1
+StatusLabel.ZIndex = 3
+StatusLabel.Parent = MainFrame
+
+-- Landscape Scrolling Container dengan Grid Layout (Button size 145x55, CanvasSize disesuaikan menjadi 520)
+local ScrollingContainer = Instance.new("ScrollingFrame")
+ScrollingContainer.Size = UDim2.new(1, -16, 1, -52)
+ScrollingContainer.Position = UDim2.new(0, 8, 0, 46)
+ScrollingContainer.BackgroundTransparency = 1
+ScrollingContainer.BorderSizePixel = 0
+ScrollingContainer.CanvasSize = UDim2.new(0, 0, 0, 520)
+ScrollingContainer.ScrollBarThickness = 4
+ScrollingContainer.ZIndex = 3
+ScrollingContainer.Parent = MainFrame
+
+local UIGrid = Instance.new("UIGridLayout")
+UIGrid.CellSize = UDim2.new(0, 145, 0, 55)
+UIGrid.CellPadding = UDim2.new(0, 8, 0, 8)
+UIGrid.SortOrder = Enum.SortOrder.LayoutOrder
+UIGrid.Parent = ScrollingContainer
+
+-- Dragging logic untuk MainFrame secara keseluruhan (Fully Draggable dengan anti-bentrok tombol)
+local mainDragging, mainDragStart, mainStartPos
+table.insert(currentConnections, MainFrame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        if input.Target and input.Target:IsDescendantOf(ScrollingContainer) then
+            return
+        end
+        mainDragging = true
+        mainDragStart = input.Position
+        mainStartPos = MainFrame.Position
+        local changedConn
+        changedConn = input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                mainDragging = false
+                if changedConn then changedConn:Disconnect() end
+            end
+        end)
+    end
+end))
+
+table.insert(currentConnections, UserInputService.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+        if mainDragging then
+            local delta = input.Position - mainDragStart
+            MainFrame.Position = UDim2.new(mainStartPos.X.Scale, mainStartPos.X.Offset + delta.X, mainStartPos.Y.Scale, mainStartPos.Y.Offset + delta.Y)
+        end
+    end
+end))
+
+local function updateStatus(text)
+    if not ScreenGui or not ScreenGui.Parent then return end
+    local frame = ScreenGui:FindFirstChild("MainFrame")
+    if frame then
+        local lbl = frame:FindFirstChild("StatusLabel")
+        if lbl then
+            lbl.Text = "Status: " .. text .. " | File: " .. state.selectedFile
+        end
+    end
+end
+
+local function createBtn(text, order, callback)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0, 145, 0, 55)
+    btn.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+    btn.Text = text
+    btn.TextColor3 = Color3.fromRGB(230, 230, 230)
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 10
+    btn.LayoutOrder = order
+    btn.ZIndex = 4
+    btn.Parent = ScrollingContainer
+      
+    local btnCorner = Instance.new("UICorner")
+    btnCorner.CornerRadius = UDim.new(0, 6)
+    btnCorner.Parent = btn
+      
+    local btnStroke = Instance.new("UIStroke")
+    btnStroke.Thickness = 1
+    btnStroke.Color = Color3.fromRGB(70, 70, 90)
+    btnStroke.Parent = btn
+
+    table.insert(currentConnections, btn.MouseButton1Click:Connect(function()
+        TweenService:Create(btn, TweenInfo.new(0.15), {BackgroundColor3 = CFG.AccentColor}):Play()
+        task.wait(0.15)
+        TweenService:Create(btn, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(30, 30, 40)}):Play()
+        callback()
+    end))
+    return btn
+end
+
+local function drawLine(p1, p2)
+    local dist = (p1 - p2).Magnitude
+    if dist < 0.2 then return end
+      
+    local part = Instance.new("Part")
+    part.Size = Vector3.new(0.15, 0.15, dist)
+    part.CFrame = CFrame.new(p1:Lerp(p2, 0.5), p2)
+    part.Anchored = true
+    part.CanCollide = false
+    part.CanQuery = false
+    part.CastShadow = false
+    part.Locked = true
+    part.Material = Enum.Material.Neon
+    part.Color = CFG.LineColor
+    part.Parent = getOrCreateRouteFolder()
+    part.Name = "VisualNode"
+    part.Transparency = state.lineVisible and 0 or 1
+    table.insert(state.visualNodes, part)
+end
+
+local function clearVisuals()
+    for _, v in pairs(state.visualNodes) do
+        if v then v:Destroy() end
+    end
+    state.visualNodes = {}
+    local folder = workspace:FindFirstChild("KNIGHTXORZ_ROUTE")
+    if folder then folder:ClearAllChildren() end
+end
+
+RunService:BindToRenderStep("AldoKnightXorzV418_Record", Enum.RenderPriority.Character.Value, function()
+    if not state.isRecording or not RootPart or not Humanoid then return end
+      
+    local pos = RootPart.Position
+    local st = Humanoid:GetState()
+    local vel = RootPart.AssemblyLinearVelocity
+    local currentTimestamp = tick() - state.startTime
+    
+    local isJumping = (Humanoid.FloorMaterial == Enum.Material.Air and vel.Y > 1) or (st == Enum.HumanoidStateType.Jumping) or (st == Enum.HumanoidStateType.Freefall and vel.Y > 2)
+    local jumpTrigger = false
+    if isJumping and not state.lastJumpState then
+        jumpTrigger = true
+    end
+    state.lastJumpState = isJumping
+
+    if #state.timeline == 0 then
+        table.insert(state.timeline, {
+            Position = pos,
+            Timestamp = currentTimestamp,
+            Jump = jumpTrigger
+        })
+    else
+        local lastNode = state.timeline[#state.timeline]
+        local dist = (pos - lastNode.Position).Magnitude
+        local timeDiff = currentTimestamp - lastNode.Timestamp
+          
+        if (timeDiff >= CFG.NodeInterval and dist >= CFG.MinDistance) or jumpTrigger then
+            drawLine(lastNode.Position, pos)
+            table.insert(state.timeline, {
+                Position = pos,
+                Timestamp = currentTimestamp,
+                Jump = jumpTrigger
+            })
+        end
+    end
+end)
+
+stopPlayback = function(manualStop)
+   0, 0.45, 0)
 MainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 MainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
 MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
