@@ -1,6 +1,6 @@
--- [[ DELTA ULTIMATE AUTO-WALK V3: GOD-TIER EDITION ]] --  
+-- [[ DELTA ULTIMATE AUTO-WALK V3: OPTIMIZED EDITION ]] --  
 -- Developed by Delta maker script for Aldo Tzy  
--- Features: Modern Premium UI, Visual Line, Timeline Stitching, Precise Playback
+-- Features: Modern Premium UI, Visual Line, Timeline Stitching, Precise Playback (Lightweight)
 
 local RunService = game:GetService("RunService")  
 local UserInputService = game:GetService("UserInputService")  
@@ -14,7 +14,7 @@ local Humanoid = Character:WaitForChild("Humanoid")
 
 -- // CONFIG & STATE // --  
 local CFG = {  
-    NodeInterval = 0.05,  
+    NodeInterval = 0.1, -- Ditingkatkan dari 0.05 ke 0.1 agar tidak berat/lag  
     LineColor = Color3.fromRGB(0, 255, 255),  
     AccentColor = Color3.fromRGB(170, 0, 255),  
     MaxError = 0.05  
@@ -86,7 +86,6 @@ local function createBtn(text, order, callback)
     btnStroke.Parent = btn
 
     btn.MouseButton1Click:Connect(function()  
-        -- Simple hover effect  
         TweenService:Create(btn, TweenInfo.new(0.2), {BackgroundColor3 = CFG.AccentColor}):Play()  
         task.wait(0.1)  
         TweenService:Create(btn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(35, 35, 45)}):Play()  
@@ -98,7 +97,7 @@ end
 -- // VISUAL LINE LOGIC // --  
 local function drawLine(p1, p2)  
     local dist = (p1 - p2).Magnitude  
-    if dist < 0.1 then return end  
+    if dist < 0.2 then return end  
       
     local part = Instance.new("Part")  
     part.Size = Vector3.new(0.1, 0.1, dist)  
@@ -113,7 +112,9 @@ local function drawLine(p1, p2)
 end
 
 local function clearVisuals()  
-    for _, v in pairs(state.visualNodes) do v:Destroy() end  
+    for _, v in pairs(state.visualNodes) do  
+        if v then v:Destroy() end  
+    end  
     state.visualNodes = {}  
 end
 
@@ -124,7 +125,7 @@ RunService.Heartbeat:Connect(function()
     if not state.isRecording then return end  
       
     local now = tick()  
-    if #state.timeline == 0 or (tick() - state.timeline[#state.timeline].T >= CFG.NodeInterval) then  
+    if #state.timeline == 0 or (now - state.timeline[#state.timeline].T >= CFG.NodeInterval) then  
         local cf = RootPart.CFrame  
         local st = Humanoid:GetState()  
           
@@ -132,11 +133,11 @@ RunService.Heartbeat:Connect(function()
             drawLine(state.timeline[#state.timeline].CFrame.Position, cf.Position)  
         end  
           
-        table.insert(state.timeline, {T = tick(), CFrame = cf, State = st})  
+        table.insert(state.timeline, {T = now, CFrame = cf, State = st})  
     end  
 end)
 
--- PLAYBACK (SMOOTH & ANIMATION FIX)  
+-- PLAYBACK (SMOOTH & LIGHTWEIGHT)  
 local function startPlayback()  
     if #state.timeline < 2 or state.isPlaying then return end  
     state.isPlaying = true  
@@ -158,23 +159,21 @@ local function startPlayback()
             elapsed = elapsed + dt  
             local alpha = math.clamp(elapsed / duration, 0, 1)  
               
-            -- Smooth CFrame lerping  
             local currentCF = startCF:Lerp(endCF, alpha)  
             RootPart.CFrame = currentCF  
               
-            -- Feed velocity and move direction so default Animate script plays walking animation  
             local moveDir = (endCF.Position - startCF.Position)  
             if moveDir.Magnitude > 0 then  
                 moveDir = moveDir.Unit  
                 Humanoid:Move(moveDir, false)  
-                RootPart.AssemblyLinearVelocity = moveDir * 16  
+                RootPart.AssemblyLinearVelocity = Vector3.new(moveDir.X * 16, RootPart.AssemblyLinearVelocity.Y, moveDir.Z * 16)  
             else  
                 Humanoid:Move(Vector3.new(0, 0, 0), false)  
-                RootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)  
             end  
               
             if currentData.State == Enum.HumanoidStateType.Jumping then  
-                Humanoid.Jump = true  
+                Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)  
+                RootPart.AssemblyLinearVelocity = Vector3.new(RootPart.AssemblyLinearVelocity.X, 35, RootPart.AssemblyLinearVelocity.Z)  
             end  
         end  
     end  
@@ -200,7 +199,6 @@ local function executeRollback()
         end  
     end  
       
-    -- Slice timeline  
     for i = #state.timeline, safeIndex + 1, -1 do  
         table.remove(state.timeline, i)  
         if state.visualNodes[i] then  
