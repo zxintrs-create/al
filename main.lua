@@ -1,10 +1,3 @@
---========================================================--
--- AUTO WALK RECORD SYSTEM
--- PART 1/3
--- LOCAL SCRIPT ONLY
--- ALDO KNIGHTXOz
---========================================================--
-
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
@@ -15,840 +8,397 @@ local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 local RootPart = Character:WaitForChild("HumanoidRootPart")
 local Humanoid = Character:WaitForChild("Humanoid")
 
-
-LocalPlayer.CharacterAdded:Connect(function(char)
-	Character = char
-	RootPart = char:WaitForChild("HumanoidRootPart")
-	Humanoid = char:WaitForChild("Humanoid")
+LocalPlayer.CharacterAdded:Connect(function(newChar)
+	Character = newChar
+	RootPart = Character:WaitForChild("HumanoidRootPart")
+	Humanoid = Character:WaitForChild("Humanoid")
 end)
 
+local recordingData = {}
+local isRecording = false
+local isPlaying = false
+local currentFrameIndex = 1
+local visualNodes = {}
+local visualAttachments = {}
+local visualBeams = {}
+local visualFolder = Instance.new("Folder")
+visualFolder.Name = "AutoWalkVisualPath"
+visualFolder.Parent = workspace
 
--- DATA
+local playerGui = LocalPlayer:WaitForChild("PlayerGui")
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "AldoKnightXOzGui"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = playerGui
 
-local RecordData = {}
-local SavedData = {}
+local openButton = Instance.new("TextButton")
+openButton.Name = "OpenMenuButton"
+openButton.Size = UDim2.new(0, 120, 0, 40)
+openButton.Position = UDim2.new(0, 20, 0, 20)
+openButton.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+openButton.Text = "Menu"
+openButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+openButton.Font = Enum.Font.GothamBold
+openButton.TextSize = 14
+openButton.Parent = screenGui
 
-local Recording = false
-local Playing = false
+local uiCornerOpen = Instance.new("UICorner")
+uiCornerOpen.CornerRadius = UDim.new(0, 8)
+uiCornerOpen.Parent = openButton
 
-local SafePointIndex = nil
-local CutIndex = 1
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Size = UDim2.new(0, 220, 0, 380)
+mainFrame.Position = UDim2.new(0, 20, 0, 70)
+mainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+mainFrame.Visible = true
+mainFrame.Parent = screenGui
 
-local RecordStart = 0
-local RecordTimer = 0
+local uiCornerMain = Instance.new("UICorner")
+uiCornerMain.CornerRadius = UDim.new(0, 12)
+uiCornerMain.Parent = mainFrame
 
-local RECORD_RATE = 60
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Name = "TitleLabel"
+titleLabel.Size = UDim2.new(1, 0, 0, 40)
+titleLabel.Position = UDim2.new(0, 0, 0, 5)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Text = "ALDO KNIGHTXOz"
+titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+titleLabel.Font = Enum.Font.GothamBold
+titleLabel.TextSize = 16
+titleLabel.Parent = mainFrame
 
+local titleStroke = Instance.new("UIStroke")
+titleStroke.Color = Color3.fromRGB(0, 0, 0)
+titleStroke.Thickness = 2
+titleStroke.Parent = titleLabel
 
+local frameLayout = Instance.new("UIListLayout")
+frameLayout.Parent = mainFrame
+frameLayout.SortOrder = Enum.SortOrder.LayoutOrder
+frameLayout.Padding = UDim.new(0, 6)
+frameLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 
--- GUI
+titleLabel.LayoutOrder = 0
 
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "ALDO_KNIGHTXOz_AutoWalk"
-ScreenGui.ResetOnSpawn = false
-ScreenGui.Parent = LocalPlayer.PlayerGui
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Name = "StatusLabel"
+statusLabel.Size = UDim2.new(0.9, 0, 0, 20)
+statusLabel.BackgroundTransparency = 1
+statusLabel.Text = "Frame: 0 / 0"
+statusLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+statusLabel.Font = Enum.Font.Gotham
+statusLabel.TextSize = 12
+statusLabel.LayoutOrder = 1
+statusLabel.Parent = mainFrame
 
-
-local OpenMenu = Instance.new("TextButton")
-OpenMenu.Size = UDim2.new(0,70,0,35)
-OpenMenu.Position = UDim2.new(0,20,0.5,-220)
-OpenMenu.Text = "MENU"
-OpenMenu.TextScaled = true
-OpenMenu.Parent = ScreenGui
-
-
-local Main = Instance.new("Frame")
-Main.Size = UDim2.new(0,260,0,430)
-Main.Position = UDim2.new(0.5,-130,0.5,-215)
-Main.Visible = false
-Main.Parent = ScreenGui
-
-
-
-local function AddUIEffect(obj)
-
+local function applyGradientAnimation(guiObject)
 	local stroke = Instance.new("UIStroke")
 	stroke.Thickness = 2
-	stroke.Parent = obj
-
+	stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	stroke.Parent = guiObject
 
 	local gradient = Instance.new("UIGradient")
-	gradient.Parent = obj
+	gradient.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 0, 100)),
+		ColorSequenceKeypoint.new(0.5, Color3.fromRGB(0, 180, 255)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 0, 100))
+	})
+	gradient.Rotation = 0
+	gradient.Parent = stroke
 
-
-	task.spawn(function()
-		while gradient.Parent do
-			gradient.Rotation += 2
-			task.wait(0.03)
-		end
-	end)
-
+	local tweenInfo = TweenInfo.new(4, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, -1)
+	local tween = TweenService:Create(gradient, tweenInfo, {Rotation = 360})
+	tween:Play()
 end
 
+applyGradientAnimation(mainFrame)
+applyGradientAnimation(openButton)
 
-AddUIEffect(OpenMenu)
-AddUIEffect(Main)
+local function createMenuButton(name, text, order)
+	local btn = Instance.new("TextButton")
+	btn.Name = name
+	btn.Size = UDim2.new(0.9, 0, 0, 28)
+	btn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+	btn.Text = text
+	btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	btn.Font = Enum.Font.GothamBold
+	btn.TextSize = 12
+	btn.LayoutOrder = order
+	btn.Parent = mainFrame
 
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 6)
+	corner.Parent = btn
 
-
-local Title = Instance.new("TextLabel")
-Title.Size = UDim2.new(1,0,0,60)
-Title.BackgroundTransparency = 1
-Title.Text = "ALDO KNIGHTXOz"
-Title.TextScaled = true
-Title.Font = Enum.Font.GothamBold
-Title.Parent = Main
-
-AddUIEffect(Title)
-
-
-
-local function CreateButton(text,y)
-
-	local b = Instance.new("TextButton")
-
-	b.Size = UDim2.new(0,220,0,40)
-	b.Position = UDim2.new(0,20,0,y)
-	b.Text = text
-	b.TextScaled = true
-	b.Font = Enum.Font.GothamBold
-	b.Parent = Main
-
-	AddUIEffect(b)
-
-	return b
-
+	applyGradientAnimation(btn)
+	return btn
 end
 
+local btnRecord = createMenuButton("BtnRecord", "RECORD", 2)
+local btnStop = createMenuButton("BtnStop", "STOP", 3)
+local btnPlay = createMenuButton("BtnPlay", "PLAY", 4)
+local btnRollback = createMenuButton("BtnRollback", "ROLLBACK", 5)
 
-local RecordButton = CreateButton("RECORD",70)
-local StopButton = CreateButton("STOP",120)
-local PlayButton = CreateButton("PLAY",170)
-local RollbackButton = CreateButton("ROLLBACK",220)
-local BackButton = CreateButton("<<",270)
-local ForwardButton = CreateButton(">>",320)
-local CutButton = CreateButton("CUT",370)
+local navFrame = Instance.new("Frame")
+navFrame.Name = "NavFrame"
+navFrame.Size = UDim2.new(0.9, 0, 0, 28)
+navFrame.BackgroundTransparency = 1
+navFrame.LayoutOrder = 6
+navFrame.Parent = mainFrame
 
+local navLayout = Instance.new("UIListLayout")
+navLayout.FillDirection = Enum.FillDirection.Horizontal
+navLayout.HorizontalAlignment = Enum.HorizontalAlignment.SpaceBetween
+navLayout.Parent = navFrame
 
+local btnLeft = Instance.new("TextButton")
+btnLeft.Size = UDim2.new(0.48, 0, 1, 0)
+btnLeft.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+btnLeft.Text = "<<"
+btnLeft.TextColor3 = Color3.fromRGB(255, 255, 255)
+btnLeft.Font = Enum.Font.GothamBold
+btnLeft.Parent = navFrame
+local cornerLeft = Instance.new("UICorner")
+cornerLeft.CornerRadius = UDim.new(0, 6)
+cornerLeft.Parent = btnLeft
+applyGradientAnimation(btnLeft)
 
-OpenMenu.MouseButton1Click:Connect(function()
-	Main.Visible = not Main.Visible
-end)
+local btnRight = Instance.new("TextButton")
+btnRight.Size = UDim2.new(0.48, 0, 1, 0)
+btnRight.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+btnRight.Text = ">>"
+btnRight.TextColor3 = Color3.fromRGB(255, 255, 255)
+btnRight.Font = Enum.Font.GothamBold
+btnRight.Parent = navFrame
+local cornerRight = Instance.new("UICorner")
+cornerRight.CornerRadius = UDim.new(0, 6)
+cornerRight.Parent = btnRight
+applyGradientAnimation(btnRight)
 
+local btnCut = createMenuButton("BtnCut", "CUT", 7)
+local btnSave = createMenuButton("BtnSave", "SAVE", 8)
+local btnLoad = createMenuButton("BtnLoad", "LOAD", 9)
 
-UserInputService.InputBegan:Connect(function(input,gp)
-	if gp then return end
+local function toggleMenu()
+	mainFrame.Visible = not mainFrame.Visible
+end
 
+openButton.MouseButton1Click:Connect(toggleMenu)
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
 	if input.KeyCode == Enum.KeyCode.O then
-		Main.Visible = not Main.Visible
+		toggleMenu()
 	end
 end)
 
-
-
--- VISUAL LINE
-
-local LineFolder = Instance.new("Folder")
-LineFolder.Name = "ALDO_Record_Line"
-LineFolder.Parent = workspace
-
-
-local LastPoint
-
-
-
-local function ClearLine()
-
-	for _,v in ipairs(LineFolder:GetChildren()) do
-		v:Destroy()
-	end
-
-	LastPoint = nil
-
+local function updateStatus()
+	statusLabel.Text = "Frame: " .. tostring(currentFrameIndex) .. " / " .. tostring(#recordingData)
 end
 
+local function clearVisuals()
+	visualFolder:ClearAllChildren()
+	visualNodes = {}
+	visualAttachments = {}
+	visualBeams = {}
+end
 
+local function rebuildVisualPath()
+	clearVisuals()
+	for i = 1, #recordingData do
+		local frame = recordingData[i]
+		local att = Instance.new("Attachment")
+		att.WorldCFrame = frame.cframe
+		att.Parent = visualFolder
+		table.insert(visualAttachments, att)
 
-local function CreateLine(pos)
+		if i > 1 then
+			local beam = Instance.new("Beam")
+			beam.Attachment0 = visualAttachments[i - 1]
+			beam.Attachment1 = att
+			beam.Width0 = 0.4
+			beam.Width1 = 0.4
+			beam.Color = ColorSequence.new(Color3.fromRGB(0, 180, 255))
+			beam.FaceCamera = true
+			beam.Parent = visualFolder
+			table.insert(visualBeams, beam)
+		end
+	end
+end
 
-	local p = Instance.new("Part")
+local function addVisualSegment(cframe)
+	local att = Instance.new("Attachment")
+	att.WorldCFrame = cframe
+	att.Parent = visualFolder
+	table.insert(visualAttachments, att)
 
-	p.Size = Vector3.new(0.05,0.05,0.05)
-	p.Anchored = true
-	p.CanCollide = false
-	p.Transparency = 1
-	p.Position = pos
-	p.Parent = LineFolder
-
-
-	if LastPoint then
-
-		local a = Instance.new("Attachment")
-		a.Parent = LastPoint
-
-		local b = Instance.new("Attachment")
-		b.Parent = p
-
-
+	local count = #visualAttachments
+	if count > 1 then
 		local beam = Instance.new("Beam")
-
-		beam.Attachment0 = a
-		beam.Attachment1 = b
-
-		beam.Width0 = 0.12
-		beam.Width1 = 0.12
-
+		beam.Attachment0 = visualAttachments[count - 1]
+		beam.Attachment1 = att
+		beam.Width0 = 0.4
+		beam.Width1 = 0.4
+		beam.Color = ColorSequence.new(Color3.fromRGB(0, 180, 255))
 		beam.FaceCamera = true
-
-		beam.Parent = p
-
+		beam.Parent = visualFolder
+		table.insert(visualBeams, beam)
 	end
-
-
-	LastPoint = p
-
 end
 
+local recordConnection = nil
+local playbackConnection = nil
 
-
--- RECORD
-
-local function IsSafe()
-
-	if Humanoid.FloorMaterial == Enum.Material.Air then
-		return false
+local function stopAll()
+	isRecording = false
+	isPlaying = false
+	if recordConnection then
+		recordConnection:Disconnect()
+		recordConnection = nil
 	end
-
-	local state = Humanoid:GetState()
-
-	if state == Enum.HumanoidStateType.Freefall then
-		return false
+	if playbackConnection then
+		playbackConnection:Disconnect()
+		playbackConnection = nil
 	end
-
-	return true
-
 end
 
-
-
-local function Capture()
-
-	local frame = {
-
-		Time = os.clock()-RecordStart,
-
-		CFrame = RootPart.CFrame,
-
-		Position = RootPart.Position,
-
-		MoveDirection = Humanoid.MoveDirection,
-
-		Velocity = RootPart.AssemblyLinearVelocity,
-
-		State = Humanoid:GetState(),
-
-		WalkSpeed = Humanoid.WalkSpeed,
-
-		Safe = IsSafe()
-
-	}
-
-
-	table.insert(RecordData,frame)
-
-
-	CreateLine(frame.Position)
-
-
-	if frame.Safe then
-		SafePointIndex = #RecordData
-	end
-
-end
-
-
-
-local function StartRecord()
-
-	table.clear(RecordData)
-
-	ClearLine()
-
-	SafePointIndex = nil
-
-	CutIndex = 1
-
-	Recording = true
-
-	RecordStart = os.clock()
-
-end
-
-
-
-local function StopRecord()
-
-	Recording = false
-
-end
-
-
-
-RecordButton.MouseButton1Click:Connect(StartRecord)
-StopButton.MouseButton1Click:Connect(StopRecord)
-
-
-
-RunService.Heartbeat:Connect(function(dt)
-
-	if Recording then
-
-		RecordTimer += dt
-
-		if RecordTimer >= 1/RECORD_RATE then
-
-			RecordTimer = 0
-
-			Capture()
-
+btnRecord.MouseButton1Click:Connect(function()
+	stopAll()
+	if currentFrameIndex < #recordingData then
+		for i = #recordingData, currentFrameIndex + 1, -1 do
+			table.remove(recordingData, i)
 		end
-
+		rebuildVisualPath()
 	end
-
-end)
-
-
-
-print("I'M KNIGHTXOz")
-	
-	--========================================================--
--- AUTO WALK RECORD SYSTEM
--- PART 2/3
--- PLAYBACK ENGINE
---========================================================--
-
-
-local PlaybackConnection = nil
-local PlaybackIndex = 1
-
-
-
-local function StopPlayback()
-
-	Playing = false
-
-	if PlaybackConnection then
-		PlaybackConnection:Disconnect()
-		PlaybackConnection = nil
-	end
-
-	Humanoid:Move(
-		Vector3.zero,
-		false
-	)
-
-end
-
-
-
-local function SmoothMove(target)
-
-	local direction =
-		target - RootPart.Position
-
-
-	local distance =
-		direction.Magnitude
-
-
-	if distance > 0.8 then
-
-		Humanoid:Move(
-			direction.Unit,
-			false
-		)
-
-	else
-
-		Humanoid:Move(
-			Vector3.zero,
-			false
-		)
-
-	end
-
-end
-
-
-
-local function SmoothRotate(frame)
-
-	if not frame then
-		return
-	end
-
-
-	local look =
-		frame.CFrame.LookVector
-
-
-	local current =
-		RootPart.CFrame.LookVector
-
-
-	local result =
-		current:Lerp(
-			look,
-			0.2
-		)
-
-
-	RootPart.CFrame =
-		CFrame.lookAt(
-			RootPart.Position,
-			RootPart.Position + result
-		)
-
-end
-
-
-
-local function SyncJump(frame)
-
-	if not frame then
-		return
-	end
-
-
-	if frame.State ==
-		Enum.HumanoidStateType.Jumping then
-
-
-		if Humanoid.FloorMaterial ~= Enum.Material.Air then
-
-			Humanoid:ChangeState(
-				Enum.HumanoidStateType.Jumping
-			)
-
-		end
-
-	end
-
-end
-
-
-
-local function StartPlayback()
-
-	if #RecordData < 2 then
-		return
-	end
-
-
-
-	StopPlayback()
-
-
-
-	local first =
-		RecordData[1]
-
-
-	if first then
-
-		RootPart.CFrame =
-			first.CFrame
-
-	end
-
-
-
-	PlaybackIndex = 1
-
-	Playing = true
-
-
-
-	PlaybackConnection =
-	RunService.Heartbeat:Connect(function()
-
-
-		if not Playing then
-			return
-		end
-
-
-
-		local current =
-			RecordData[PlaybackIndex]
-
-
-		local nextFrame =
-			RecordData[PlaybackIndex + 1]
-
-
-
-		if not current or not nextFrame then
-
-			StopPlayback()
-
-			return
-
-		end
-
-
-
-		SmoothMove(
-			nextFrame.Position
-		)
-
-
-		SmoothRotate(
-			current
-		)
-
-
-		SyncJump(
-			current
-		)
-
-
-
-		if
-			(RootPart.Position -
-			nextFrame.Position).Magnitude
-			< 1
-		then
-
-			PlaybackIndex += 1
-
-		end
-
-
-
+	isRecording = true
+	recordConnection = RunService.Heartbeat:Connect(function()
+		if not isRecording or not RootPart or not Humanoid then return end
+		local state = Humanoid:GetState()
+		local frameData = {
+			cframe = RootPart.CFrame,
+			velocity = RootPart.AssemblyLinearVelocity,
+			moveDir = Humanoid.MoveDirection,
+			walkSpeed = Humanoid.WalkSpeed,
+			state = state,
+			jump = (state == Enum.HumanoidStateType.Jumping)
+		}
+		table.insert(recordingData, frameData)
+		currentFrameIndex = #recordingData
+		addVisualSegment(frameData.cframe)
+		updateStatus()
 	end)
-
-end
-
-
-
-PlayButton.MouseButton1Click:Connect(function()
-
-	StartPlayback()
-
 end)
 
-
-
---========================================================--
--- TIMELINE CUT CONTROL
---========================================================--
-
-
-local function UpdateCut()
-
-	if CutIndex < 1 then
-		CutIndex = 1
-	end
-
-
-	if CutIndex > #RecordData then
-		CutIndex = #RecordData
-	end
-
-end
-
-
-
-BackButton.MouseButton1Click:Connect(function()
-
-	CutIndex -= 10
-
-	UpdateCut()
-
+btnStop.MouseButton1Click:Connect(function()
+	stopAll()
+	updateStatus()
 end)
 
+btnPlay.MouseButton1Click:Connect(function()
+	stopAll()
+	if #recordingData == 0 then return end
+	isPlaying = true
+	currentFrameIndex = 1
 
-
-ForwardButton.MouseButton1Click:Connect(function()
-
-	CutIndex += 10
-
-	UpdateCut()
-
-end)
-		
-		--========================================================--
--- AUTO WALK RECORD SYSTEM
--- PART 3/3
--- ROLLBACK + CUT + SAVE LOAD
---========================================================--
-
-
---========================================================--
--- REFRESH VISUAL LINE
---========================================================--
-
-local function RefreshLine()
-
-	ClearLine()
-
-
-	for _,frame in ipairs(RecordData) do
-
-		CreateLine(
-			frame.Position
-		)
-
-	end
-
-end
-
-
-
---========================================================--
--- CUT TIMELINE
---========================================================--
-
-local function ApplyCut()
-
-
-	if #RecordData == 0 then
-		return
-	end
-
-
-
-	local NewData = {}
-
-
-	for i = 1,CutIndex do
-
-		table.insert(
-			NewData,
-			RecordData[i]
-		)
-
-	end
-
-
-
-	for i = CutIndex + 1,#RecordData do
-
-		if RecordData[i].Safe then
-
-			table.insert(
-				NewData,
-				RecordData[i]
-			)
-
-			break
-
+	playbackConnection = RunService.Heartbeat:Connect(function()
+		if not isPlaying then return end
+		if currentFrameIndex > #recordingData then
+			stopAll()
+			return
 		end
 
-	end
+		local frame = recordingData[currentFrameIndex]
+		RootPart.CFrame = frame.cframe
+		RootPart.AssemblyLinearVelocity = frame.velocity
 
-
-
-	RecordData = NewData
-
-
-
-	SafePointIndex = nil
-
-
-	for i,frame in ipairs(RecordData) do
-
-		if frame.Safe then
-
-			SafePointIndex = i
-
+		if frame.jump then
+			Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
 		end
 
-	end
+		Humanoid:Move(frame.moveDir, false)
 
-
-
-	RefreshLine()
-
-end
-
-
-
-CutButton.MouseButton1Click:Connect(function()
-
-	ApplyCut()
-
+		currentFrameIndex = currentFrameIndex + 1
+		updateStatus()
+	end)
 end)
 
-
-
---========================================================--
--- ROLLBACK SMART
---========================================================--
-
-RollbackButton.MouseButton1Click:Connect(function()
-
-
-	StopPlayback()
-
-
-
-	if SafePointIndex then
-
-
-		local safe =
-			RecordData[SafePointIndex]
-
-
-		if safe then
-
-
-			RootPart.CFrame =
-				safe.CFrame
-
-
-			CutIndex =
-				SafePointIndex
-
-
-			ApplyCut()
-
-
-		end
-
-
+btnRollback.MouseButton1Click:Connect(function()
+	stopAll()
+	if #recordingData == 0 then return end
+	local removeAmount = math.min(30, #recordingData)
+	for i = 1, removeAmount do
+		table.remove(recordingData)
 	end
-
-
+	currentFrameIndex = #recordingData
+	rebuildVisualPath()
+	if currentFrameIndex > 0 then
+		RootPart.CFrame = recordingData[currentFrameIndex].cframe
+	end
+	updateStatus()
 end)
 
-
-
---========================================================--
--- SAVE LOAD
---========================================================--
-
-SaveButton.MouseButton1Click:Connect(function()
-
-
-	table.clear(
-		SavedData
-	)
-
-
-
-	for i,frame in ipairs(RecordData) do
-
-
-		SavedData[i] = frame
-
-
-	end
-
-
+btnLeft.MouseButton1Click:Connect(function()
+	if #recordingData == 0 then return end
+	currentFrameIndex = math.clamp(currentFrameIndex - 10, 1, #recordingData)
+	RootPart.CFrame = recordingData[currentFrameIndex].cframe
+	updateStatus()
 end)
 
-
-
-LoadButton.MouseButton1Click:Connect(function()
-
-
-	if #SavedData == 0 then
-		return
-	end
-
-
-
-	table.clear(
-		RecordData
-	)
-
-
-
-	for i,frame in ipairs(SavedData) do
-
-
-		RecordData[i] = frame
-
-
-	end
-
-
-
-	RefreshLine()
-
-
+btnRight.MouseButton1Click:Connect(function()
+	if #recordingData == 0 then return end
+	currentFrameIndex = math.clamp(currentFrameIndex + 10, 1, #recordingData)
+	RootPart.CFrame = recordingData[currentFrameIndex].cframe
+	updateStatus()
 end)
 
-
-
---========================================================--
--- CONTINUE RECORD AFTER CUT
---========================================================--
-
-local OldRecord = StartRecord
-
-
-
-StartRecord = function()
-
-
-	if #RecordData > 0 then
-
-
-		local last =
-			RecordData[#RecordData]
-
-
-		if last then
-
-
-			RootPart.CFrame =
-				last.CFrame
-
-
-		end
-
-
+btnCut.MouseButton1Click:Connect(function()
+	stopAll()
+	if #recordingData == 0 or currentFrameIndex >= #recordingData then return end
+	for i = #recordingData, currentFrameIndex + 1, -1 do
+		table.remove(recordingData, i)
 	end
-
-
-
-	Recording = true
-
-	RecordStart = os.clock()
-
-
-end
-
-
-
-RecordButton.MouseButton1Click:Connect(function()
-
-	StartRecord()
-
+	rebuildVisualPath()
+	updateStatus()
 end)
 
+local savedData = {}
 
-
---========================================================--
--- REMOVE MENU WITH ESC
---========================================================--
-
-UserInputService.InputBegan:Connect(function(input,gp)
-
-	if gp then
-		return
+btnSave.MouseButton1Click:Connect(function()
+	savedData = {}
+	for i, v in ipairs(recordingData) do
+		table.insert(savedData, {
+			cframe = v.cframe,
+			velocity = v.velocity,
+			moveDir = v.moveDir,
+			walkSpeed = v.walkSpeed,
+			state = v.state,
+			jump = v.jump
+		})
 	end
-
-
-	if input.KeyCode == Enum.KeyCode.Escape then
-
-		Main.Visible = false
-
-	end
-
+	updateStatus()
 end)
-		
-		
+
+btnLoad.MouseButton1Click:Connect(function()
+	stopAll()
+	recordingData = {}
+	for i, v in ipairs(savedData) do
+		table.insert(recordingData, {
+			cframe = v.cframe,
+			velocity = v.velocity,
+			moveDir = v.moveDir,
+			walkSpeed = v.walkSpeed,
+			state = v.state,
+			jump = v.jump
+		})
+	end
+	currentFrameIndex = #recordingData
+	rebuildVisualPath()
+	if currentFrameIndex > 0 then
+		RootPart.CFrame = recordingData[currentFrameIndex].cframe
+	end
+	updateStatus()
+end)
+
+print("ALDO KNIGHTXOz")
