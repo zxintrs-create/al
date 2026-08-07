@@ -1,3 +1,8 @@
+--========================================================--
+-- R15 ADVANCED GHOST REPLAY SYSTEM V4
+-- FULL SINGLE LOCAL SCRIPT - MOBILE & R15 OPTIMIZED
+--========================================================--
+
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
@@ -7,489 +12,774 @@ local LocalPlayer = Players.LocalPlayer
 local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 local RootPart = Character:WaitForChild("HumanoidRootPart")
 local Humanoid = Character:WaitForChild("Humanoid")
+local Animator = Humanoid:WaitForChild("Animator")
 
-LocalPlayer.CharacterAdded:Connect(function(newChar)
+-- Core Settings & State
+local RECORD_FPS = 30
+local RECORD_INTERVAL = 1 / RECORD_FPS
+local MAX_RECORD_FRAMES = 9000 -- Max 5 Menit (30 FPS * 300s)
+
+local RecordData = {}
+local SavedData = {}
+
+local Recording = false
+local Playing = false
+local Paused = false
+
+local CutIndex = 1
+local RecordStart = 0
+local RecordTimer = 0
+local PlaybackElapsed = 0
+
+local ActiveConnections = {}
+local ActiveTweens = {}
+local ActiveGhostTracks = {}
+local GhostCharacter = nil
+
+-- Character Reload Handler
+local function SetupCharacter(newChar)
 	Character = newChar
-	RootPart = Character:WaitForChild("HumanoidRootPart")
-	Humanoid = Character:WaitForChild("Humanoid")
-end)
-
-local recordingData = {}
-local isRecording = false
-local isPlaying = false
-local currentFrameIndex = 1
-local playbackTime = 0
-
-local visualAttachments = {}
-local visualBeams = {}
-local visualFolder = Instance.new("Folder")
-visualFolder.Name = "AutoWalkVisualPath"
-visualFolder.Parent = workspace
-
-local wasGrounded = true
-
-local function clearVisuals()
-	visualFolder:ClearAllChildren()
-	visualAttachments = {}
-	visualBeams = {}
-end
-
-local function rebuildVisualPath()
-	clearVisuals()
-	for i = 1, #recordingData do
-		local frame = recordingData[i]
-		local att = Instance.new("Attachment")
-		att.WorldCFrame = frame.cframe
-		att.Parent = visualFolder
-		table.insert(visualAttachments, att)
-
-		if i > 1 then
-			local beam = Instance.new("Beam")
-			beam.Attachment0 = visualAttachments[i - 1]
-			beam.Attachment1 = att
-			beam.Width0 = 0.3
-			beam.Width1 = 0.3
-			beam.Color = ColorSequence.new(Color3.fromRGB(0, 180, 255))
-			beam.FaceCamera = true
-			beam.Parent = visualFolder
-			table.insert(visualBeams, beam)
-		end
+	RootPart = newChar:WaitForChild("HumanoidRootPart", 10)
+	Humanoid = newChar:WaitForChild("Humanoid", 10)
+	if Humanoid then
+		Animator = Humanoid:WaitForChild("Animator", 10)
 	end
 end
 
-local function addVisualSegment(cframe)
-	local att = Instance.new("Attachment")
-	att.WorldCFrame = cframe
-	att.Parent = visualFolder
-	table.insert(visualAttachments, att)
+LocalPlayer.CharacterAdded:Connect(SetupCharacter)
 
-	local count = #visualAttachments
-	if count > 1 then
-		local beam = Instance.new("Beam")
-		beam.Attachment0 = visualAttachments[count - 1]
-		beam.Attachment1 = att
-		beam.Width0 = 0.3
-		beam.Width1 = 0.3
-		beam.Color = ColorSequence.new(Color3.fromRGB(0, 180, 255))
-		beam.FaceCamera = true
-		beam.Parent = visualFolder
-		table.insert(visualBeams, beam)
+----------------------------------------------------
+-- 1. UTILITY & CLEANUP
+----------------------------------------------------
+local function CleanupTweens()
+	for _, tween in ipairs(ActiveTweens) do
+		pcall(function()
+			tween:Cancel()
+			tween:Destroy()
+		end)
+	end
+	table.clear(ActiveTweens)
+end
+
+local function StopGhostAnimations()
+	for _, track in pairs(ActiveGhostTracks) do
+		pcall(function()
+			track:Stop(0)
+			track:Destroy()
+		end)
+	end
+	table.clear(ActiveGhostTracks)
+end
+
+local function CleanupGhost()
+	StopGhostAnimations()
+	if GhostCharacter then
+		GhostCharacter:Destroy()
+		GhostCharacter = nil
 	end
 end
 
-local recordConnection = nil
-local playbackConnection = nil
+----------------------------------------------------
+-- 2. GHOST CLONE SYSTEM (R15 COMPATIBLE)
+----------------------------------------------------
+local function CreateGhostClone()
+	CleanupGhost()
+	if not Character then return nil end
 
-local function stopAll()
-	isRecording = false
-	isPlaying = false
-	if recordConnection then
-		recordConnection:Disconnect()
-		recordConnection = nil
+	local oldArchivable = Character.Archivable
+	Character.Archivable = true
+	
+	local clone = Character:Clone()
+	Character.Archivable = oldArchivable
+	
+	clone.Name = "Replay_Ghost_R15"
+
+	-- Hilangkan Script internal, Animate script asli, dan sesuaikan Fisika
+	for _, desc in ipairs(clone:GetDescendants()) do
+		if desc:IsA("LuaSourceContainer") then
+			desc:Destroy()
+		elseif desc:IsA("BasePart") then
+			desc.CanCollide = false
+			desc.CanQuery = false
+			desc.CanTouch = false
+			desc.Anchored = true
+			desc.Transparency = math.clamp(desc.Transparency + 0.35, 0.35, 0.85)
+			desc.Material = Enum.Material.Forcefield
+			desc.Color = Color3.fromRGB(0, 240, 255)
+		end
 	end
-	if playbackConnection then
-		playbackConnection:Disconnect()
-		playbackConnection = nil
+
+	-- Pastikan Ghost Memiliki Humanoid & Animator aktif
+	local gHumanoid = clone:FindFirstChildOfClass("Humanoid")
+	if gHumanoid then
+		gHumanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+		gHumanoid.EvaluateStateMachine = false
+		local gAnimator = gHumanoid:FindFirstChildOfClass("Animator") or Instance.new("Animator", gHumanoid)
 	end
+
+	clone.Parent = workspace
+	GhostCharacter = clone
+	return clone
 end
 
-local function startRecording()
-	stopAll()
-	if currentFrameIndex < #recordingData then
-		for i = #recordingData, currentFrameIndex + 1, -1 do
-			table.remove(recordingData, i)
-		end
-		rebuildVisualPath()
-	end
+----------------------------------------------------
+-- 3. NEON UI STYLING & ANIMATIONS
+----------------------------------------------------
+local function PremiumNeonBorder(guiObject)
+	local outerStroke = Instance.new("UIStroke")
+	outerStroke.Name = "OuterGlowStroke"
+	outerStroke.Thickness = 3
+	outerStroke.Transparency = 0.4
+	outerStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	outerStroke.Parent = guiObject
 
-	isRecording = true
-	local startTime = os.clock()
-	wasGrounded = Humanoid.FloorMaterial ~= Enum.Material.Air
+	local innerStroke = Instance.new("UIStroke")
+	innerStroke.Name = "InnerNeonStroke"
+	innerStroke.Thickness = 2
+	innerStroke.Transparency = 0
+	innerStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	innerStroke.Parent = guiObject
 
-	recordConnection = RunService.Heartbeat:Connect(function(dt)
-		if not isRecording or not RootPart or not Humanoid then return end
-
-		local currentPos = RootPart.Position
-		local currentCF = RootPart.CFrame
-		local state = Humanoid:GetState()
-		local isGrounded = (Humanoid.FloorMaterial ~= Enum.Material.Air)
-
-		if #recordingData > 0 then
-			local lastPos = recordingData[#recordingData].position
-			local dist = (currentPos - lastPos).Magnitude
-			if dist > 25 then
-				return
-			end
-		end
-
-		local jumpStart = (state == Enum.HumanoidStateType.Jumping)
-		local landing = (not wasGrounded and isGrounded)
-		wasGrounded = isGrounded
-
-		local isSafePoint = isGrounded and (state == Enum.HumanoidStateType.Running or state == Enum.HumanoidStateType.RunningNoPhysics or state == Enum.HumanoidStateType.Landed) and RootPart.AssemblyLinearVelocity.Y <= 2 and RootPart.AssemblyLinearVelocity.Y >= -2
-
-		local frameData = {
-			timestamp = os.clock() - startTime,
-			position = currentPos,
-			cframe = currentCF,
-			rotation = currentCF.Rotation,
-			velocity = RootPart.AssemblyLinearVelocity,
-			moveDir = Humanoid.MoveDirection,
-			walkSpeed = Humanoid.WalkSpeed,
-			state = state,
-			jumpStart = jumpStart,
-			landing = landing,
-			grounded = isGrounded,
-			safePoint = isSafePoint
-		}
-
-		table.insert(recordingData, frameData)
-		currentFrameIndex = #recordingData
-		addVisualSegment(frameData.cframe)
-	end)
-end
-
-local function startPlayback()
-	stopAll()
-	if #recordingData == 0 then return end
-
-	isPlaying = true
-	currentFrameIndex = 1
-	playbackTime = recordingData[1].timestamp
-	RootPart.CFrame = recordingData[1].cframe
-
-	playbackConnection = RunService.Heartbeat:Connect(function(dt)
-		if not isPlaying or #recordingData == 0 then return end
-
-		playbackTime = playbackTime + dt
-
-		while currentFrameIndex < #recordingData and recordingData[currentFrameIndex + 1].timestamp <= playbackTime do
-			currentFrameIndex = currentFrameIndex + 1
-		end
-
-		if currentFrameIndex >= #recordingData then
-			stopAll()
-			return
-		end
-
-		local currFrame = recordingData[currentFrameIndex]
-		local nextFrame = recordingData[currentFrameIndex + 1]
-
-		local duration = nextFrame.timestamp - currFrame.timestamp
-		local alpha = 0
-		if duration > 0 then
-			alpha = math.clamp((playbackTime - currFrame.timestamp) / duration, 0, 1)
-		end
-
-		Humanoid.WalkSpeed = currFrame.walkSpeed
-
-		if currFrame.jumpStart then
-			Humanoid.Jump = true
-		end
-
-		local interpMoveDir = currFrame.moveDir:Lerp(nextFrame.moveDir, alpha)
-		if interpMoveDir.Magnitude > 0.02 then
-			Humanoid:Move(interpMoveDir, false)
-		else
-			Humanoid:Move(Vector3.zero, false)
-		end
-
-		local targetCF = currFrame.cframe:Lerp(nextFrame.cframe, alpha)
-		local currentCF = RootPart.CFrame
-		local distErr = (RootPart.Position - targetCF.Position).Magnitude
-
-		if distErr > 5 then
-			RootPart.CFrame = targetCF
-		else
-			local currentRot = currentCF.Rotation
-			local targetRot = targetCF.Rotation
-			local newRot = currentRot:Lerp(targetRot, 0.2)
-			RootPart.CFrame = CFrame.new(RootPart.Position) * newRot
-		end
-	end)
-end
-
-local function rollbackTimeline()
-	stopAll()
-	if #recordingData == 0 then return end
-
-	local lastSafeIndex = nil
-	for i = #recordingData - 1, 1, -1 do
-		if recordingData[i].safePoint then
-			lastSafeIndex = i
-			break
-		end
-	end
-
-	if lastSafeIndex then
-		for i = #recordingData, lastSafeIndex + 1, -1 do
-			table.remove(recordingData, i)
-		end
-	else
-		local removeCount = math.min(30, #recordingData)
-		for i = 1, removeCount do
-			table.remove(recordingData)
-		end
-	end
-
-	currentFrameIndex = #recordingData
-	rebuildVisualPath()
-	if currentFrameIndex > 0 then
-		RootPart.CFrame = recordingData[currentFrameIndex].cframe
-	end
-end
-
-local function cutTimeline()
-	stopAll()
-	if #recordingData == 0 or currentFrameIndex >= #recordingData then return end
-	for i = #recordingData, currentFrameIndex + 1, -1 do
-		table.remove(recordingData, i)
-	end
-	rebuildVisualPath()
-end
-
-local savedData = {}
-
-local function saveData()
-	savedData = {}
-	for i, v in ipairs(recordingData) do
-		table.insert(savedData, {
-			timestamp = v.timestamp,
-			position = v.position,
-			cframe = v.cframe,
-			rotation = v.rotation,
-			velocity = v.velocity,
-			moveDir = v.moveDir,
-			walkSpeed = v.walkSpeed,
-			state = v.state,
-			jumpStart = v.jumpStart,
-			landing = v.landing,
-			grounded = v.grounded,
-			safePoint = v.safePoint
-		})
-	end
-end
-
-local function loadData()
-	stopAll()
-	recordingData = {}
-	for i, v in ipairs(savedData) do
-		table.insert(recordingData, {
-			timestamp = v.timestamp,
-			position = v.position,
-			cframe = v.cframe,
-			rotation = v.rotation,
-			velocity = v.velocity,
-			moveDir = v.moveDir,
-			walkSpeed = v.walkSpeed,
-			state = v.state,
-			jumpStart = v.jumpStart,
-			landing = v.landing,
-			grounded = v.grounded,
-			safePoint = v.safePoint
-		})
-	end
-	currentFrameIndex = #recordingData
-	rebuildVisualPath()
-	if currentFrameIndex > 0 then
-		RootPart.CFrame = recordingData[currentFrameIndex].cframe
-	end
-end
-
-local playerGui = LocalPlayer:WaitForChild("PlayerGui")
-local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "AldoKnightXOzGui"
-screenGui.ResetOnSpawn = false
-screenGui.Parent = playerGui
-
-local openButton = Instance.new("TextButton")
-openButton.Name = "OpenMenuButton"
-openButton.Size = UDim2.new(0, 120, 0, 35)
-openButton.Position = UDim2.new(0, 15, 0, 15)
-openButton.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-openButton.Text = "Menu"
-openButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-openButton.Font = Enum.Font.GothamBold
-openButton.TextSize = 13
-openButton.Parent = screenGui
-
-local uiCornerOpen = Instance.new("UICorner")
-uiCornerOpen.CornerRadius = UDim.new(0, 6)
-uiCornerOpen.Parent = openButton
-
-local mainFrame = Instance.new("Frame")
-mainFrame.Name = "MainFrame"
-mainFrame.Size = UDim2.new(0, 200, 0, 350)
-mainFrame.Position = UDim2.new(0, 15, 0, 60)
-mainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
-mainFrame.Visible = true
-mainFrame.Parent = screenGui
-
-local uiCornerMain = Instance.new("UICorner")
-uiCornerMain.CornerRadius = UDim.new(0, 8)
-uiCornerMain.Parent = mainFrame
-
-local titleLabel = Instance.new("TextLabel")
-titleLabel.Name = "TitleLabel"
-titleLabel.Size = UDim2.new(1, 0, 0, 35)
-titleLabel.BackgroundTransparency = 1
-titleLabel.Text = "ALDO KNIGHTXOz"
-titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-titleLabel.Font = Enum.Font.GothamBold
-titleLabel.TextSize = 14
-titleLabel.LayoutOrder = 0
-titleLabel.Parent = mainFrame
-
-local titleStroke = Instance.new("UIStroke")
-titleStroke.Color = Color3.fromRGB(0, 0, 0)
-titleStroke.Thickness = 2
-titleStroke.Parent = titleLabel
-
-local frameLayout = Instance.new("UIListLayout")
-frameLayout.Parent = mainFrame
-frameLayout.SortOrder = Enum.SortOrder.LayoutOrder
-frameLayout.Padding = UDim.new(0, 5)
-frameLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-
-local statusLabel = Instance.new("TextLabel")
-statusLabel.Name = "StatusLabel"
-statusLabel.Size = UDim2.new(0.9, 0, 0, 18)
-statusLabel.BackgroundTransparency = 1
-statusLabel.Text = "Frame: 0 / 0"
-statusLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
-statusLabel.Font = Enum.Font.Gotham
-statusLabel.TextSize = 11
-statusLabel.LayoutOrder = 1
-statusLabel.Parent = mainFrame
-
-local function updateStatus()
-	statusLabel.Text = "Frame: " .. tostring(currentFrameIndex) .. " / " .. tostring(#recordingData)
-end
-
-RunService.RenderStepped:Connect(function()
-	if not isRecording and not isPlaying then
-		updateStatus()
-	end
-end)
-
-local function applyGradientAnimation(guiObject)
-	local stroke = Instance.new("UIStroke")
-	stroke.Thickness = 1.5
-	stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-	stroke.Parent = guiObject
-
-	local gradient = Instance.new("UIGradient")
-	gradient.Color = ColorSequence.new({
-		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 0, 100)),
-		ColorSequenceKeypoint.new(0.5, Color3.fromRGB(0, 180, 255)),
-		ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 0, 100))
+	local neonGradient = Instance.new("UIGradient")
+	neonGradient.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0.00, Color3.fromRGB(160, 32, 240)),
+		ColorSequenceKeypoint.new(0.33, Color3.fromRGB(0, 240, 255)),
+		ColorSequenceKeypoint.new(0.66, Color3.fromRGB(0, 100, 255)),
+		ColorSequenceKeypoint.new(1.00, Color3.fromRGB(255, 20, 147))
 	})
-	gradient.Rotation = 0
-	gradient.Parent = stroke
+	neonGradient.Rotation = 45
+	neonGradient.Parent = innerStroke
 
-	local tweenInfo = TweenInfo.new(4, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, -1)
-	local tween = TweenService:Create(gradient, tweenInfo, {Rotation = 360})
-	tween:Play()
+	local outerGradient = neonGradient:Clone()
+	outerGradient.Parent = outerStroke
+
+	local rotTweenInfo = TweenInfo.new(4, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, -1)
+	local rotTween = TweenService:Create(neonGradient, rotTweenInfo, {Rotation = 405})
+	local rotTweenOuter = TweenService:Create(outerGradient, rotTweenInfo, {Rotation = 405})
+	rotTween:Play()
+	rotTweenOuter:Play()
+
+	local pulseInfo = TweenInfo.new(1.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true)
+	local pulseTween = TweenService:Create(outerStroke, pulseInfo, {Transparency = 0.8, Thickness = 5})
+	pulseTween:Play()
+
+	table.insert(ActiveTweens, rotTween)
+	table.insert(ActiveTweens, rotTweenOuter)
+	table.insert(ActiveTweens, pulseTween)
 end
 
-applyGradientAnimation(mainFrame)
-applyGradientAnimation(openButton)
+local function ApplyButtonEffects(button)
+	PremiumNeonBorder(button)
+	local baseSize = button.Size
+	local hoverInfo = TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
-local function createMenuButton(name, text, order)
-	local btn = Instance.new("TextButton")
-	btn.Name = name
-	btn.Size = UDim2.new(0.9, 0, 0, 25)
-	btn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-	btn.Text = text
-	btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-	btn.Font = Enum.Font.GothamBold
-	btn.TextSize = 11
-	btn.LayoutOrder = order
-	btn.Parent = mainFrame
+	button.MouseEnter:Connect(function()
+		TweenService:Create(button, hoverInfo, {
+			Size = UDim2.new(baseSize.X.Scale, baseSize.X.Offset + 4, baseSize.Y.Scale, baseSize.Y.Offset + 2),
+			BackgroundColor3 = Color3.fromRGB(35, 15, 55)
+		}):Play()
+	end)
+
+	button.MouseLeave:Connect(function()
+		TweenService:Create(button, hoverInfo, {
+			Size = baseSize,
+			BackgroundColor3 = Color3.fromRGB(15, 10, 25)
+		}):Play()
+	end)
+
+	button.Activated:Connect(function()
+		local pressTween = TweenService:Create(button, TweenInfo.new(0.08, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			Size = UDim2.new(baseSize.X.Scale, baseSize.X.Offset - 2, baseSize.Y.Scale, baseSize.Y.Offset - 2),
+			BackgroundColor3 = Color3.fromRGB(80, 20, 120)
+		})
+		pressTween:Play()
+		task.delay(0.08, function()
+			TweenService:Create(button, hoverInfo, {
+				Size = baseSize,
+				BackgroundColor3 = Color3.fromRGB(15, 10, 25)
+			}):Play()
+		end)
+	end)
+end
+
+----------------------------------------------------
+-- 4. GUI CONSTRUCTION
+----------------------------------------------------
+local ExistingGui = LocalPlayer.PlayerGui:FindFirstChild("R15_ReplaySystem_UI")
+if ExistingGui then ExistingGui:Destroy() end
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "R15_ReplaySystem_UI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+local OpenMenu = Instance.new("TextButton")
+OpenMenu.Name = "OpenMenuButton"
+OpenMenu.Size = UDim2.new(0, 80, 0, 40)
+OpenMenu.Position = UDim2.new(0, 15, 0.5, -20)
+OpenMenu.BackgroundColor3 = Color3.fromRGB(15, 10, 25)
+OpenMenu.Text = "MENU"
+OpenMenu.TextColor3 = Color3.fromRGB(0, 240, 255)
+OpenMenu.TextScaled = true
+OpenMenu.Font = Enum.Font.GothamBold
+OpenMenu.Parent = ScreenGui
+
+local openCorner = Instance.new("UICorner")
+openCorner.CornerRadius = UDim.new(0, 8)
+openCorner.Parent = OpenMenu
+ApplyButtonEffects(OpenMenu)
+
+local Main = Instance.new("Frame")
+Main.Name = "MainPanel"
+Main.Size = UDim2.new(0, 270, 0, 490)
+Main.Position = UDim2.new(0.5, -135, 1.2, 0)
+Main.BackgroundColor3 = Color3.fromRGB(12, 8, 20)
+Main.BackgroundTransparency = 0.1
+Main.Visible = false
+Main.Parent = ScreenGui
+
+local mainCorner = Instance.new("UICorner")
+mainCorner.CornerRadius = UDim.new(0, 12)
+mainCorner.Parent = Main
+
+local mainPadding = Instance.new("UIPadding")
+mainPadding.PaddingTop = UDim.new(0, 8)
+mainPadding.PaddingBottom = UDim.new(0, 8)
+mainPadding.PaddingLeft = UDim.new(0, 8)
+mainPadding.PaddingRight = UDim.new(0, 8)
+mainPadding.Parent = Main
+
+PremiumNeonBorder(Main)
+
+local Title = Instance.new("TextLabel")
+Title.Name = "Title"
+Title.Size = UDim2.new(1, 0, 0, 28)
+Title.BackgroundTransparency = 1
+Title.Text = "R15 REPLAY ENGINE"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.TextScaled = true
+Title.Font = Enum.Font.GothamBold
+Title.Parent = Main
+
+local titleGradient = Instance.new("UIGradient")
+titleGradient.Color = ColorSequence.new({
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 240, 255)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(200, 50, 255))
+})
+titleGradient.Parent = Title
+
+local StatusPanel = Instance.new("Frame")
+StatusPanel.Name = "StatusPanel"
+StatusPanel.Size = UDim2.new(1, -10, 0, 50)
+StatusPanel.Position = UDim2.new(0, 5, 0, 32)
+StatusPanel.BackgroundColor3 = Color3.fromRGB(20, 15, 35)
+StatusPanel.BackgroundTransparency = 0.3
+StatusPanel.Parent = Main
+
+local statusCorner = Instance.new("UICorner")
+statusCorner.CornerRadius = UDim.new(0, 6)
+statusCorner.Parent = StatusPanel
+
+local StatusLabel = Instance.new("TextLabel")
+StatusLabel.Name = "StatusLabel"
+StatusLabel.Size = UDim2.new(1, 0, 0.5, 0)
+StatusLabel.BackgroundTransparency = 1
+StatusLabel.Text = "STATUS: IDLE"
+StatusLabel.TextColor3 = Color3.fromRGB(0, 240, 255)
+StatusLabel.Font = Enum.Font.GothamBold
+StatusLabel.TextSize = 12
+StatusLabel.Parent = StatusPanel
+
+local FrameLabel = Instance.new("TextLabel")
+FrameLabel.Name = "FrameLabel"
+FrameLabel.Size = UDim2.new(1, 0, 0.5, 0)
+FrameLabel.Position = UDim2.new(0, 0, 0.5, 0)
+FrameLabel.BackgroundTransparency = 1
+FrameLabel.Text = "FRAMES: 0 | DURATION: 0.0s"
+FrameLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+FrameLabel.Font = Enum.Font.Gotham
+FrameLabel.TextSize = 11
+FrameLabel.Parent = StatusPanel
+
+local Container = Instance.new("Frame")
+Container.Name = "Container"
+Container.Size = UDim2.new(1, 0, 1, -90)
+Container.Position = UDim2.new(0, 0, 0, 90)
+Container.BackgroundTransparency = 1
+Container.Parent = Main
+
+local listLayout = Instance.new("UIListLayout")
+listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+listLayout.Padding = UDim.new(0, 5)
+listLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+listLayout.Parent = Container
+
+local function CreateButton(text, layoutOrder)
+	local b = Instance.new("TextButton")
+	b.Name = text .. "Button"
+	b.Size = UDim2.new(1, -10, 0, 30)
+	b.BackgroundColor3 = Color3.fromRGB(15, 10, 25)
+	b.Text = text
+	b.TextColor3 = Color3.fromRGB(255, 255, 255)
+	b.TextSize = 12
+	b.Font = Enum.Font.GothamBold
+	b.LayoutOrder = layoutOrder
+	b.Parent = Container
 
 	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 5)
-	corner.Parent = btn
+	corner.CornerRadius = UDim.new(0, 6)
+	corner.Parent = b
 
-	applyGradientAnimation(btn)
-	return btn
+	ApplyButtonEffects(b)
+	return b
 end
 
-local btnRecord = createMenuButton("BtnRecord", "RECORD", 2)
-local btnStop = createMenuButton("BtnStop", "STOP", 3)
-local btnPlay = createMenuButton("BtnPlay", "PLAY", 4)
-local btnRollback = createMenuButton("BtnRollback", "ROLLBACK", 5)
+local RecordButton = CreateButton("RECORD", 1)
+local StopButton = CreateButton("STOP", 2)
 
-local navFrame = Instance.new("Frame")
-navFrame.Name = "NavFrame"
-navFrame.Size = UDim2.new(0.9, 0, 0, 25)
-navFrame.BackgroundTransparency = 1
-navFrame.LayoutOrder = 6
-navFrame.Parent = mainFrame
+local PlayControlRow = Instance.new("Frame")
+PlayControlRow.Size = UDim2.new(1, -10, 0, 30)
+PlayControlRow.BackgroundTransparency = 1
+PlayControlRow.LayoutOrder = 3
+PlayControlRow.Parent = Container
+
+local pcLayout = Instance.new("UIListLayout")
+pcLayout.FillDirection = Enum.FillDirection.Horizontal
+pcLayout.HorizontalAlignment = Enum.HorizontalAlignment.SpaceBetween
+pcLayout.Parent = PlayControlRow
+
+local PlayButton = Instance.new("TextButton")
+PlayButton.Size = UDim2.new(0.48, 0, 1, 0)
+PlayButton.BackgroundColor3 = Color3.fromRGB(15, 10, 25)
+PlayButton.Text = "PLAY GHOST"
+PlayButton.TextColor3 = Color3.fromRGB(0, 255, 100)
+PlayButton.Font = Enum.Font.GothamBold
+PlayButton.TextSize = 11
+PlayButton.Parent = PlayControlRow
+ApplyButtonEffects(PlayButton)
+
+local PauseButton = Instance.new("TextButton")
+PauseButton.Size = UDim2.new(0.48, 0, 1, 0)
+PauseButton.BackgroundColor3 = Color3.fromRGB(15, 10, 25)
+PauseButton.Text = "PAUSE"
+PauseButton.TextColor3 = Color3.fromRGB(255, 200, 0)
+PauseButton.Font = Enum.Font.GothamBold
+PauseButton.TextSize = 11
+PauseButton.Parent = PlayControlRow
+ApplyButtonEffects(PauseButton)
+
+local NavRow = Instance.new("Frame")
+NavRow.Size = UDim2.new(1, -10, 0, 30)
+NavRow.BackgroundTransparency = 1
+NavRow.LayoutOrder = 4
+NavRow.Parent = Container
 
 local navLayout = Instance.new("UIListLayout")
 navLayout.FillDirection = Enum.FillDirection.Horizontal
 navLayout.HorizontalAlignment = Enum.HorizontalAlignment.SpaceBetween
-navLayout.Parent = navFrame
+navLayout.Parent = NavRow
 
-local btnLeft = Instance.new("TextButton")
-btnLeft.Size = UDim2.new(0.48, 0, 1, 0)
-btnLeft.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-btnLeft.Text = "<<"
-btnLeft.TextColor3 = Color3.fromRGB(255, 255, 255)
-btnLeft.Font = Enum.Font.GothamBold
-btnLeft.Parent = navFrame
-local cornerLeft = Instance.new("UICorner")
-cornerLeft.CornerRadius = UDim.new(0, 5)
-cornerLeft.Parent = btnLeft
-applyGradientAnimation(btnLeft)
+local BackButton = Instance.new("TextButton")
+BackButton.Size = UDim2.new(0.48, 0, 1, 0)
+BackButton.BackgroundColor3 = Color3.fromRGB(15, 10, 25)
+BackButton.Text = "<< SEEK"
+BackButton.TextColor3 = Color3.fromRGB(0, 240, 255)
+BackButton.Font = Enum.Font.GothamBold
+BackButton.TextSize = 11
+BackButton.Parent = NavRow
+ApplyButtonEffects(BackButton)
 
-local btnRight = Instance.new("TextButton")
-btnRight.Size = UDim2.new(0.48, 0, 1, 0)
-btnRight.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-btnRight.Text = ">>"
-btnRight.TextColor3 = Color3.fromRGB(255, 255, 255)
-btnRight.Font = Enum.Font.GothamBold
-btnRight.Parent = navFrame
-local cornerRight = Instance.new("UICorner")
-cornerRight.CornerRadius = UDim.new(0, 5)
-cornerRight.Parent = btnRight
-applyGradientAnimation(btnRight)
+local ForwardButton = Instance.new("TextButton")
+ForwardButton.Size = UDim2.new(0.48, 0, 1, 0)
+ForwardButton.BackgroundColor3 = Color3.fromRGB(15, 10, 25)
+ForwardButton.Text = "SEEK >>"
+ForwardButton.TextColor3 = Color3.fromRGB(0, 240, 255)
+ForwardButton.Font = Enum.Font.GothamBold
+ForwardButton.TextSize = 11
+ForwardButton.Parent = NavRow
+ApplyButtonEffects(ForwardButton)
 
-local btnCut = createMenuButton("BtnCut", "CUT", 7)
-local btnSave = createMenuButton("BtnSave", "SAVE", 8)
-local btnLoad = createMenuButton("BtnLoad", "LOAD", 9)
+local CutButton = CreateButton("TRIM TIMELINE", 5)
 
-openButton.MouseButton1Click:Connect(function()
-	mainFrame.Visible = not mainFrame.Visible
+local SaveLoadRow = Instance.new("Frame")
+SaveLoadRow.Size = UDim2.new(1, -10, 0, 30)
+SaveLoadRow.BackgroundTransparency = 1
+SaveLoadRow.LayoutOrder = 6
+SaveLoadRow.Parent = Container
+
+local slLayout = Instance.new("UIListLayout")
+slLayout.FillDirection = Enum.FillDirection.Horizontal
+slLayout.HorizontalAlignment = Enum.HorizontalAlignment.SpaceBetween
+slLayout.Parent = SaveLoadRow
+
+local SaveButton = Instance.new("TextButton")
+SaveButton.Size = UDim2.new(0.48, 0, 1, 0)
+SaveButton.BackgroundColor3 = Color3.fromRGB(15, 10, 25)
+SaveButton.Text = "SAVE DATA"
+SaveButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+SaveButton.Font = Enum.Font.GothamBold
+SaveButton.TextSize = 11
+SaveButton.Parent = SaveLoadRow
+ApplyButtonEffects(SaveButton)
+
+local LoadButton = Instance.new("TextButton")
+LoadButton.Size = UDim2.new(0.48, 0, 1, 0)
+LoadButton.BackgroundColor3 = Color3.fromRGB(15, 10, 25)
+LoadButton.Text = "LOAD DATA"
+LoadButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+LoadButton.Font = Enum.Font.GothamBold
+LoadButton.TextSize = 11
+LoadButton.Parent = SaveLoadRow
+ApplyButtonEffects(LoadButton)
+
+----------------------------------------------------
+-- 5. MENU TOGGLE ANIMATION
+----------------------------------------------------
+local menuOpen = false
+local animInFlight = false
+
+local function ToggleMenu()
+	if animInFlight then return end
+	animInFlight = true
+
+	if not menuOpen then
+		Main.Visible = true
+		local tween = TweenService:Create(Main, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+			Position = UDim2.new(0.5, -135, 0.5, -245)
+		})
+		tween:Play()
+		tween.Completed:Connect(function()
+			menuOpen = true
+			animInFlight = false
+		end)
+	else
+		local tween = TweenService:Create(Main, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+			Position = UDim2.new(0.5, -135, 1.2, 0)
+		})
+		tween:Play()
+		tween.Completed:Connect(function()
+			Main.Visible = false
+			menuOpen = false
+			animInFlight = false
+		end)
+	end
+end
+
+OpenMenu.Activated:Connect(ToggleMenu)
+
+----------------------------------------------------
+-- 6. ANIMATION & RECORD ENGINE
+----------------------------------------------------
+local function GetActiveAnimations()
+	local activeAnimList = {}
+	if Animator then
+		local playingTracks = Animator:GetPlayingAnimationTracks()
+		for _, track in ipairs(playingTracks) do
+			if track.Animation and track.Animation.AnimationId ~= "" then
+				table.insert(activeAnimList, {
+					AnimationId = track.Animation.AnimationId,
+					TimePosition = track.TimePosition,
+					Speed = track.Speed,
+					Weight = track.WeightTarget,
+					IsPlaying = track.IsPlaying
+				})
+			end
+		end
+	end
+	return activeAnimList
+end
+
+local function CaptureFrame()
+	if not RootPart or not Humanoid or not Character then return end
+	if #RecordData >= MAX_RECORD_FRAMES then
+		Recording = false
+		StatusLabel.Text = "STATUS: MAX MEMORY REACHED"
+		return
+	end
+
+	local currentState = Humanoid:GetState()
+	local frame = {
+		Time = os.clock() - RecordStart,
+		CFrame = RootPart.CFrame,
+		Position = RootPart.Position,
+		Rotation = RootPart.Orientation,
+		Velocity = RootPart.AssemblyLinearVelocity,
+		HumanoidState = currentState,
+		Animations = GetActiveAnimations()
+	}
+
+	table.insert(RecordData, frame)
+
+	StatusLabel.Text = "STATUS: RECORDING"
+	StatusLabel.TextColor3 = Color3.fromRGB(255, 50, 50)
+	FrameLabel.Text = string.format("FRAMES: %d | DURATION: %.1fs", #RecordData, frame.Time)
+end
+
+local function StopPlayback()
+	Playing = false
+	Paused = false
+	if ActiveConnections["Playback"] then
+		ActiveConnections["Playback"]:Disconnect()
+		ActiveConnections["Playback"] = nil
+	end
+	CleanupGhost()
+	StatusLabel.Text = "STATUS: IDLE"
+	StatusLabel.TextColor3 = Color3.fromRGB(0, 240, 255)
+end
+
+local function StopRecord()
+	Recording = false
+	if ActiveConnections["Record"] then
+		ActiveConnections["Record"]:Disconnect()
+		ActiveConnections["Record"] = nil
+	end
+	if not Playing then
+		StatusLabel.Text = "STATUS: STOPPED"
+		StatusLabel.TextColor3 = Color3.fromRGB(255, 200, 0)
+	end
+end
+
+local function StartRecord()
+	StopPlayback()
+	StopRecord()
+
+	table.clear(RecordData)
+	CutIndex = 1
+
+	if not RootPart or not Humanoid then return end
+
+	Recording = true
+	RecordStart = os.clock()
+	RecordTimer = 0
+	
+	CaptureFrame()
+
+	ActiveConnections["Record"] = RunService.Heartbeat:Connect(function(dt)
+		if Recording then
+			RecordTimer = RecordTimer + dt
+			while RecordTimer >= RECORD_INTERVAL do
+				RecordTimer = RecordTimer - RECORD_INTERVAL
+				CaptureFrame()
+			end
+		end
+	end)
+end
+
+RecordButton.Activated:Connect(StartRecord)
+StopButton.Activated:Connect(function()
+	StopRecord()
+	StopPlayback()
 end)
 
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-	if gameProcessed then return end
-	if input.KeyCode == Enum.KeyCode.O then
-		mainFrame.Visible = not mainFrame.Visible
+----------------------------------------------------
+-- 7. PLAYBACK & ANIMATION SYNCHRONIZATION ENGINE
+----------------------------------------------------
+local function SyncGhostAnimations(ghostAnimator, animDataList)
+	if not ghostAnimator then return end
+
+	local currentActiveIds = {}
+
+	for _, animInfo in ipairs(animDataList) do
+		local animId = animInfo.AnimationId
+		currentActiveIds[animId] = true
+
+		local track = ActiveGhostTracks[animId]
+		if not track then
+			local animObj = Instance.new("Animation")
+			animObj.AnimationId = animId
+			local success, loadedTrack = pcall(function()
+				return ghostAnimator:LoadAnimation(animObj)
+			end)
+			
+			if success and loadedTrack then
+				track = loadedTrack
+				ActiveGhostTracks[animId] = track
+				track:Play(0.1, animInfo.Weight, animInfo.Speed)
+			end
+		end
+
+		if track then
+			if not track.IsPlaying then
+				track:Play(0.1, animInfo.Weight, animInfo.Speed)
+			end
+			track:AdjustSpeed(animInfo.Speed)
+			track:AdjustWeight(animInfo.Weight, 0.1)
+
+			-- Sync Waktu Animasi apabila terjadi desinkronisasi > 0.15s
+			if math.abs(track.TimePosition - animInfo.TimePosition) > 0.15 then
+				track.TimePosition = animInfo.TimePosition
+			end
+		end
+	end
+
+	-- Hentikan animasi yang sudah tidak aktif pada frame ini
+	for animId, track in pairs(ActiveGhostTracks) do
+		if not currentActiveIds[animId] then
+			track:Stop(0.1)
+			ActiveGhostTracks[animId] = nil
+		end
+	end
+end
+
+local function StartPlayback()
+	if #RecordData < 2 then return end
+
+	StopRecord()
+	
+	if not Playing then
+		CleanupGhost()
+		local ghost = CreateGhostClone()
+		if not ghost then return end
+		
+		Playing = true
+		Paused = false
+		PlaybackElapsed = 0
+	else
+		Paused = false
+	end
+
+	StatusLabel.Text = "STATUS: PLAYING (GHOST)"
+	StatusLabel.TextColor3 = Color3.fromRGB(0, 255, 100)
+
+	local ghostRoot = GhostCharacter:WaitForChild("HumanoidRootPart", 5)
+	local ghostHumanoid = GhostCharacter:FindFirstChildOfClass("Humanoid")
+	local ghostAnimator = ghostHumanoid and ghostHumanoid:FindFirstChildOfClass("Animator")
+
+	if not ghostRoot or not ghostAnimator then return end
+
+	local totalDuration = RecordData[#RecordData].Time - RecordData[1].Time
+	local playbackStartTime = os.clock() - PlaybackElapsed
+
+	if ActiveConnections["Playback"] then ActiveConnections["Playback"]:Disconnect() end
+
+	ActiveConnections["Playback"] = RunService.Heartbeat:Connect(function()
+		if not Playing or Paused or not GhostCharacter or not ghostRoot then return end
+
+		PlaybackElapsed = os.clock() - playbackStartTime
+		if PlaybackElapsed >= totalDuration then
+			StopPlayback()
+			return
+		end
+
+		local targetTime = RecordData[1].Time + PlaybackElapsed
+		local i1, i2 = 1, #RecordData
+
+		for i = 1, #RecordData - 1 do
+			if RecordData[i].Time <= targetTime and RecordData[i + 1].Time >= targetTime then
+				i1 = i
+				i2 = i + 1
+				break
+			end
+		end
+
+		local f1 = RecordData[i1]
+		local f2 = RecordData[i2]
+		local span = f2.Time - f1.Time
+		local alpha = (span > 0) and ((targetTime - f1.Time) / span) or 0
+		alpha = math.clamp(alpha, 0, 1)
+
+		-- Interpolasi CFrame posisi & rotasi Ghost
+		ghostRoot.CFrame = f1.CFrame:Lerp(f2.CFrame, alpha)
+
+		-- Sinkronisasi Animasi R15
+		SyncGhostAnimations(ghostAnimator, f1.Animations)
+
+		FrameLabel.Text = string.format("FRAME: %d/%d | TIME: %.1fs", i1, #RecordData, PlaybackElapsed)
+	end)
+end
+
+PlayButton.Activated:Connect(StartPlayback)
+
+PauseButton.Activated:Connect(function()
+	if Playing and not Paused then
+		Paused = true
+		StatusLabel.Text = "STATUS: PAUSED"
+		StatusLabel.TextColor3 = Color3.fromRGB(255, 200, 0)
+		for _, track in pairs(ActiveGhostTracks) do
+			track:AdjustSpeed(0)
+		end
 	end
 end)
 
-btnRecord.MouseButton1Click:Connect(startRecording)
-btnStop.MouseButton1Click:Connect(stopAll)
-btnPlay.MouseButton1Click:Connect(startPlayback)
-btnRollback.MouseButton1Click:Connect(rollbackTimeline)
+----------------------------------------------------
+-- 8. SEEK, TRIM, SAVE & LOAD
+----------------------------------------------------
+local function UpdatePreviewPosition()
+	CutIndex = math.clamp(CutIndex, 1, math.max(1, #RecordData))
+	if RecordData[CutIndex] then
+		if not GhostCharacter then
+			CreateGhostClone()
+		end
+		if GhostCharacter then
+			local gRoot = GhostCharacter:FindFirstChild("HumanoidRootPart")
+			local gHum = GhostCharacter:FindFirstChildOfClass("Humanoid")
+			local gAnim = gHum and gHum:FindFirstChildOfClass("Animator")
 
-btnLeft.MouseButton1Click:Connect(function()
-	if #recordingData == 0 then return end
-	currentFrameIndex = math.clamp(currentFrameIndex - 10, 1, #recordingData)
-	RootPart.CFrame = recordingData[currentFrameIndex].cframe
+			if gRoot then gRoot.CFrame = RecordData[CutIndex].CFrame end
+			if gAnim then SyncGhostAnimations(gAnim, RecordData[CutIndex].Animations) end
+		end
+		FrameLabel.Text = string.format("NAV: %d/%d | TIME: %.1fs", CutIndex, #RecordData, RecordData[CutIndex].Time)
+	end
+end
+
+BackButton.Activated:Connect(function()
+	if #RecordData == 0 then return end
+	StopRecord()
+	Playing = false
+	Paused = true
+	CutIndex = math.max(1, CutIndex - 15)
+	UpdatePreviewPosition()
 end)
 
-btnRight.MouseButton1Click:Connect(function()
-	if #recordingData == 0 then return end
-	currentFrameIndex = math.clamp(currentFrameIndex + 10, 1, #recordingData)
-	RootPart.CFrame = recordingData[currentFrameIndex].cframe
+ForwardButton.Activated:Connect(function()
+	if #RecordData == 0 then return end
+	StopRecord()
+	Playing = false
+	Paused = true
+	CutIndex = math.min(#RecordData, CutIndex + 15)
+	UpdatePreviewPosition()
 end)
 
-btnCut.MouseButton1Click:Connect(cutTimeline)
-btnSave.MouseButton1Click:Connect(saveData)
-btnLoad.MouseButton1Click:Connect(loadData)
+CutButton.Activated:Connect(function()
+	if #RecordData == 0 or CutIndex >= #RecordData then return end
+	StopRecord()
+	StopPlayback()
 
-print("ALDO KNIGHTXOz")
+	for i = #RecordData, CutIndex + 1, -1 do
+		table.remove(RecordData, i)
+	end
+
+	StatusLabel.Text = "STATUS: TRIMMED"
+	StatusLabel.TextColor3 = Color3.fromRGB(255, 200, 0)
+	FrameLabel.Text = string.format("FRAMES: %d", #RecordData)
+end)
+
+SaveButton.Activated:Connect(function()
+	if #RecordData == 0 then return end
+	SavedData = table.clone(RecordData)
+	StatusLabel.Text = "STATUS: DATA SAVED"
+	StatusLabel.TextColor3 = Color3.fromRGB(0, 255, 100)
+end)
+
+LoadButton.Activated:Connect(function()
+	if #SavedData == 0 then return end
+	StopRecord()
+	StopPlayback()
+
+	RecordData = table.clone(SavedData)
+	CutIndex = 1
+
+	StatusLabel.Text = "STATUS: DATA LOADED"
+	StatusLabel.TextColor3 = Color3.fromRGB(0, 240, 255)
+	FrameLabel.Text = string.format("FRAMES: %d", #RecordData)
+end)
+
+----------------------------------------------------
+-- 9. CLEANUP HANDLER
+----------------------------------------------------
+ScreenGui.Destroying:Connect(function()
+	StopRecord()
+	StopPlayback()
+	CleanupTweens()
+	CleanupGhost()
+end)
