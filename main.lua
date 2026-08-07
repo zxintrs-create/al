@@ -109,24 +109,38 @@ local function startRecording()
 	recordConnection = RunService.Heartbeat:Connect(function(dt)
 		if not isRecording or not RootPart or not Humanoid then return end
 
+		local currentPos = RootPart.Position
+		local currentCF = RootPart.CFrame
 		local state = Humanoid:GetState()
 		local isGrounded = (Humanoid.FloorMaterial ~= Enum.Material.Air)
+
+		if #recordingData > 0 then
+			local lastPos = recordingData[#recordingData].position
+			local dist = (currentPos - lastPos).Magnitude
+			if dist > 25 then
+				return
+			end
+		end
+
 		local jumpStart = (state == Enum.HumanoidStateType.Jumping)
 		local landing = (not wasGrounded and isGrounded)
 		wasGrounded = isGrounded
 
+		local isSafePoint = isGrounded and (state == Enum.HumanoidStateType.Running or state == Enum.HumanoidStateType.RunningNoPhysics or state == Enum.HumanoidStateType.Landed) and RootPart.AssemblyLinearVelocity.Y <= 2 and RootPart.AssemblyLinearVelocity.Y >= -2
+
 		local frameData = {
 			timestamp = os.clock() - startTime,
-			position = RootPart.Position,
-			cframe = RootPart.CFrame,
-			rotation = RootPart.CFrame.Rotation,
+			position = currentPos,
+			cframe = currentCF,
+			rotation = currentCF.Rotation,
 			velocity = RootPart.AssemblyLinearVelocity,
 			moveDir = Humanoid.MoveDirection,
 			walkSpeed = Humanoid.WalkSpeed,
 			state = state,
 			jumpStart = jumpStart,
 			landing = landing,
-			grounded = isGrounded
+			grounded = isGrounded,
+			safePoint = isSafePoint
 		}
 
 		table.insert(recordingData, frameData)
@@ -174,19 +188,23 @@ local function startPlayback()
 		end
 
 		local interpMoveDir = currFrame.moveDir:Lerp(nextFrame.moveDir, alpha)
-		if interpMoveDir.Magnitude > 0.05 then
+		if interpMoveDir.Magnitude > 0.02 then
 			Humanoid:Move(interpMoveDir, false)
 		else
 			Humanoid:Move(Vector3.zero, false)
 		end
 
-		local targetCFrame = currFrame.cframe:Lerp(nextFrame.cframe, alpha)
+		local targetCF = currFrame.cframe:Lerp(nextFrame.cframe, alpha)
 		local currentCF = RootPart.CFrame
-		local correctedCF = currentCF:Lerp(CFrame.new(currentCF.Position) * targetCFrame.Rotation, 0.25)
-		RootPart.CFrame = correctedCF
+		local distErr = (RootPart.Position - targetCF.Position).Magnitude
 
-		if (RootPart.Position - targetCFrame.Position).Magnitude > 4 then
-			RootPart.CFrame = targetCFrame
+		if distErr > 5 then
+			RootPart.CFrame = targetCF
+		else
+			local currentRot = currentCF.Rotation
+			local targetRot = targetCF.Rotation
+			local newRot = currentRot:Lerp(targetRot, 0.2)
+			RootPart.CFrame = CFrame.new(RootPart.Position) * newRot
 		end
 	end)
 end
@@ -194,10 +212,26 @@ end
 local function rollbackTimeline()
 	stopAll()
 	if #recordingData == 0 then return end
-	local removeCount = math.min(30, #recordingData)
-	for i = 1, removeCount do
-		table.remove(recordingData)
+
+	local lastSafeIndex = nil
+	for i = #recordingData - 1, 1, -1 do
+		if recordingData[i].safePoint then
+			lastSafeIndex = i
+			break
+		end
 	end
+
+	if lastSafeIndex then
+		for i = #recordingData, lastSafeIndex + 1, -1 do
+			table.remove(recordingData, i)
+		end
+	else
+		local removeCount = math.min(30, #recordingData)
+		for i = 1, removeCount do
+			table.remove(recordingData)
+		end
+	end
+
 	currentFrameIndex = #recordingData
 	rebuildVisualPath()
 	if currentFrameIndex > 0 then
@@ -230,7 +264,8 @@ local function saveData()
 			state = v.state,
 			jumpStart = v.jumpStart,
 			landing = v.landing,
-			grounded = v.grounded
+			grounded = v.grounded,
+			safePoint = v.safePoint
 		})
 	end
 end
@@ -250,7 +285,8 @@ local function loadData()
 			state = v.state,
 			jumpStart = v.jumpStart,
 			landing = v.landing,
-			grounded = v.grounded
+			grounded = v.grounded,
+			safePoint = v.safePoint
 		})
 	end
 	currentFrameIndex = #recordingData
@@ -455,70 +491,5 @@ end)
 btnCut.MouseButton1Click:Connect(cutTimeline)
 btnSave.MouseButton1Click:Connect(saveData)
 btnLoad.MouseButton1Click:Connect(loadData)
-
-print("ALDO KNIGHTXOz")	updateStatus()
-end)
-
-btnLeft.MouseButton1Click:Connect(function()
-	if #recordingData == 0 then return end
-	currentFrameIndex = math.clamp(currentFrameIndex - 10, 1, #recordingData)
-	RootPart.CFrame = recordingData[currentFrameIndex].cframe
-	updateStatus()
-end)
-
-btnRight.MouseButton1Click:Connect(function()
-	if #recordingData == 0 then return end
-	currentFrameIndex = math.clamp(currentFrameIndex + 10, 1, #recordingData)
-	RootPart.CFrame = recordingData[currentFrameIndex].cframe
-	updateStatus()
-end)
-
-btnCut.MouseButton1Click:Connect(function()
-	stopAll()
-	if #recordingData == 0 or currentFrameIndex >= #recordingData then return end
-	for i = #recordingData, currentFrameIndex + 1, -1 do
-		table.remove(recordingData, i)
-	end
-	rebuildVisualPath()
-	updateStatus()
-end)
-
-local savedData = {}
-
-btnSave.MouseButton1Click:Connect(function()
-	savedData = {}
-	for i, v in ipairs(recordingData) do
-		table.insert(savedData, {
-			cframe = v.cframe,
-			velocity = v.velocity,
-			moveDir = v.moveDir,
-			walkSpeed = v.walkSpeed,
-			state = v.state,
-			jump = v.jump
-		})
-	end
-	updateStatus()
-end)
-
-btnLoad.MouseButton1Click:Connect(function()
-	stopAll()
-	recordingData = {}
-	for i, v in ipairs(savedData) do
-		table.insert(recordingData, {
-			cframe = v.cframe,
-			velocity = v.velocity,
-			moveDir = v.moveDir,
-			walkSpeed = v.walkSpeed,
-			state = v.state,
-			jump = v.jump
-		})
-	end
-	currentFrameIndex = #recordingData
-	rebuildVisualPath()
-	if currentFrameIndex > 0 then
-		RootPart.CFrame = recordingData[currentFrameIndex].cframe
-	end
-	updateStatus()
-end)
 
 print("ALDO KNIGHTXOz")
