@@ -1,4 +1,4 @@
--- [[ DELTA MOBILE PRECISION CONTROL SYSTEM (BIGGER BUTTONS) ]] --  
+-- [[ DELTA MOBILE PRECISION CONTROL SYSTEM (STABLE VERSION) ]] --  
 -- Developed by Delta maker script for Aldo Tzy  
 -- Features: Virtual D-Pad, Hold Movement, W-Lock System, R6/R15 Support
 
@@ -7,6 +7,13 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 
 local player = Players.LocalPlayer  
+local playerGui = player:WaitForChild("PlayerGui")
+
+-- Hapus GUI lama jika script dijalankan ulang agar tidak menumpuk
+if playerGui:FindFirstChild("DeltaMobileControls") then  
+	playerGui.DeltaMobileControls:Destroy()  
+end
+
 local character = player.Character or player.CharacterAdded:Wait()  
 local humanoid = character:WaitForChild("Humanoid")
 
@@ -23,11 +30,11 @@ local moveState = {
 local screenGui = Instance.new("ScreenGui")  
 screenGui.Name = "DeltaMobileControls"  
 screenGui.ResetOnSpawn = false  
-screenGui.Parent = player:WaitForChild("PlayerGui")
+screenGui.Parent = playerGui
 
 local mainFrame = Instance.new("Frame")  
 mainFrame.Name = "ControlsFrame"  
-mainFrame.Size = UDim2.new(0, 260, 0, 260) -- Ukuran frame diperbesar dari 200 ke 260
+mainFrame.Size = UDim2.new(0, 260, 0, 260)  
 mainFrame.Position = UDim2.new(0, 40, 1, -300)  
 mainFrame.BackgroundTransparency = 1  
 mainFrame.Parent = screenGui
@@ -41,7 +48,7 @@ local function createButton(name, pos, size, text)
 	btn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)  
 	btn.TextColor3 = Color3.fromRGB(255, 255, 255)  
 	btn.Font = Enum.Font.GothamBold  
-	btn.TextSize = 26 -- Ukuran teks diperbesar agar lebih jelas  
+	btn.TextSize = 26  
 	btn.AutoButtonColor = false  
 	  
 	local corner = Instance.new("UICorner")  
@@ -62,33 +69,27 @@ local btnRight = createButton("Right", UDim2.new(0.7, 0, 0.35, 0), UDim2.new(0.3
 local btnWLock = createButton("WLock", UDim2.new(0.7, 0, 0, 0), UDim2.new(0.3, 0, 0.2, 0), "W: OFF")  
 btnWLock.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
 
--- // INPUT LOGIC // --
-
+-- // INPUT LOGIC // --  
 local function setMove(dir, state)  
 	moveState[dir] = state  
 end
 
--- Up Button Events  
 btnUp.MouseButton1Down:Connect(function() setMove("Forward", true) end)  
-btnUp.MouseButton1Up:Connect(function() setMove("Forward", false) end)
+btnUp.MouseButton1Up:Connect(function() setMove("Forward", false) end)  
 btnUp.MouseLeave:Connect(function() setMove("Forward", false) end)
 
--- Down Button Events  
 btnDown.MouseButton1Down:Connect(function() setMove("Backward", true) end)  
-btnDown.MouseButton1Up:Connect(function() setMove("Backward", false) end)
+btnDown.MouseButton1Up:Connect(function() setMove("Backward", false) end)  
 btnDown.MouseLeave:Connect(function() setMove("Backward", false) end)
 
--- Left Button Events  
 btnLeft.MouseButton1Down:Connect(function() setMove("Left", true) end)  
-btnLeft.MouseButton1Up:Connect(function() setMove("Left", false) end)
+btnLeft.MouseButton1Up:Connect(function() setMove("Left", false) end)  
 btnLeft.MouseLeave:Connect(function() setMove("Left", false) end)
 
--- Right Button Events  
 btnRight.MouseButton1Down:Connect(function() setMove("Right", true) end)  
-btnRight.MouseButton1Up:Connect(function() setMove("Right", false) end)
+btnRight.MouseButton1Up:Connect(function() setMove("Right", false) end)  
 btnRight.MouseLeave:Connect(function() setMove("Right", false) end)
 
--- W Lock Toggle Event  
 btnWLock.MouseButton1Click:Connect(function()  
 	moveState.WLock = not moveState.WLock  
 	if moveState.WLock then  
@@ -100,14 +101,11 @@ btnWLock.MouseButton1Click:Connect(function()
 	end  
 end)
 
--- // MOVEMENT ENGINE // --
-
+-- // MOVEMENT ENGINE // --  
 RunService.RenderStepped:Connect(function()  
-	if not character or not character:FindFirstChild("HumanoidRootPart") then return end  
+	if not character or not character:FindFirstChild("HumanoidRootPart") or not humanoid then return end  
 	  
-	local root = character.HumanoidRootPart  
 	local camera = workspace.CurrentCamera  
-	  
 	local moveVec = Vector3.new(0, 0, 0)  
 	  
 	if moveState.Forward or moveState.WLock then  
@@ -133,7 +131,6 @@ RunService.RenderStepped:Connect(function()
 	humanoid:Move(moveVec, false)  
 end)
 
--- Handle character respawn  
 player.CharacterAdded:Connect(function(newChar)  
 	character = newChar  
 	humanoid = newChar:WaitForChild("Humanoid")  
