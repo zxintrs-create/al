@@ -1,4 +1,4 @@
--- [[ ALDO KNIGHTXORZ V4.7 MASTER ENTERPRISE EDITION ]] --
+-- [[ ALDO KNIGHTXORZ V4.10 MASTER ENTERPRISE EDITION ]] --
 
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -14,9 +14,12 @@ local stopPlayback
 -- Cleanup Universal untuk membersihkan seluruh sisa versi sebelumnya secara total
 if _G.AldoKnightXorzV3_Cleanup then pcall(_G.AldoKnightXorzV3_Cleanup) end
 if _G.AldoKnightXorzV4_Cleanup then pcall(_G.AldoKnightXorzV4_Cleanup) end
+if _G.AldoKnightXorzV48_Cleanup then pcall(_G.AldoKnightXorzV48_Cleanup) end
+if _G.AldoKnightXorzV49_Cleanup then pcall(_G.AldoKnightXorzV49_Cleanup) end
+if _G.AldoKnightXorzV410_Cleanup then pcall(_G.AldoKnightXorzV410_Cleanup) end
 
 local currentConnections = {}
-_G.AldoKnightXorzV4_Cleanup = function()
+_G.AldoKnightXorzV410_Cleanup = function()
     for _, conn in ipairs(currentConnections) do
         if typeof(conn) == "RBXScriptConnection" then conn:Disconnect() end
     end
@@ -26,13 +29,22 @@ _G.AldoKnightXorzV4_Cleanup = function()
     RunService:UnbindFromRenderStep("AldoKnightXorzV3_Playback")
     RunService:UnbindFromRenderStep("AldoKnightXorzV4_Record")
     RunService:UnbindFromRenderStep("AldoKnightXorzV4_Playback")
+    RunService:UnbindFromRenderStep("AldoKnightXorzV48_Record")
+    RunService:UnbindFromRenderStep("AldoKnightXorzV48_Playback")
+    RunService:UnbindFromRenderStep("AldoKnightXorzV49_Record")
+    RunService:UnbindFromRenderStep("AldoKnightXorzV49_Playback")
+    RunService:UnbindFromRenderStep("AldoKnightXorzV410_Record")
+    RunService:UnbindFromRenderStep("AldoKnightXorzV410_Playback")
     
     local playerGui = LocalPlayer:WaitForChild("PlayerGui")
     for _, gui in ipairs(playerGui:GetChildren()) do
         if gui:IsA("ScreenGui") then
             if gui.Name == "AldoKnightXorzV3Gui"
             or gui.Name == "AldoKnightXorzV4Gui"
-            or gui.Name == "AldoKnightXorzV47Gui" then
+            or gui.Name == "AldoKnightXorzV47Gui"
+            or gui.Name == "AldoKnightXorzV48Gui"
+            or gui.Name == "AldoKnightXorzV49Gui"
+            or gui.Name == "AldoKnightXorzV410Gui" then
                 gui:Destroy()
             end
         end
@@ -58,7 +70,7 @@ local CFG = {
     MinDistance = 0.6,
     LineColor = Color3.fromRGB(0, 255, 255),
     AccentColor = Color3.fromRGB(170, 0, 255),
-    SaveFileName = "ALDO_KNIGHTXORZ_PURE_V4_7.json"
+    SaveFileName = "ALDO_KNIGHTXORZ_PURE_V4_10.json"
 }
 
 local state = {
@@ -147,7 +159,7 @@ local function getOrCreateRouteFolder()
 end
 
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "AldoKnightXorzV47Gui"
+ScreenGui.Name = "AldoKnightXorzV410Gui"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
@@ -158,16 +170,19 @@ local OpenMenu = Instance.new("ImageButton")
 OpenMenu.Name = "OpenMenu"
 OpenMenu.Size = UDim2.new(0, 55, 0, 55)
 OpenMenu.Position = UDim2.new(0.05, 0, 0.5, 0)
-OpenMenu.BackgroundTransparency = 1
 OpenMenu.Image = "rbxassetid://101640388423900"
+OpenMenu.ImageColor3 = Color3.fromRGB(255, 255, 255)
+OpenMenu.BackgroundTransparency = 0
+OpenMenu.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+OpenMenu.ZIndex = 10
 OpenMenu.Parent = ScreenGui
 
 local OpenCorner = Instance.new("UICorner")
-OpenCorner.CornerRadius = UDim.new(0, 8)
+OpenCorner.CornerRadius = UDim.new(0, 12)
 OpenCorner.Parent = OpenMenu
 
 local OpenStroke = Instance.new("UIStroke")
-OpenStroke.Thickness = 2
+OpenStroke.Thickness = 2.5
 OpenStroke.Color = Color3.fromRGB(255, 255, 255)
 OpenStroke.Parent = OpenMenu
 
@@ -181,25 +196,44 @@ OpenGradient.Parent = OpenMenu
 
 task.spawn(function()
     while OpenMenu and OpenMenu.Parent do
-        OpenGradient.Rotation += 1
+        OpenGradient.Rotation += 2
         task.wait(0.03)
     end
 end)
 
 --========================================================
--- MAIN FRAME (NOT DRAGGABLE)
+-- MAIN FRAME (LANDSCAPE HORIZONTAL & CENTERED & INITIALLY VISIBLE)
 --========================================================
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 260, 0, 540)
-MainFrame.Position = UDim2.new(0.75, 0, 0.15, 0)
+MainFrame.Size = UDim2.new(0, 620, 0, 300)
+MainFrame.Position = UDim2.new(0.5, -310, 0.5, -150)
 MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
 MainFrame.Visible = true
+MainFrame.ZIndex = 2
 MainFrame.Parent = ScreenGui
 
--- Toggle MainFrame Visibility dengan pencegahan konflik drag pada HP
+local MainGradient = Instance.new("UIGradient")
+MainGradient.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(20, 20, 35)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(60, 0, 90))
+})
+MainGradient.Rotation = 45
+MainGradient.Parent = MainFrame
+
+local Shadow = Instance.new("ImageLabel")
+Shadow.Name = "Shadow"
+Shadow.Size = UDim2.new(1, 40, 1, 40)
+Shadow.Position = UDim2.new(0, -20, 0, -20)
+Shadow.BackgroundTransparency = 1
+Shadow.Image = "rbxassetid://5554236805"
+Shadow.ImageTransparency = 0.5
+Shadow.ZIndex = 1
+Shadow.Parent = MainFrame
+
+-- Toggle MainFrame Visibility dengan Animasi Buka/Tutup & Pencegahan Konflik Drag
 local openMoved = false
 
 table.insert(currentConnections, OpenMenu.InputChanged:Connect(function(input)
@@ -214,10 +248,28 @@ table.insert(currentConnections, OpenMenu.MouseButton1Click:Connect(function()
         return
     end
     
-    MainFrame.Visible = not MainFrame.Visible
+    if not MainFrame.Visible then
+        MainFrame.Visible = true
+        MainFrame.Size = UDim2.new(0, 0, 0, 0)
+
+        TweenService:Create(
+            MainFrame,
+            TweenInfo.new(0.35, Enum.EasingStyle.Back),
+            {Size = UDim2.new(0, 620, 0, 300)}
+        ):Play()
+    else
+        TweenService:Create(
+            MainFrame,
+            TweenInfo.new(0.25),
+            {Size = UDim2.new(0, 0, 0, 0)}
+        ):Play()
+
+        task.wait(0.25)
+        MainFrame.Visible = false
+    end
 end))
 
--- Dragging logic khusus untuk OpenMenu (OpenMenu draggable = true)
+-- Dragging logic khusus untuk OpenMenu
 local openDragging, openDragStart, openStartPos
 table.insert(currentConnections, OpenMenu.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -256,40 +308,91 @@ Stroke.Thickness = 2
 Stroke.Color = CFG.AccentColor
 Stroke.Parent = MainFrame
 
+local TopGlow = Instance.new("UIGradient")
+TopGlow.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 255, 255)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(170, 0, 255)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(0, 255, 255))
+})
+TopGlow.Rotation = 0
+TopGlow.Parent = Stroke
+
+task.spawn(function()
+    while MainFrame and MainFrame.Parent do
+        TopGlow.Rotation += 1
+        task.wait(0.03)
+    end
+end)
+
+-- Top Bar Header
 local Title = Instance.new("TextLabel")
-Title.Size = UDim2.new(1, 0, 0, 35)
-Title.Text = "ALDO KNIGHTXORZ V4.7"
+Title.Name = "TitleHeader"
+Title.Size = UDim2.new(0, 300, 0, 42)
+Title.Position = UDim2.new(0, 12, 0, 0)
+Title.Text = "ALDO KNIGHTXORZ V4.10"
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 14
+Title.TextXAlignment = Enum.TextXAlignment.Left
 Title.BackgroundTransparency = 1
+Title.ZIndex = 3
 Title.Parent = MainFrame
 
 local StatusLabel = Instance.new("TextLabel")
 StatusLabel.Name = "StatusLabel"
-StatusLabel.Size = UDim2.new(1, 0, 0, 25)
-StatusLabel.Position = UDim2.new(0, 0, 0, 35)
+StatusLabel.Size = UDim2.new(0, 260, 0, 42)
+StatusLabel.Position = UDim2.new(0, 280, 0, 0)
 StatusLabel.Text = "Status: IDLE | File: 1"
 StatusLabel.TextColor3 = CFG.LineColor
 StatusLabel.Font = Enum.Font.GothamBold
-StatusLabel.TextSize = 12
+StatusLabel.TextSize = 11
+StatusLabel.TextXAlignment = Enum.TextXAlignment.Left
 StatusLabel.BackgroundTransparency = 1
+StatusLabel.ZIndex = 3
 StatusLabel.Parent = MainFrame
 
+-- Dragging logic untuk MainFrame secara keseluruhan (Fully Draggable)
+local mainDragging, mainDragStart, mainStartPos
+table.insert(currentConnections, MainFrame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        mainDragging = true
+        mainDragStart = input.Position
+        mainStartPos = MainFrame.Position
+        local changedConn
+        changedConn = input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                mainDragging = false
+                if changedConn then changedConn:Disconnect() end
+            end
+        end)
+    end
+end))
+
+table.insert(currentConnections, UserInputService.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+        if mainDragging then
+            local delta = input.Position - mainDragStart
+            MainFrame.Position = UDim2.new(mainStartPos.X.Scale, mainStartPos.X.Offset + delta.X, mainStartPos.Y.Scale, mainStartPos.Y.Offset + delta.Y)
+        end
+    end
+end))
+
+-- Landscape Scrolling Container dengan Grid Layout DJ Panel style (Button size 145x55)
 local ScrollingContainer = Instance.new("ScrollingFrame")
-ScrollingContainer.Size = UDim2.new(1, -10, 1, -70)
-ScrollingContainer.Position = UDim2.new(0, 5, 0, 65)
+ScrollingContainer.Size = UDim2.new(1, -16, 1, -52)
+ScrollingContainer.Position = UDim2.new(0, 8, 0, 46)
 ScrollingContainer.BackgroundTransparency = 1
 ScrollingContainer.BorderSizePixel = 0
-ScrollingContainer.CanvasSize = UDim2.new(0, 0, 0, 800)
-ScrollingContainer.ScrollBarThickness = 3
+ScrollingContainer.CanvasSize = UDim2.new(0, 0, 0, 320)
+ScrollingContainer.ScrollBarThickness = 4
+ScrollingContainer.ZIndex = 3
 ScrollingContainer.Parent = MainFrame
 
-local UIList = Instance.new("UIListLayout")
-UIList.Parent = ScrollingContainer
-UIList.HorizontalAlignment = Enum.HorizontalAlignment.Center
-UIList.Padding = UDim.new(0, 6)
-UIList.SortOrder = Enum.SortOrder.LayoutOrder
+local UIGrid = Instance.new("UIGridLayout")
+UIGrid.CellSize = UDim2.new(0, 145, 0, 55)
+UIGrid.CellPadding = UDim2.new(0, 8, 0, 8)
+UIGrid.SortOrder = Enum.SortOrder.LayoutOrder
+UIGrid.Parent = ScrollingContainer
 
 local function updateStatus(text)
     if not ScreenGui or not ScreenGui.Parent then return end
@@ -304,13 +407,14 @@ end
 
 local function createBtn(text, order, callback)
     local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0, 230, 0, 35)
+    btn.Size = UDim2.new(0, 145, 0, 55)
     btn.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
     btn.Text = text
     btn.TextColor3 = Color3.fromRGB(230, 230, 230)
     btn.Font = Enum.Font.GothamBold
-    btn.TextSize = 12
+    btn.TextSize = 10
     btn.LayoutOrder = order
+    btn.ZIndex = 4
     btn.Parent = ScrollingContainer
       
     local btnCorner = Instance.new("UICorner")
@@ -360,7 +464,7 @@ local function clearVisuals()
     if folder then folder:ClearAllChildren() end
 end
 
-RunService:BindToRenderStep("AldoKnightXorzV4_Record", Enum.RenderPriority.Character.Value, function()
+RunService:BindToRenderStep("AldoKnightXorzV410_Record", Enum.RenderPriority.Character.Value, function()
     if not state.isRecording or not RootPart or not Humanoid then return end
       
     local pos = RootPart.Position
@@ -405,7 +509,7 @@ stopPlayback = function(manualStop)
         state.isAutoWalk = false
     end
     
-    RunService:UnbindFromRenderStep("AldoKnightXorzV4_Playback")
+    RunService:UnbindFromRenderStep("AldoKnightXorzV410_Playback")
     
     if Humanoid then
         Humanoid.AutoRotate = true
@@ -439,7 +543,7 @@ local function executePlayback()
 
     updateStatus("WALKING TO START")
 
-    RunService:BindToRenderStep("AldoKnightXorzV4_Playback", Enum.RenderPriority.Last.Value, function(dt)
+    RunService:BindToRenderStep("AldoKnightXorzV410_Playback", Enum.RenderPriority.Last.Value, function(dt)
         if not state.isPlaying or state.playbackID ~= currentPlaybackID or not RootPart or not Humanoid then
             stopPlayback(false)
             return
@@ -650,5 +754,3 @@ createBtn("SHOW / HIDE LINE", 14, function()
         end
     end
 end)
-
-print("I'M KNIGHTXORz")
