@@ -1,4 +1,4 @@
--- [[ ALDO KNIGHTXORZ V4.5 FINAL MASTER ENTERPRISE EDITION ]] --
+-- [[ ALDO KNIGHTXORZ V4.7 MASTER ENTERPRISE EDITION ]] --
 
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -28,10 +28,15 @@ _G.AldoKnightXorzV4_Cleanup = function()
     RunService:UnbindFromRenderStep("AldoKnightXorzV4_Playback")
     
     local playerGui = LocalPlayer:WaitForChild("PlayerGui")
-    local oldGuiV3 = playerGui:FindFirstChild("AldoKnightXorzV3Gui")
-    local oldGuiV4 = playerGui:FindFirstChild("AldoKnightXorzV4Gui")
-    if oldGuiV3 then oldGuiV3:Destroy() end
-    if oldGuiV4 then oldGuiV4:Destroy() end
+    for _, gui in ipairs(playerGui:GetChildren()) do
+        if gui:IsA("ScreenGui") then
+            if gui.Name == "AldoKnightXorzV3Gui"
+            or gui.Name == "AldoKnightXorzV4Gui"
+            or gui.Name == "AldoKnightXorzV47Gui" then
+                gui:Destroy()
+            end
+        end
+    end
 end
 
 local function setupCharacter(char)
@@ -49,11 +54,11 @@ end
 table.insert(currentConnections, LocalPlayer.CharacterAdded:Connect(setupCharacter))
 
 local CFG = {
-    NodeInterval = 0.18, -- Dioptimalkan untuk tikungan presisi dan aman di perangkat seluler
+    NodeInterval = 0.18,
     MinDistance = 0.6,
     LineColor = Color3.fromRGB(0, 255, 255),
     AccentColor = Color3.fromRGB(170, 0, 255),
-    SaveFileName = "ALDO_KNIGHTXORZ_PURE_V4_5.json"
+    SaveFileName = "ALDO_KNIGHTXORZ_PURE_V4_7.json"
 }
 
 local state = {
@@ -142,10 +147,48 @@ local function getOrCreateRouteFolder()
 end
 
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "AldoKnightXorzV4Gui"
+ScreenGui.Name = "AldoKnightXorzV47Gui"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
+--========================================================
+-- OPEN MENU BUTTON (DRAGGABLE & ANIMATED GRADIENT)
+--========================================================
+local OpenMenu = Instance.new("ImageButton")
+OpenMenu.Name = "OpenMenu"
+OpenMenu.Size = UDim2.new(0, 55, 0, 55)
+OpenMenu.Position = UDim2.new(0.05, 0, 0.5, 0)
+OpenMenu.BackgroundTransparency = 1
+OpenMenu.Image = "rbxassetid://101640388423900"
+OpenMenu.Parent = ScreenGui
+
+local OpenCorner = Instance.new("UICorner")
+OpenCorner.CornerRadius = UDim.new(0, 8)
+OpenCorner.Parent = OpenMenu
+
+local OpenStroke = Instance.new("UIStroke")
+OpenStroke.Thickness = 2
+OpenStroke.Color = Color3.fromRGB(255, 255, 255)
+OpenStroke.Parent = OpenMenu
+
+local OpenGradient = Instance.new("UIGradient")
+OpenGradient.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 255, 255)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(170, 0, 255))
+})
+OpenGradient.Rotation = 45
+OpenGradient.Parent = OpenMenu
+
+task.spawn(function()
+    while OpenMenu and OpenMenu.Parent do
+        OpenGradient.Rotation += 1
+        task.wait(0.03)
+    end
+end)
+
+--========================================================
+-- MAIN FRAME (NOT DRAGGABLE)
+--========================================================
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
 MainFrame.Size = UDim2.new(0, 260, 0, 540)
@@ -153,7 +196,56 @@ MainFrame.Position = UDim2.new(0.75, 0, 0.15, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
+MainFrame.Visible = true
 MainFrame.Parent = ScreenGui
+
+-- Toggle MainFrame Visibility dengan pencegahan konflik drag pada HP
+local openMoved = false
+
+table.insert(currentConnections, OpenMenu.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch then
+        openMoved = true
+    end
+end))
+
+table.insert(currentConnections, OpenMenu.MouseButton1Click:Connect(function()
+    if openMoved then
+        openMoved = false
+        return
+    end
+    
+    MainFrame.Visible = not MainFrame.Visible
+end))
+
+-- Dragging logic khusus untuk OpenMenu (OpenMenu draggable = true)
+local openDragging, openDragStart, openStartPos
+table.insert(currentConnections, OpenMenu.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        openDragging = true
+        openDragStart = input.Position
+        openStartPos = OpenMenu.Position
+        openMoved = false
+        local changedConn
+        changedConn = input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                openDragging = false
+                if changedConn then changedConn:Disconnect() end
+            end
+        end)
+    end
+end))
+
+table.insert(currentConnections, UserInputService.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+        if openDragging then
+            local delta = input.Position - openDragStart
+            if delta.Magnitude > 5 then
+                openMoved = true
+            end
+            OpenMenu.Position = UDim2.new(openStartPos.X.Scale, openStartPos.X.Offset + delta.X, openStartPos.Y.Scale, openStartPos.Y.Offset + delta.Y)
+        end
+    end
+end))
 
 local Corner = Instance.new("UICorner")
 Corner.CornerRadius = UDim.new(0, 12)
@@ -166,7 +258,7 @@ Stroke.Parent = MainFrame
 
 local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, 0, 0, 35)
-Title.Text = "ALDO KNIGHTXORZ V4.5"
+Title.Text = "ALDO KNIGHTXORZ V4.7"
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 14
@@ -238,31 +330,6 @@ local function createBtn(text, order, callback)
     end))
     return btn
 end
-
-local dragging, dragStart, startPos
-table.insert(currentConnections, MainFrame.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        dragging = true
-        dragStart = input.Position
-        startPos = MainFrame.Position
-        local changedConn
-        changedConn = input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End then
-                dragging = false
-                if changedConn then changedConn:Disconnect() end
-            end
-        end)
-    end
-end))
-
-table.insert(currentConnections, UserInputService.InputChanged:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-        if dragging then
-            local delta = input.Position - dragStart
-            MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-        end
-    end
-end))
 
 local function drawLine(p1, p2)
     local dist = (p1 - p2).Magnitude
@@ -472,7 +539,6 @@ local function executePlayback()
                     Humanoid:Move(horizontal.Unit, false)
                 end
 
-                -- Bantuan naik otomatis saat perbedaan tinggi vertikal cukup besar
                 if direction.Y > 2 then
                     Humanoid.Jump = true
                 end
@@ -584,3 +650,5 @@ createBtn("SHOW / HIDE LINE", 14, function()
         end
     end
 end)
+
+print("I'M KNIGHTXORz")
