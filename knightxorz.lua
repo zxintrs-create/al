@@ -1,4 +1,4 @@
--- [[ ALDO KNIGHTXORZ V4.22 ULTIMATE HYBRID EDITION ]] --
+-- [[ ALDO KNIGHTXORZ V4.27 SMOOTH PLAYBACK EDITION ]] --
 
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -11,18 +11,18 @@ local Character, RootPart, Humanoid
 
 local stopPlayback
 
--- Universal Cleanup
-for i = 3, 22 do
+-- Universal Cleanup (Extended range up to 48 to fully encompass legacy globals)
+for i = 3, 48 do
     pcall(function()
         if _G["AldoKnightXorzV" .. i .. "_Cleanup"] then
             _G["AldoKnightXorzV" .. i .. "_Cleanup"]()
         end
     end)
 end
-if _G.AldoKnightXorzV422_Cleanup then pcall(_G.AldoKnightXorzV422_Cleanup) end
+if _G.AldoKnightXorzV427_Cleanup then pcall(_G.AldoKnightXorzV427_Cleanup) end
 
 local currentConnections = {}
-_G.AldoKnightXorzV422_Cleanup = function()
+_G.AldoKnightXorzV427_Cleanup = function()
     for _, conn in ipairs(currentConnections) do
         if typeof(conn) == "RBXScriptConnection" then 
             pcall(function() conn:Disconnect() end) 
@@ -30,8 +30,15 @@ _G.AldoKnightXorzV422_Cleanup = function()
     end
     currentConnections = {}
     
-    pcall(function() RunService:UnbindFromRenderStep("AldoKnightXorzV422_Record") end)
-    pcall(function() RunService:UnbindFromRenderStep("AldoKnightXorzV422_Playback") end)
+    -- Explicitly unbind all RenderSteps from current and previous versions
+    pcall(function() RunService:UnbindFromRenderStep("AldoKnightXorzV427_Record") end)
+    pcall(function() RunService:UnbindFromRenderStep("AldoKnightXorzV427_Playback") end)
+    pcall(function() RunService:UnbindFromRenderStep("AldoKnightXorzV426_Record") end)
+    pcall(function() RunService:UnbindFromRenderStep("AldoKnightXorzV426_Playback") end)
+    pcall(function() RunService:UnbindFromRenderStep("AldoKnightXorzV425_Record") end)
+    pcall(function() RunService:UnbindFromRenderStep("AldoKnightXorzV425_Playback") end)
+    pcall(function() RunService:UnbindFromRenderStep("AldoKnightXorzV4_Record") end)
+    pcall(function() RunService:UnbindFromRenderStep("AldoKnightXorzV4_Playback") end)
     
     local playerGui = LocalPlayer:WaitForChild("PlayerGui", 5)
     if playerGui then
@@ -68,11 +75,11 @@ end
 table.insert(currentConnections, LocalPlayer.CharacterAdded:Connect(setupCharacter))
 
 local CFG = {
-    NodeInterval = 0.15,
-    MinDistance = 0.4,
+    NodeInterval = 0.18,
+    MinDistance = 0.6,
     LineColor = Color3.fromRGB(0, 255, 255),
     AccentColor = Color3.fromRGB(170, 0, 255),
-    SaveFileName = "ALDO_KNIGHTXORZ_PURE_V4_22.json"
+    SaveFileName = "ALDO_KNIGHTXORZ_PURE_V4_27.json"
 }
 
 local state = {
@@ -200,7 +207,7 @@ local function getOrCreateRouteFolder()
 end
 
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "AldoKnightXorzV422Gui"
+ScreenGui.Name = "AldoKnightXorzV427Gui"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
@@ -211,8 +218,8 @@ local OpenMenu = Instance.new("ImageButton")
 OpenMenu.Name = "OpenMenu"
 OpenMenu.Size = UDim2.new(0, 55, 0, 55)
 OpenMenu.Position = UDim2.new(0.05, 0, 0.5, 0)
-OpenMenu.BackgroundTransparency = 1
-OpenMenu.Image = "rbxassetid://101640388423900"
+OpenMenu.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
+OpenMenu.BackgroundTransparency = 0.2
 OpenMenu.ZIndex = 10
 OpenMenu.Parent = ScreenGui
 
@@ -225,28 +232,22 @@ OpenStroke.Thickness = 2
 OpenStroke.Color = Color3.fromRGB(255, 255, 255)
 OpenStroke.Parent = OpenMenu
 
-local OpenGradient = Instance.new("UIGradient")
-OpenGradient.Color = ColorSequence.new({
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 255, 255)),
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(170, 0, 255))
-})
-OpenGradient.Rotation = 45
-OpenGradient.Parent = OpenMenu
-
-task.spawn(function()
-    while OpenMenu and OpenMenu.Parent do
-        OpenGradient.Rotation = (OpenGradient.Rotation + 2) % 360
-        task.wait(0.03)
-    end
-end)
+local IconImage = Instance.new("ImageLabel")
+IconImage.Name = "Icon"
+IconImage.Size = UDim2.new(0.8, 0, 0.8, 0)
+IconImage.Position = UDim2.new(0.1, 0, 0.1, 0)
+IconImage.BackgroundTransparency = 1
+IconImage.Image = "rbxassetid://101640388423900"
+IconImage.ZIndex = 11
+IconImage.Parent = OpenMenu
 
 --========================================================
--- MAIN FRAME
+-- MAIN FRAME (LANDSCAPE 540x310)
 --========================================================
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 260, 0, 540)
-MainFrame.Position = UDim2.new(0.75, 0, 0.15, 0)
+MainFrame.Size = UDim2.new(0, 540, 0, 310)
+MainFrame.Position = UDim2.new(0.5, -270, 0.5, -155)
 MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
@@ -309,7 +310,7 @@ Stroke.Parent = MainFrame
 
 local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, 0, 0, 35)
-Title.Text = "ALDO KNIGHTXORZ V4.22"
+Title.Text = "ALDO KNIGHTXORZ V4.27"
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 14
@@ -330,20 +331,21 @@ StatusLabel.ZIndex = 3
 StatusLabel.Parent = MainFrame
 
 local ScrollingContainer = Instance.new("ScrollingFrame")
-ScrollingContainer.Size = UDim2.new(1, -10, 1, -70)
-ScrollingContainer.Position = UDim2.new(0, 5, 0, 65)
+ScrollingContainer.Size = UDim2.new(1, -20, 1, -75)
+ScrollingContainer.Position = UDim2.new(0, 10, 0, 65)
 ScrollingContainer.BackgroundTransparency = 1
 ScrollingContainer.BorderSizePixel = 0
-ScrollingContainer.CanvasSize = UDim2.new(0, 0, 0, 800)
-ScrollingContainer.ScrollBarThickness = 3
+ScrollingContainer.CanvasSize = UDim2.new(0, 0, 0, 0)
+ScrollingContainer.AutomaticCanvasSize = Enum.AutomaticSize.XY
+ScrollingContainer.ScrollBarThickness = 4
 ScrollingContainer.ZIndex = 3
 ScrollingContainer.Parent = MainFrame
 
-local UIList = Instance.new("UIListLayout")
-UIList.Parent = ScrollingContainer
-UIList.HorizontalAlignment = Enum.HorizontalAlignment.Center
-UIList.Padding = UDim.new(0, 6)
-UIList.SortOrder = Enum.SortOrder.LayoutOrder
+local UIGrid = Instance.new("UIGridLayout")
+UIGrid.CellSize = UDim2.new(0, 120, 0, 35)
+UIGrid.CellPadding = UDim2.new(0, 8, 0, 8)
+UIGrid.SortOrder = Enum.SortOrder.LayoutOrder
+UIGrid.Parent = ScrollingContainer
 
 local function updateStatus(text)
     if not ScreenGui or not ScreenGui.Parent then return end
@@ -358,12 +360,12 @@ end
 
 local function createBtn(text, order, callback)
     local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0, 230, 0, 35)
+    btn.Size = UDim2.new(0, 120, 0, 35)
     btn.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
     btn.Text = text
     btn.TextColor3 = Color3.fromRGB(230, 230, 230)
     btn.Font = Enum.Font.GothamBold
-    btn.TextSize = 12
+    btn.TextSize = 11
     btn.LayoutOrder = order
     btn.ZIndex = 4
     btn.Parent = ScrollingContainer
@@ -415,8 +417,8 @@ local function clearVisuals()
     if folder then folder:ClearAllChildren() end
 end
 
-pcall(function() RunService:UnbindFromRenderStep("AldoKnightXorzV422_Record") end)
-RunService:BindToRenderStep("AldoKnightXorzV422_Record", Enum.RenderPriority.Character.Value, function()
+pcall(function() RunService:UnbindFromRenderStep("AldoKnightXorzV427_Record") end)
+RunService:BindToRenderStep("AldoKnightXorzV427_Record", Enum.RenderPriority.Character.Value, function()
     if not state.isRecording or not isCharacterAlive() then return end
 
     local cf = RootPart.CFrame
@@ -425,7 +427,7 @@ RunService:BindToRenderStep("AldoKnightXorzV422_Record", Enum.RenderPriority.Cha
     local vel = RootPart.AssemblyLinearVelocity  
     local currentTimestamp = tick() - state.startTime  
       
-    local isJumping = (Humanoid.FloorMaterial == Enum.Material.Air and vel.Y > 1) or (st == Enum.HumanoidStateType.Jumping) or (st == Enum.HumanoidStateType.Freefall and vel.Y > 2)  
+    local isJumping = (Humanoid.FloorMaterial == Enum.Material.Air and vel.Y >  1) or (st == Enum.HumanoidStateType.Jumping) or (st == Enum.HumanoidStateType.Freefall and vel.Y > 2)  
     local jumpTrigger = false  
     if isJumping and not state.lastJumpState then  
         jumpTrigger = true  
@@ -464,7 +466,7 @@ stopPlayback = function(manualStop)
         state.isAutoWalk = false
     end
 
-    pcall(function() RunService:UnbindFromRenderStep("AldoKnightXorzV422_Playback") end)
+    pcall(function() RunService:UnbindFromRenderStep("AldoKnightXorzV427_Playback") end)
       
     if isCharacterAlive() and Humanoid then  
         Humanoid.AutoRotate = true  
@@ -499,8 +501,9 @@ local function executePlayback()
 
     updateStatus("WALKING TO START")  
 
-    pcall(function() RunService:UnbindFromRenderStep("AldoKnightXorzV422_Playback") end)
-    RunService:BindToRenderStep("AldoKnightXorzV422_Playback", Enum.RenderPriority.Last.Value, function(dt)  
+    pcall(function() RunService:UnbindFromRenderStep("AldoKnightXorzV427_Playback") end)
+    -- Using direct RenderStepped priority to ensure ultra-smooth framerate-synced motion
+    RunService:BindToRenderStep("AldoKnightXorzV427_Playback", Enum.RenderPriority.Camera.Value - 1, function(dt)  
         if not state.isPlaying or state.playbackID ~= currentPlaybackID or not isCharacterAlive() then  
             stopPlayback(false)  
             return  
@@ -570,52 +573,57 @@ local function executePlayback()
 
             local currentNode = state.timeline[currentIndex]  
             local nextNode = state.timeline[currentIndex + 1]  
-            local timeDiff = nextNode.RelativeTimestamp        playbackState = "PLAYING"
-                playbackStartTime = tick()
-                pauseOffset = 0
-                currentIndex = 1
-                
-                if Humanoid then 
-                    Humanoid.PlatformStand = true 
-                end
-                stateChanged = true
-                updateStatus(state.isAutoWalk and "AUTO WALK" or "PLAYING")
-            end
-        elseif playbackState == "PLAYING" then
-            local currentTime = tick() - playbackStartTime - pauseOffset
+            local timeDiff = nextNode.RelativeTimestamp - currentNode.RelativeTimestamp  
+              
+            local alpha = 0  
+            if timeDiff > 0 then  
+                alpha = math.clamp((currentTime - currentNode.RelativeTimestamp) / timeDiff, 0, 1)  
+            end  
 
-            while currentIndex < #state.timeline and currentTime >= state.timeline[currentIndex + 1].RelativeTimestamp do
-                currentIndex = currentIndex + 1
-            end
+            local targetPos = currentNode.Position:Lerp(nextNode.Position, alpha)  
+            local currentPos = RootPart.Position  
+            local direction = (targetPos - currentPos)  
+            local totalDist = direction.Magnitude  
 
-            if currentIndex >= #state.timeline then
-                if state.isAutoWalk then
-                    if Humanoid then Humanoid.PlatformStand = false end
-                    playbackState = "RETURNING_TO_START"
-                    stateChanged = true
-                    timeoutTimer = tick() + 25
-                    updateStatus("WALKING TO START")
-                else
-                    stopPlayback(false)
-                end
-                return
-            end
+            if (currentPos - lastCheckPos).Magnitude < 0.04 and totalDist > 0.2 then  
+                stuckTimer = stuckTimer + dt  
+                if stuckTimer > 2.5 and (tick() - stuckJumpCooldown > 3.0) then  
+                    Humanoid.Jump = true  
+                    Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)  
+                    stuckJumpCooldown = tick()  
+                    stuckTimer = 0  
+                end  
+            else  
+                stuckTimer = 0  
+                lastCheckPos = currentPos  
+            end  
 
-            local currentNode = state.timeline[currentIndex]
-            local nextNode = state.timeline[currentIndex + 1]
-            local timeDiff = nextNode.RelativeTimestamp - currentNode.RelativeTimestamp
-            
-            local alpha = 0
-            if timeDiff > 0 then
-                alpha = math.clamp((currentTime - currentNode.RelativeTimestamp) / timeDiff, 0, 1)
-            end
+            if totalDist > 0.15 then  
+                Humanoid.AutoRotate = true  
 
-            -- True Precision CFrame Interpolation including full orientation/rotation
-            local interpolatedCf = currentNode.CFrame:Lerp(nextNode.CFrame, alpha)
-            RootPart.CFrame = interpolatedCf
-            RootPart.AssemblyLinearVelocity = Vector3.zero
-            RootPart.AssemblyAngularVelocity = Vector3.zero
-        end
+                local horizontal = Vector3.new(  
+                    direction.X,  
+                    0,  
+                    direction.Z  
+                )  
+
+                if horizontal.Magnitude > 0 then  
+                    Humanoid:Move(horizontal.Unit, false)  
+                end  
+
+                if direction.Y > 2 then  
+                    Humanoid.Jump = true  
+                end  
+            else  
+                Humanoid:Move(Vector3.zero, true)  
+            end  
+
+            if currentNode.CFrame and nextNode.CFrame then
+                pausedCFrame = currentNode.CFrame:Lerp(nextNode.CFrame, alpha)
+            else
+                pausedCFrame = CFrame.new(targetPos)
+            end
+        end  
     end)
 end
 
@@ -632,7 +640,7 @@ local function toggleAutoWalk()
     end
 end
 
-createBtn("RECORD START / STOP", 1, function()
+createBtn("RECORD START", 1, function()
     state.isRecording = not state.isRecording
     if state.isRecording then
         stopPlayback(true)
@@ -653,7 +661,7 @@ createBtn("PLAY ROUTE", 2, function()
     executePlayback()
 end)
 
-createBtn("PAUSE / RESUME", 3, function()
+createBtn("PAUSE / RES", 3, function()
     if not state.isPlaying then return end
     state.isPaused = not state.isPaused
     if state.isPaused then
@@ -663,16 +671,16 @@ createBtn("PAUSE / RESUME", 3, function()
     end
 end)
 
-createBtn("AUTO WALK ON / OFF", 4, function()
+createBtn("AUTO WALK", 4, function()
     toggleAutoWalk()
 end)
 
-createBtn("STOP PLAYBACK", 5, function()
+createBtn("STOP", 5, function()
     stopPlayback(true)
 end)
 
 for i = 1, 5 do
-    createBtn("SELECT FILE " .. i, 5 + i, function()
+    createBtn("FILE " .. i, 5 + i, function()
         state.selectedFile = i
         updateStatus("IDLE")
     end)
@@ -696,20 +704,20 @@ createBtn("LOAD FILE", 12, function()
         state.timeline = normalizeTimeline(cloneTimeline(fileData.timeline))
         clearVisuals()
         for i = 2, #state.timeline do
-            drawLine(state.timeline[i-1].CFrame.Position, state.timeline[i].CFrame.Position)
+            drawLine(state.timeline[i-1].Position, state.timeline[i].Position)
         end
         updateStatus("LOADED FILE " .. state.selectedFile)
     end
 end)
 
-createBtn("CLEAR ROUTE", 13, function()
+createBtn("CLEAR", 13, function()
     stopPlayback(true)
     state.timeline = {}
     clearVisuals()
     updateStatus("CLEARED")
 end)
 
-createBtn("SHOW / HIDE LINE", 14, function()
+createBtn("LINE VISIBLE", 14, function()
     state.lineVisible = not state.lineVisible
     local folder = workspace:FindFirstChild("KNIGHTXORZ_ROUTE")
     if folder then
