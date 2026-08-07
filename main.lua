@@ -1,5 +1,5 @@
 --========================================================--
--- ADVANCED R15 GHOST REPLAY ENGINE (CYBER NEON EDITION)
+-- ADVANCED R15 GHOST REPLAY ENGINE (CYBER NEON FIXED)
 -- LocalScript - Standalone / Complete / Mobile Responsive
 --========================================================--
 
@@ -199,7 +199,7 @@ local function ApplyTouchEffects(button)
 	ApplyNeonGlow(button)
 	local baseSize = button.Size
 
-	button.Activated:Connect(function()
+	local function OnPress()
 		local pressTween = TweenService:Create(button, TweenInfo.new(0.08, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 			Size = UDim2.new(baseSize.X.Scale, baseSize.X.Offset - 2, baseSize.Y.Scale, baseSize.Y.Offset - 2),
 			BackgroundColor3 = Color3.fromRGB(60, 20, 90)
@@ -214,7 +214,9 @@ local function ApplyTouchEffects(button)
 				}):Play()
 			end)
 		end)
-	end)
+	end
+
+	button.MouseButton1Down:Connect(OnPress)
 end
 
 ----------------------------------------------------
@@ -236,13 +238,15 @@ ScreenGui.Parent = PlayerGui
 
 local OpenMenu = Instance.new("TextButton")
 OpenMenu.Name = "OpenMenuButton"
-OpenMenu.Size = UDim2.new(0, 90, 0, 40)
-OpenMenu.Position = UDim2.new(0, 15, 0.5, -20)
+OpenMenu.Size = UDim2.new(0, 100, 0, 42)
+OpenMenu.Position = UDim2.new(0, 15, 0.5, -21)
 OpenMenu.BackgroundColor3 = Color3.fromRGB(15, 10, 25)
 OpenMenu.Text = "OPEN MENU"
 OpenMenu.TextColor3 = Color3.fromRGB(0, 240, 255)
 OpenMenu.TextScaled = true
 OpenMenu.Font = Enum.Font.GothamBold
+OpenMenu.Active = true
+OpenMenu.ZIndex = 50
 OpenMenu.Parent = ScreenGui
 
 local openCorner = Instance.new("UICorner")
@@ -257,6 +261,7 @@ Main.Position = UDim2.new(0.5, -140, 1.2, 0)
 Main.BackgroundColor3 = Color3.fromRGB(10, 6, 18)
 Main.BackgroundTransparency = 0.1
 Main.Visible = false
+Main.ZIndex = 10
 Main.Parent = ScreenGui
 
 local mainCorner = Instance.new("UICorner")
@@ -276,6 +281,7 @@ local HeaderFrame = Instance.new("Frame")
 HeaderFrame.Name = "HeaderFrame"
 HeaderFrame.Size = UDim2.new(1, 0, 0, 26)
 HeaderFrame.BackgroundTransparency = 1
+HeaderFrame.ZIndex = 11
 HeaderFrame.Parent = Main
 
 local Title = Instance.new("TextLabel")
@@ -286,6 +292,7 @@ Title.Text = "R15 GHOST REPLAY"
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
 Title.TextScaled = true
 Title.Font = Enum.Font.GothamBold
+Title.ZIndex = 11
 Title.Parent = HeaderFrame
 
 local titleGradient = Instance.new("UIGradient")
@@ -304,6 +311,8 @@ CloseButton.Text = "X"
 CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 CloseButton.Font = Enum.Font.GothamBold
 CloseButton.TextSize = 12
+CloseButton.Active = true
+CloseButton.ZIndex = 12
 CloseButton.Parent = HeaderFrame
 
 local closeCorner = Instance.new("UICorner")
@@ -316,6 +325,7 @@ StatusPanel.Size = UDim2.new(1, -10, 0, 48)
 StatusPanel.Position = UDim2.new(0, 5, 0, 32)
 StatusPanel.BackgroundColor3 = Color3.fromRGB(20, 12, 35)
 StatusPanel.BackgroundTransparency = 0.3
+StatusPanel.ZIndex = 11
 StatusPanel.Parent = Main
 
 local statusCorner = Instance.new("UICorner")
@@ -330,6 +340,7 @@ StatusLabel.Text = "STATUS: IDLE"
 StatusLabel.TextColor3 = Color3.fromRGB(0, 240, 255)
 StatusLabel.Font = Enum.Font.GothamBold
 StatusLabel.TextSize = 12
+StatusLabel.ZIndex = 12
 StatusLabel.Parent = StatusPanel
 
 local FrameLabel = Instance.new("TextLabel")
@@ -341,6 +352,7 @@ FrameLabel.Text = "FRAMES: 0 | DURATION: 0.0s"
 FrameLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
 FrameLabel.Font = Enum.Font.Gotham
 FrameLabel.TextSize = 11
+FrameLabel.ZIndex = 12
 FrameLabel.Parent = StatusPanel
 
 local Container = Instance.new("Frame")
@@ -348,6 +360,7 @@ Container.Name = "Container"
 Container.Size = UDim2.new(1, 0, 1, -88)
 Container.Position = UDim2.new(0, 0, 0, 88)
 Container.BackgroundTransparency = 1
+Container.ZIndex = 11
 Container.Parent = Main
 
 local listLayout = Instance.new("UIListLayout")
@@ -366,6 +379,8 @@ local function CreateButton(text, layoutOrder)
 	b.TextSize = 11
 	b.Font = Enum.Font.GothamBold
 	b.LayoutOrder = layoutOrder
+	b.Active = true
+	b.ZIndex = 12
 	b.Parent = Container
 
 	local corner = Instance.new("UICorner")
@@ -383,6 +398,7 @@ local PlayRow = Instance.new("Frame")
 PlayRow.Size = UDim2.new(1, -10, 0, 30)
 PlayRow.BackgroundTransparency = 1
 PlayRow.LayoutOrder = 3
+PlayRow.ZIndex = 11
 PlayRow.Parent = Container
 
 local prLayout = Instance.new("UIListLayout")
@@ -397,6 +413,8 @@ PlayButton.Text = "PLAY GHOST"
 PlayButton.TextColor3 = Color3.fromRGB(0, 255, 120)
 PlayButton.Font = Enum.Font.GothamBold
 PlayButton.TextSize = 10
+PlayButton.Active = true
+PlayButton.ZIndex = 12
 PlayButton.Parent = PlayRow
 ApplyTouchEffects(PlayButton)
 
@@ -407,6 +425,8 @@ PauseButton.Text = "PAUSE"
 PauseButton.TextColor3 = Color3.fromRGB(255, 200, 0)
 PauseButton.Font = Enum.Font.GothamBold
 PauseButton.TextSize = 10
+PauseButton.Active = true
+PauseButton.ZIndex = 12
 PauseButton.Parent = PlayRow
 ApplyTouchEffects(PauseButton)
 
@@ -414,6 +434,7 @@ local SeekRow = Instance.new("Frame")
 SeekRow.Size = UDim2.new(1, -10, 0, 30)
 SeekRow.BackgroundTransparency = 1
 SeekRow.LayoutOrder = 4
+SeekRow.ZIndex = 11
 SeekRow.Parent = Container
 
 local srLayout = Instance.new("UIListLayout")
@@ -428,6 +449,8 @@ SeekBackButton.Text = "SEEK BACK"
 SeekBackButton.TextColor3 = Color3.fromRGB(0, 240, 255)
 SeekBackButton.Font = Enum.Font.GothamBold
 SeekBackButton.TextSize = 10
+SeekBackButton.Active = true
+SeekBackButton.ZIndex = 12
 SeekBackButton.Parent = SeekRow
 ApplyTouchEffects(SeekBackButton)
 
@@ -438,6 +461,8 @@ SeekForwardButton.Text = "SEEK FORWARD"
 SeekForwardButton.TextColor3 = Color3.fromRGB(0, 240, 255)
 SeekForwardButton.Font = Enum.Font.GothamBold
 SeekForwardButton.TextSize = 10
+SeekForwardButton.Active = true
+SeekForwardButton.ZIndex = 12
 SeekForwardButton.Parent = SeekRow
 ApplyTouchEffects(SeekForwardButton)
 
@@ -447,6 +472,7 @@ local StorageRow = Instance.new("Frame")
 StorageRow.Size = UDim2.new(1, -10, 0, 30)
 StorageRow.BackgroundTransparency = 1
 StorageRow.LayoutOrder = 6
+StorageRow.ZIndex = 11
 StorageRow.Parent = Container
 
 local stLayout = Instance.new("UIListLayout")
@@ -461,6 +487,8 @@ SaveButton.Text = "SAVE DATA"
 SaveButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 SaveButton.Font = Enum.Font.GothamBold
 SaveButton.TextSize = 10
+SaveButton.Active = true
+SaveButton.ZIndex = 12
 SaveButton.Parent = StorageRow
 ApplyTouchEffects(SaveButton)
 
@@ -471,54 +499,55 @@ LoadButton.Text = "LOAD DATA"
 LoadButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 LoadButton.Font = Enum.Font.GothamBold
 LoadButton.TextSize = 10
+LoadButton.Active = true
+LoadButton.ZIndex = 12
 LoadButton.Parent = StorageRow
 ApplyTouchEffects(LoadButton)
 
 ----------------------------------------------------
--- 5. PANEL ANIMATION & TOGGLE SYSTEM
+-- 5. PANEL ANIMATION & TOGGLE SYSTEM (FIXED)
 ----------------------------------------------------
 local menuOpen = false
 local isAnimating = false
 
-local function OpenPanel()
-	if isAnimating or menuOpen then return end
-	isAnimating = true
-	Main.Visible = true
-
-	local openTween = TweenService:Create(Main, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-		Position = UDim2.new(0.5, -140, 0.5, -250)
-	})
-	openTween:Play()
-	openTween.Completed:Connect(function()
-		menuOpen = true
-		isAnimating = false
-	end)
-end
-
-local function ClosePanel()
-	if isAnimating or not menuOpen then return end
+local function ToggleMenu()
+	if isAnimating then return end
 	isAnimating = true
 
-	local closeTween = TweenService:Create(Main, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
-		Position = UDim2.new(0.5, -140, 1.2, 0)
-	})
-	closeTween:Play()
-	closeTween.Completed:Connect(function()
-		Main.Visible = false
-		menuOpen = false
-		isAnimating = false
-	end)
-end
+	if not menuOpen then
+		Main.Position = UDim2.new(0.5, -140, 1.2, 0)
+		Main.Visible = true
 
-OpenMenu.Activated:Connect(function()
-	if menuOpen then
-		ClosePanel()
+		local openTween = TweenService:Create(Main, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+			Position = UDim2.new(0.5, -140, 0.5, -250)
+		})
+		openTween:Play()
+		openTween.Completed:Connect(function()
+			menuOpen = true
+			isAnimating = false
+		end)
 	else
-		OpenPanel()
+		local closeTween = TweenService:Create(Main, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+			Position = UDim2.new(0.5, -140, 1.2, 0)
+		})
+		closeTween:Play()
+		closeTween.Completed:Connect(function()
+			Main.Visible = false
+			menuOpen = false
+			isAnimating = false
+		end)
 	end
-end)
+end
 
-CloseButton.Activated:Connect(ClosePanel)
+OpenMenu.MouseButton1Click:Connect(ToggleMenu)
+OpenMenu.Activated:Connect(ToggleMenu)
+
+CloseButton.MouseButton1Click:Connect(function()
+	if menuOpen then ToggleMenu() end
+end)
+CloseButton.Activated:Connect(function()
+	if menuOpen then ToggleMenu() end
+end)
 
 ----------------------------------------------------
 -- 6. RECORD ENGINE
@@ -605,8 +634,8 @@ local function StartRecord()
 	end)
 end
 
-RecordButton.Activated:Connect(StartRecord)
-StopButton.Activated:Connect(function()
+RecordButton.MouseButton1Click:Connect(StartRecord)
+StopButton.MouseButton1Click:Connect(function()
 	StopRecord()
 	StopPlayback()
 	StatusLabel.Text = "STATUS: IDLE"
@@ -736,9 +765,9 @@ local function StartPlayback()
 	end)
 end
 
-PlayButton.Activated:Connect(StartPlayback)
+PlayButton.MouseButton1Click:Connect(StartPlayback)
 
-PauseButton.Activated:Connect(function()
+PauseButton.MouseButton1Click:Connect(function()
 	if Playing and not Paused then
 		Paused = true
 		StatusLabel.Text = "STATUS: PAUSED"
@@ -772,7 +801,7 @@ local function UpdatePreviewState()
 	end
 end
 
-SeekBackButton.Activated:Connect(function()
+SeekBackButton.MouseButton1Click:Connect(function()
 	if #RecordData == 0 then return end
 	StopRecord()
 	Playing = false
@@ -781,7 +810,7 @@ SeekBackButton.Activated:Connect(function()
 	UpdatePreviewState()
 end)
 
-SeekForwardButton.Activated:Connect(function()
+SeekForwardButton.MouseButton1Click:Connect(function()
 	if #RecordData == 0 then return end
 	StopRecord()
 	Playing = false
@@ -790,7 +819,7 @@ SeekForwardButton.Activated:Connect(function()
 	UpdatePreviewState()
 end)
 
-TrimButton.Activated:Connect(function()
+TrimButton.MouseButton1Click:Connect(function()
 	if #RecordData == 0 or CutIndex >= #RecordData then return end
 	StopRecord()
 	StopPlayback()
@@ -804,7 +833,7 @@ TrimButton.Activated:Connect(function()
 	FrameLabel.Text = string.format("FRAMES: %d", #RecordData)
 end)
 
-SaveButton.Activated:Connect(function()
+SaveButton.MouseButton1Click:Connect(function()
 	if #RecordData == 0 then return end
 	
 	SavedData = {}
@@ -833,7 +862,7 @@ SaveButton.Activated:Connect(function()
 	StatusLabel.TextColor3 = Color3.fromRGB(0, 255, 120)
 end)
 
-LoadButton.Activated:Connect(function()
+LoadButton.MouseButton1Click:Connect(function()
 	if #SavedData == 0 then return end
 	StopRecord()
 	StopPlayback()
