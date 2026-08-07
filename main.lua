@@ -143,4 +143,3 @@ player.CharacterAdded:Connect(function(newChar)
 	humanoid = newChar:WaitForChild("Humanoid")  
 end)
 
-print("DELTA MOBILE CONTROL LOADED: D-Pad + W-Lock System Active")  
