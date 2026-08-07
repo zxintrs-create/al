@@ -1,3 +1,7 @@
+-- [[ DELTA ULTIMATE AUTO-WALK V3: GOD-TIER EDITION ]] --  
+-- Developed by Delta maker script for Aldo Tzy  
+-- Features: Modern Premium UI, Visual Line, Timeline Stitching, Precise Playback
+
 local RunService = game:GetService("RunService")  
 local UserInputService = game:GetService("UserInputService")  
 local TweenService = game:GetService("TweenService")  
@@ -132,34 +136,52 @@ RunService.Heartbeat:Connect(function()
     end  
 end)
 
--- PLAYBACK  
+-- PLAYBACK (SMOOTH & ANIMATION FIX)  
 local function startPlayback()  
-    if #state.timeline == 0 or state.isPlaying then return end  
+    if #state.timeline < 2 or state.isPlaying then return end  
     state.isPlaying = true  
       
-    -- Disable character movement  
-    Humanoid.WalkSpeed = 0  
-      
-    for i = 1, #state.timeline do  
+    for i = 1, #state.timeline - 1 do  
         if not state.isPlaying then break end  
-        local data = state.timeline[i]  
+        local currentData = state.timeline[i]  
+        local nextData = state.timeline[i+1]  
           
-        -- Ultra-smooth lerp movement  
-        local targetCF = data.CFrame  
-        local duration = CFG.NodeInterval  
+        local startCF = currentData.CFrame  
+        local endCF = nextData.CFrame  
+        local duration = nextData.T - currentData.T  
+        if duration <= 0 then duration = CFG.NodeInterval end  
           
-        local tween = TweenService:Create(RootPart, TweenInfo.new(duration, Enum.EasingStyle.Linear), {CFrame = targetCF})  
-        tween:Play()  
-          
-        if data.State == Enum.HumanoidStateType.Jumping then  
-            Humanoid.Jump = true  
+        local elapsed = 0  
+        while elapsed < duration do  
+            if not state.isPlaying then break end  
+            local dt = RunService.Heartbeat:Wait()  
+            elapsed = elapsed + dt  
+            local alpha = math.clamp(elapsed / duration, 0, 1)  
+              
+            -- Smooth CFrame lerping  
+            local currentCF = startCF:Lerp(endCF, alpha)  
+            RootPart.CFrame = currentCF  
+              
+            -- Feed velocity and move direction so default Animate script plays walking animation  
+            local moveDir = (endCF.Position - startCF.Position)  
+            if moveDir.Magnitude > 0 then  
+                moveDir = moveDir.Unit  
+                Humanoid:Move(moveDir, false)  
+                RootPart.AssemblyLinearVelocity = moveDir * 16  
+            else  
+                Humanoid:Move(Vector3.new(0, 0, 0), false)  
+                RootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)  
+            end  
+              
+            if currentData.State == Enum.HumanoidStateType.Jumping then  
+                Humanoid.Jump = true  
+            end  
         end  
-          
-        task.wait(duration)  
     end  
       
     state.isPlaying = false  
-    Humanoid.WalkSpeed = 16  
+    Humanoid:Move(Vector3.new(0, 0, 0), false)  
+    RootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)  
 end
 
 -- ROLLBACK (STITCHING)  
