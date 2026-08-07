@@ -1,14 +1,17 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
 
 local player = Players.LocalPlayer
+
+-- Matikan kontrol default Roblox Mobile
+local PlayerModule = require(player.PlayerScripts:WaitForChild("PlayerModule"))
+local Controls = PlayerModule:GetControls()
+Controls:Disable()
+
 
 local character
 local humanoid
 
-
---// STATE
 local moveState = {
 	Forward = false,
 	Backward = false,
@@ -18,193 +21,150 @@ local moveState = {
 }
 
 
---// CHARACTER
 local function setupCharacter(char)
-
 	character = char
 	humanoid = char:WaitForChild("Humanoid")
-
 end
-
 
 if player.Character then
 	setupCharacter(player.Character)
 end
 
-
-player.CharacterAdded:Connect(function(char)
-	setupCharacter(char)
-end)
+player.CharacterAdded:Connect(setupCharacter)
 
 
 
---// GUI
-local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "MobileControl"
-screenGui.ResetOnSpawn = false
-screenGui.IgnoreGuiInset = true
-screenGui.Parent = player:WaitForChild("PlayerGui")
+-- GUI
+local gui = Instance.new("ScreenGui")
+gui.Name = "MobileButtonControl"
+gui.ResetOnSpawn = false
+gui.Parent = player:WaitForChild("PlayerGui")
 
 
-
---// BUTTON
 local function createButton(name,text,pos)
 
-	local button = Instance.new("TextButton")
+	local b = Instance.new("TextButton")
+	b.Name = name
+	b.Size = UDim2.fromOffset(75,75)
+	b.Position = pos
+	b.BackgroundTransparency = 0.3
+	b.BackgroundColor3 = Color3.fromRGB(40,40,40)
+	b.TextColor3 = Color3.new(1,1,1)
+	b.TextScaled = true
+	b.Text = text
+	b.BorderSizePixel = 0
+	b.Parent = gui
 
-	button.Name = name
-	button.Size = UDim2.new(0,75,0,75)
-	button.Position = pos
-	button.BackgroundColor3 = Color3.fromRGB(35,35,35)
-	button.BackgroundTransparency = 0.25
-	button.TextColor3 = Color3.new(1,1,1)
-	button.Text = text
-	button.TextScaled = true
-	button.BorderSizePixel = 0
-
-	button.Parent = screenGui
-
-	return button
+	return b
 end
 
 
-
-local forward = createButton(
+local Forward = createButton(
 	"Forward",
 	"▲",
-	UDim2.new(0,120,1,-210)
+	UDim2.new(0,120,1,-200)
 )
 
-local backward = createButton(
+local Backward = createButton(
 	"Backward",
 	"▼",
-	UDim2.new(0,120,1,-70)
+	UDim2.new(0,120,1,-80)
 )
 
-local left = createButton(
+local Left = createButton(
 	"Left",
 	"◀",
-	UDim2.new(0,35,1,-140)
+	UDim2.new(0,40,1,-140)
 )
 
-local right = createButton(
+local Right = createButton(
 	"Right",
 	"▶",
-	UDim2.new(0,205,1,-140)
+	UDim2.new(0,200,1,-140)
 )
 
-local wLock = createButton(
+local WLock = createButton(
 	"W LOCK",
 	"OFF",
-	UDim2.new(0,320,1,-140)
+	UDim2.new(0,310,1,-140)
 )
 
 
 
---// HOLD BUTTON FIX MOBILE
-local function connectHold(button,state)
+-- HOLD TOUCH
+local function bindHold(button,state)
 
-	button.InputBegan:Connect(function(input)
-
-		if input.UserInputType == Enum.UserInputType.Touch then
-
-			moveState[state] = true
-
-		end
-
+	button.TouchStarted:Connect(function()
+		moveState[state] = true
 	end)
 
-
-	button.InputEnded:Connect(function(input)
-
-		if input.UserInputType == Enum.UserInputType.Touch then
-
-			moveState[state] = false
-
-		end
-
+	button.TouchEnded:Connect(function()
+		moveState[state] = false
 	end)
 
 end
 
 
-connectHold(forward,"Forward")
-connectHold(backward,"Backward")
-connectHold(left,"Left")
-connectHold(right,"Right")
+bindHold(Forward,"Forward")
+bindHold(Backward,"Backward")
+bindHold(Left,"Left")
+bindHold(Right,"Right")
 
 
 
---// W LOCK BUTTON
-wLock.InputBegan:Connect(function(input)
+-- W LOCK
+WLock.TouchTap:Connect(function()
 
-	if input.UserInputType == Enum.UserInputType.Touch then
+	moveState.WLock = not moveState.WLock
 
-		moveState.WLock = not moveState.WLock
-
-
-		if moveState.WLock then
-
-			wLock.Text = "ON"
-			wLock.BackgroundColor3 = Color3.fromRGB(0,255,0)
-
-		else
-
-			wLock.Text = "OFF"
-			wLock.BackgroundColor3 = Color3.fromRGB(35,35,35)
-
-		end
-
+	if moveState.WLock then
+		WLock.Text = "ON"
+		WLock.BackgroundColor3 = Color3.fromRGB(0,255,0)
+	else
+		WLock.Text = "OFF"
+		WLock.BackgroundColor3 = Color3.fromRGB(40,40,40)
 	end
 
 end)
 
 
 
---// MOVEMENT ENGINE
+-- MOVEMENT
 RunService.RenderStepped:Connect(function()
 
-	if not humanoid then
-		return
-	end
+	if not humanoid then return end
 
-
-	local input = Vector3.zero
+	local x = 0
+	local z = 0
 
 
 	if moveState.Forward or moveState.WLock then
-		input += Vector3.new(0,0,-1)
+		z -= 1
 	end
-
 
 	if moveState.Backward then
-		input += Vector3.new(0,0,1)
+		z += 1
 	end
-
 
 	if moveState.Left then
-		input += Vector3.new(-1,0,0)
+		x -= 1
 	end
-
 
 	if moveState.Right then
-		input += Vector3.new(1,0,0)
+		x += 1
 	end
 
 
+	local move = Vector3.new(x,0,z)
 
-	if input.Magnitude > 0 then
 
+	if move.Magnitude > 0 then
 
 		local camera = workspace.CurrentCamera
 
-
 		local direction =
-			(camera.CFrame.RightVector * input.X)
-			+
-			(camera.CFrame.LookVector * -input.Z)
-
-
+			camera.CFrame.RightVector * move.X +
+			camera.CFrame.LookVector * -move.Z
 
 		direction = Vector3.new(
 			direction.X,
@@ -213,23 +173,10 @@ RunService.RenderStepped:Connect(function()
 		)
 
 
-		if direction.Magnitude > 0 then
-
-			humanoid:Move(
-				direction.Unit,
-				false
-			)
-
-		end
-
+		humanoid:Move(direction.Unit,true)
 
 	else
-
-		humanoid:Move(
-			Vector3.zero,
-			false
-		)
-
+		humanoid:Move(Vector3.zero,true)
 	end
 
 end)
