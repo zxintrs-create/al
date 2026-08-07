@@ -142,4 +142,3 @@ player.CharacterAdded:Connect(function(newChar)
 	character = newChar  
 	humanoid = newChar:WaitForChild("Humanoid")  
 end)
-
