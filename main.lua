@@ -1,3 +1,8 @@
+--========================================================--
+-- ADVANCED R15 GHOST REPLAY ENGINE (CYBER NEON EDITION)
+-- LocalScript - Standalone / Complete / Mobile Responsive
+--========================================================--
+
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
@@ -5,14 +10,9 @@ local Players = game:GetService("Players")
 
 local LocalPlayer = Players.LocalPlayer
 local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-local RootPart = Character:WaitForChild("HumanoidRootPart")
-local Humanoid = Character:WaitForChild("Humanoid")
-
---========================================================--
--- ADVANCED R15 GHOST REPLAY ENGINE (OPTIMIZED FULL SCRIPT)
---========================================================--
-
-local Animator = Humanoid:WaitForChild("Animator", 10)
+local RootPart = Character:WaitForChild("HumanoidRootPart", 10)
+local Humanoid = Character:WaitForChild("Humanoid", 10)
+local Animator = Humanoid and Humanoid:WaitForChild("Animator", 10)
 
 -- Configuration & Constants
 local RECORD_FPS = 30
@@ -37,24 +37,54 @@ local ActiveTweens = {}
 local ActiveGhostTracks = {}
 local GhostCharacter = nil
 
--- Safe Character Rebinding
-local function SetupCharacter(newChar)
-	Character = newChar
-	local hrp = newChar:WaitForChild("HumanoidRootPart", 10)
-	local hum = newChar:WaitForChild("Humanoid", 10)
+----------------------------------------------------
+-- 1. DYNAMIC CHARACTER REBINDING & CLEANUP
+----------------------------------------------------
+local function StopPlayback()
+	Playing = false
+	Paused = false
+	if ActiveConnections["Playback"] then
+		pcall(function() ActiveConnections["Playback"]:Disconnect() end)
+		ActiveConnections["Playback"] = nil
+	end
 	
-	if hrp and hum then
-		RootPart = hrp
-		Humanoid = hum
-		Animator = hum:WaitForChild("Animator", 10)
+	for id, track in pairs(ActiveGhostTracks) do
+		pcall(function()
+			track:Stop(0)
+			track:Destroy()
+		end)
+	end
+	table.clear(ActiveGhostTracks)
+
+	if GhostCharacter then
+		pcall(function() GhostCharacter:Destroy() end)
+		GhostCharacter = nil
 	end
 end
 
-LocalPlayer.CharacterAdded:Connect(SetupCharacter)
+local function StopRecord()
+	Recording = false
+	if ActiveConnections["Record"] then
+		pcall(function() ActiveConnections["Record"]:Disconnect() end)
+		ActiveConnections["Record"] = nil
+	end
+end
 
-----------------------------------------------------
--- 1. UTILITY & CLEANUP
-----------------------------------------------------
+local function RebindCharacter(newChar)
+	if not newChar then return end
+	StopRecord()
+	StopPlayback()
+
+	Character = newChar
+	RootPart = newChar:WaitForChild("HumanoidRootPart", 10)
+	Humanoid = newChar:WaitForChild("Humanoid", 10)
+	if Humanoid then
+		Animator = Humanoid:WaitForChild("Animator", 10)
+	end
+end
+
+LocalPlayer.CharacterAdded:Connect(RebindCharacter)
+
 local function CleanupTweens()
 	for _, tween in ipairs(ActiveTweens) do
 		pcall(function()
@@ -65,32 +95,15 @@ local function CleanupTweens()
 	table.clear(ActiveTweens)
 end
 
-local function StopGhostAnimations()
-	for id, track in pairs(ActiveGhostTracks) do
-		pcall(function()
-			track:Stop(0)
-			track:Destroy()
-		end)
-	end
-	table.clear(ActiveGhostTracks)
-end
-
-local function CleanupGhost()
-	StopGhostAnimations()
-	if GhostCharacter then
-		pcall(function()
-			GhostCharacter:Destroy()
-		end)
-		GhostCharacter = nil
-	end
-end
-
 ----------------------------------------------------
--- 2. SAFE GHOST CLONE CREATOR
+-- 2. GHOST CLONE CREATOR
 ----------------------------------------------------
 local function CreateGhostClone()
-	CleanupGhost()
-	if not Character or not Character:FindFirstChild("HumanoidRootPart") then return nil end
+	StopPlayback()
+
+	if not Character or not RootPart or not Character:IsDescendantOf(workspace) then 
+		return nil 
+	end
 
 	local oldArchivable = Character.Archivable
 	Character.Archivable = true
@@ -117,7 +130,7 @@ local function CreateGhostClone()
 				desc.CanTouch = false
 				desc.Anchored = true
 				desc.Transparency = 0.45
-				desc.Material = Enum.Material.Forcefield
+				desc.Material = Enum.Material.ForceField
 				desc.Color = Color3.fromRGB(0, 240, 255)
 			end
 		end)
@@ -138,7 +151,7 @@ local function CreateGhostClone()
 end
 
 ----------------------------------------------------
--- 3. UI STYLING ENGINE
+-- 3. UI STYLING ENGINE (CYBER NEON)
 ----------------------------------------------------
 local function ApplyNeonGlow(guiObject)
 	local outerStroke = Instance.new("UIStroke")
@@ -185,17 +198,17 @@ end
 local function ApplyTouchEffects(button)
 	ApplyNeonGlow(button)
 	local baseSize = button.Size
-	local tweenInfo = TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
 	button.Activated:Connect(function()
-		local press = TweenService:Create(button, tweenInfo, {
+		local pressTween = TweenService:Create(button, TweenInfo.new(0.08, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 			Size = UDim2.new(baseSize.X.Scale, baseSize.X.Offset - 2, baseSize.Y.Scale, baseSize.Y.Offset - 2),
 			BackgroundColor3 = Color3.fromRGB(60, 20, 90)
 		})
-		press:Play()
-		task.delay(0.1, function()
+		pressTween:Play()
+		
+		task.delay(0.08, function()
 			pcall(function()
-				TweenService:Create(button, tweenInfo, {
+				TweenService:Create(button, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 					Size = baseSize,
 					BackgroundColor3 = Color3.fromRGB(15, 10, 25)
 				}):Play()
@@ -207,21 +220,26 @@ end
 ----------------------------------------------------
 -- 4. GUI CONSTRUCTION
 ----------------------------------------------------
-local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui", 10)
+if not PlayerGui then return end
+
 local ExistingGui = PlayerGui:FindFirstChild("R15_AdvancedGhostReplay_UI")
-if ExistingGui then ExistingGui:Destroy() end
+if ExistingGui then 
+	ExistingGui:Destroy() 
+end
 
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "R15_AdvancedGhostReplay_UI"
 ScreenGui.ResetOnSpawn = false
+ScreenGui.DisplayOrder = 100
 ScreenGui.Parent = PlayerGui
 
 local OpenMenu = Instance.new("TextButton")
 OpenMenu.Name = "OpenMenuButton"
-OpenMenu.Size = UDim2.new(0, 90, 0, 42)
-OpenMenu.Position = UDim2.new(0, 15, 0.5, -21)
+OpenMenu.Size = UDim2.new(0, 90, 0, 40)
+OpenMenu.Position = UDim2.new(0, 15, 0.5, -20)
 OpenMenu.BackgroundColor3 = Color3.fromRGB(15, 10, 25)
-OpenMenu.Text = "MENU"
+OpenMenu.Text = "OPEN MENU"
 OpenMenu.TextColor3 = Color3.fromRGB(0, 240, 255)
 OpenMenu.TextScaled = true
 OpenMenu.Font = Enum.Font.GothamBold
@@ -234,7 +252,7 @@ ApplyTouchEffects(OpenMenu)
 
 local Main = Instance.new("Frame")
 Main.Name = "MainPanel"
-Main.Size = UDim2.new(0, 280, 0, 490)
+Main.Size = UDim2.new(0, 280, 0, 500)
 Main.Position = UDim2.new(0.5, -140, 1.2, 0)
 Main.BackgroundColor3 = Color3.fromRGB(10, 6, 18)
 Main.BackgroundTransparency = 0.1
@@ -254,15 +272,21 @@ mainPadding.Parent = Main
 
 ApplyNeonGlow(Main)
 
+local HeaderFrame = Instance.new("Frame")
+HeaderFrame.Name = "HeaderFrame"
+HeaderFrame.Size = UDim2.new(1, 0, 0, 26)
+HeaderFrame.BackgroundTransparency = 1
+HeaderFrame.Parent = Main
+
 local Title = Instance.new("TextLabel")
 Title.Name = "Title"
-Title.Size = UDim2.new(1, 0, 0, 28)
+Title.Size = UDim2.new(1, -30, 1, 0)
 Title.BackgroundTransparency = 1
 Title.Text = "R15 GHOST REPLAY"
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
 Title.TextScaled = true
 Title.Font = Enum.Font.GothamBold
-Title.Parent = Main
+Title.Parent = HeaderFrame
 
 local titleGradient = Instance.new("UIGradient")
 titleGradient.Color = ColorSequence.new({
@@ -271,9 +295,24 @@ titleGradient.Color = ColorSequence.new({
 })
 titleGradient.Parent = Title
 
+local CloseButton = Instance.new("TextButton")
+CloseButton.Name = "CloseButton"
+CloseButton.Size = UDim2.new(0, 26, 0, 26)
+CloseButton.Position = UDim2.new(1, -26, 0, 0)
+CloseButton.BackgroundColor3 = Color3.fromRGB(255, 40, 80)
+CloseButton.Text = "X"
+CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+CloseButton.Font = Enum.Font.GothamBold
+CloseButton.TextSize = 12
+CloseButton.Parent = HeaderFrame
+
+local closeCorner = Instance.new("UICorner")
+closeCorner.CornerRadius = UDim.new(0, 6)
+closeCorner.Parent = CloseButton
+
 local StatusPanel = Instance.new("Frame")
 StatusPanel.Name = "StatusPanel"
-StatusPanel.Size = UDim2.new(1, -10, 0, 50)
+StatusPanel.Size = UDim2.new(1, -10, 0, 48)
 StatusPanel.Position = UDim2.new(0, 5, 0, 32)
 StatusPanel.BackgroundColor3 = Color3.fromRGB(20, 12, 35)
 StatusPanel.BackgroundTransparency = 0.3
@@ -306,8 +345,8 @@ FrameLabel.Parent = StatusPanel
 
 local Container = Instance.new("Frame")
 Container.Name = "Container"
-Container.Size = UDim2.new(1, 0, 1, -90)
-Container.Position = UDim2.new(0, 0, 0, 90)
+Container.Size = UDim2.new(1, 0, 1, -88)
+Container.Position = UDim2.new(0, 0, 0, 88)
 Container.BackgroundTransparency = 1
 Container.Parent = Main
 
@@ -357,7 +396,7 @@ PlayButton.BackgroundColor3 = Color3.fromRGB(15, 10, 25)
 PlayButton.Text = "PLAY GHOST"
 PlayButton.TextColor3 = Color3.fromRGB(0, 255, 120)
 PlayButton.Font = Enum.Font.GothamBold
-PlayButton.TextSize = 11
+PlayButton.TextSize = 10
 PlayButton.Parent = PlayRow
 ApplyTouchEffects(PlayButton)
 
@@ -367,7 +406,7 @@ PauseButton.BackgroundColor3 = Color3.fromRGB(15, 10, 25)
 PauseButton.Text = "PAUSE"
 PauseButton.TextColor3 = Color3.fromRGB(255, 200, 0)
 PauseButton.Font = Enum.Font.GothamBold
-PauseButton.TextSize = 11
+PauseButton.TextSize = 10
 PauseButton.Parent = PlayRow
 ApplyTouchEffects(PauseButton)
 
@@ -436,42 +475,53 @@ LoadButton.Parent = StorageRow
 ApplyTouchEffects(LoadButton)
 
 ----------------------------------------------------
--- 5. PANEL TOGGLE SYSTEM
+-- 5. PANEL ANIMATION & TOGGLE SYSTEM
 ----------------------------------------------------
 local menuOpen = false
 local isAnimating = false
 
-local function ToggleMenu()
-	if isAnimating then return end
+local function OpenPanel()
+	if isAnimating or menuOpen then return end
 	isAnimating = true
+	Main.Visible = true
 
-	if not menuOpen then
-		Main.Visible = true
-		local tween = TweenService:Create(Main, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-			Position = UDim2.new(0.5, -140, 0.5, -245)
-		})
-		tween:Play()
-		tween.Completed:Connect(function()
-			menuOpen = true
-			isAnimating = false
-		end)
-	else
-		local tween = TweenService:Create(Main, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
-			Position = UDim2.new(0.5, -140, 1.2, 0)
-		})
-		tween:Play()
-		tween.Completed:Connect(function()
-			Main.Visible = false
-			menuOpen = false
-			isAnimating = false
-		end)
-	end
+	local openTween = TweenService:Create(Main, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+		Position = UDim2.new(0.5, -140, 0.5, -250)
+	})
+	openTween:Play()
+	openTween.Completed:Connect(function()
+		menuOpen = true
+		isAnimating = false
+	end)
 end
 
-OpenMenu.Activated:Connect(ToggleMenu)
+local function ClosePanel()
+	if isAnimating or not menuOpen then return end
+	isAnimating = true
+
+	local closeTween = TweenService:Create(Main, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+		Position = UDim2.new(0.5, -140, 1.2, 0)
+	})
+	closeTween:Play()
+	closeTween.Completed:Connect(function()
+		Main.Visible = false
+		menuOpen = false
+		isAnimating = false
+	end)
+end
+
+OpenMenu.Activated:Connect(function()
+	if menuOpen then
+		ClosePanel()
+	else
+		OpenPanel()
+	end
+end)
+
+CloseButton.Activated:Connect(ClosePanel)
 
 ----------------------------------------------------
--- 6. RECORDING ENGINE
+-- 6. RECORD ENGINE
 ----------------------------------------------------
 local function FetchActiveAnimations()
 	local activeAnimList = {}
@@ -499,8 +549,9 @@ end
 
 local function CaptureFrame()
 	if not RootPart or not Humanoid or not Character or not RootPart:IsDescendantOf(workspace) then return end
+	
 	if #RecordData >= MAX_RECORD_FRAMES then
-		Recording = false
+		StopRecord()
 		StatusLabel.Text = "STATUS: MAX DURATION"
 		StatusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
 		return
@@ -526,30 +577,6 @@ local function CaptureFrame()
 	StatusLabel.Text = "STATUS: RECORDING"
 	StatusLabel.TextColor3 = Color3.fromRGB(255, 50, 50)
 	FrameLabel.Text = string.format("FRAMES: %d | DURATION: %.1fs", #RecordData, frame.Time)
-end
-
-local function StopPlayback()
-	Playing = false
-	Paused = false
-	if ActiveConnections["Playback"] then
-		ActiveConnections["Playback"]:Disconnect()
-		ActiveConnections["Playback"] = nil
-	end
-	CleanupGhost()
-	StatusLabel.Text = "STATUS: IDLE"
-	StatusLabel.TextColor3 = Color3.fromRGB(0, 240, 255)
-end
-
-local function StopRecord()
-	Recording = false
-	if ActiveConnections["Record"] then
-		ActiveConnections["Record"]:Disconnect()
-		ActiveConnections["Record"] = nil
-	end
-	if not Playing then
-		StatusLabel.Text = "STATUS: IDLE"
-		StatusLabel.TextColor3 = Color3.fromRGB(0, 240, 255)
-	end
 end
 
 local function StartRecord()
@@ -582,6 +609,8 @@ RecordButton.Activated:Connect(StartRecord)
 StopButton.Activated:Connect(function()
 	StopRecord()
 	StopPlayback()
+	StatusLabel.Text = "STATUS: IDLE"
+	StatusLabel.TextColor3 = Color3.fromRGB(0, 240, 255)
 end)
 
 ----------------------------------------------------
@@ -644,7 +673,7 @@ local function StartPlayback()
 	StopRecord()
 
 	if not Playing then
-		CleanupGhost()
+		StopPlayback()
 		local ghost = CreateGhostClone()
 		if not ghost then return end
 
@@ -667,7 +696,10 @@ local function StartPlayback()
 	local totalDuration = RecordData[#RecordData].Time - RecordData[1].Time
 	local playbackStartTime = os.clock() - PlaybackElapsed
 
-	if ActiveConnections["Playback"] then ActiveConnections["Playback"]:Disconnect() end
+	if ActiveConnections["Playback"] then
+		pcall(function() ActiveConnections["Playback"]:Disconnect() end)
+		ActiveConnections["Playback"] = nil
+	end
 
 	ActiveConnections["Playback"] = RunService.Heartbeat:Connect(function()
 		if not Playing or Paused or not GhostCharacter or not ghostRoot then return end
@@ -675,6 +707,8 @@ local function StartPlayback()
 		PlaybackElapsed = os.clock() - playbackStartTime
 		if PlaybackElapsed >= totalDuration then
 			StopPlayback()
+			StatusLabel.Text = "STATUS: IDLE"
+			StatusLabel.TextColor3 = Color3.fromRGB(0, 240, 255)
 			return
 		end
 
@@ -772,7 +806,29 @@ end)
 
 SaveButton.Activated:Connect(function()
 	if #RecordData == 0 then return end
-	SavedData = table.clone(RecordData)
+	
+	SavedData = {}
+	for i, frame in ipairs(RecordData) do
+		local animsCopy = {}
+		for _, anim in ipairs(frame.Animations) do
+			table.insert(animsCopy, {
+				AnimationId = anim.AnimationId,
+				TimePosition = anim.TimePosition,
+				Speed = anim.Speed,
+				Weight = anim.Weight
+			})
+		end
+		table.insert(SavedData, {
+			Time = frame.Time,
+			CFrame = frame.CFrame,
+			Position = frame.Position,
+			Rotation = frame.Rotation,
+			Velocity = frame.Velocity,
+			HumanoidState = frame.HumanoidState,
+			Animations = animsCopy
+		})
+	end
+
 	StatusLabel.Text = "STATUS: SAVED"
 	StatusLabel.TextColor3 = Color3.fromRGB(0, 255, 120)
 end)
@@ -782,7 +838,28 @@ LoadButton.Activated:Connect(function()
 	StopRecord()
 	StopPlayback()
 
-	RecordData = table.clone(SavedData)
+	RecordData = {}
+	for i, frame in ipairs(SavedData) do
+		local animsCopy = {}
+		for _, anim in ipairs(frame.Animations) do
+			table.insert(animsCopy, {
+				AnimationId = anim.AnimationId,
+				TimePosition = anim.TimePosition,
+				Speed = anim.Speed,
+				Weight = anim.Weight
+			})
+		end
+		table.insert(RecordData, {
+			Time = frame.Time,
+			CFrame = frame.CFrame,
+			Position = frame.Position,
+			Rotation = frame.Rotation,
+			Velocity = frame.Velocity,
+			HumanoidState = frame.HumanoidState,
+			Animations = animsCopy
+		})
+	end
+
 	CutIndex = 1
 
 	StatusLabel.Text = "STATUS: LOADED"
@@ -791,11 +868,10 @@ LoadButton.Activated:Connect(function()
 end)
 
 ----------------------------------------------------
--- 9. MEMORY CLEANUP
+-- 9. CLEANUP ON DESTROY
 ----------------------------------------------------
 ScreenGui.Destroying:Connect(function()
 	StopRecord()
 	StopPlayback()
 	CleanupTweens()
-	CleanupGhost()
 end)
