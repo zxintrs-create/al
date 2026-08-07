@@ -1,6 +1,6 @@
--- [[ DELTA ULTIMATE AUTO-WALK V3: OPTIMIZED EDITION ]] --  
+-- [[ DELTA ULTIMATE AUTO-WALK V3: SMOOTH LINE FIX ]] --  
 -- Developed by Delta maker script for Aldo Tzy  
--- Features: Modern Premium UI, Visual Line, Timeline Stitching, Precise Playback (Lightweight)
+-- Features: Modern Premium UI, Smooth Visual Line, Timeline Stitching, Precise Playback & Animation Support
 
 local RunService = game:GetService("RunService")  
 local UserInputService = game:GetService("UserInputService")  
@@ -14,10 +14,10 @@ local Humanoid = Character:WaitForChild("Humanoid")
 
 -- // CONFIG & STATE // --  
 local CFG = {  
-    NodeInterval = 0.1, -- Ditingkatkan dari 0.05 ke 0.1 agar tidak berat/lag  
+    NodeInterval = 0.1,  
+    MinDistance = 0.8, -- Filter jarak minimal agar garis tidak ada bengkokan kecil/jitter  
     LineColor = Color3.fromRGB(0, 255, 255),  
     AccentColor = Color3.fromRGB(170, 0, 255),  
-    MaxError = 0.05  
 }
 
 local state = {  
@@ -26,6 +26,8 @@ local state = {
     timeline = {},  
     visualNodes = {}  
 }
+
+local loadedTracks = {}
 
 -- // PREMIUM GUI SYSTEM // --  
 local ScreenGui = Instance.new("ScreenGui")  
@@ -100,7 +102,7 @@ local function drawLine(p1, p2)
     if dist < 0.2 then return end  
       
     local part = Instance.new("Part")  
-    part.Size = Vector3.new(0.1, 0.1, dist)  
+    part.Size = Vector3.new(0.15, 0.15, dist)  
     part.CFrame = CFrame.new(p1:Lerp(p2, 0.5), p2)  
     part.Anchored = true  
     part.CanCollide = false  
@@ -120,67 +122,118 @@ end
 
 -- // CORE ENGINE // --
 
--- RECORDING  
+-- RECORDING WITH DISTANCE FILTER (SMOOTH LINES)  
 RunService.Heartbeat:Connect(function()  
     if not state.isRecording then return end  
       
     local now = tick()  
-    if #state.timeline == 0 or (now - state.timeline[#state.timeline].T >= CFG.NodeInterval) then  
-        local cf = RootPart.CFrame  
-        local st = Humanoid:GetState()  
-          
-        if #state.timeline > 0 then  
-            drawLine(state.timeline[#state.timeline].CFrame.Position, cf.Position)  
+    local cf = RootPart.CFrame  
+    local st = Humanoid:GetState()  
+      
+    -- Capture active animation IDs  
+    local activeAnims = {}  
+    local animator = Humanoid:FindFirstChildOfClass("Animator")  
+    if animator then  
+        for _, track in ipairs(animator:GetPlayingAnimationTracks()) do  
+            if track.Animation and track.Animation.AnimationId ~= "" then  
+                table.insert(activeAnims, track.Animation.AnimationId)  
+            end  
         end  
+    end  
+      
+    if #state.timeline == 0 then  
+        table.insert(state.timeline, {T = now, CFrame = cf, State = st, Animations = activeAnims})  
+    else  
+        local lastNode = state.timeline[#state.timeline]  
+        local dist = (cf.Position - lastNode.CFrame.Position).Magnitude  
           
-        table.insert(state.timeline, {T = now, CFrame = cf, State = st})  
+        -- Rekam hanya jika interval waktu terpenuhi DAN jarak melampaui MinDistance  
+        if (now - lastNode.T >= CFG.NodeInterval) and (dist >= CFG.MinDistance) then  
+            drawLine(lastNode.CFrame.Position, cf.Position)  
+            table.insert(state.timeline, {T = now, CFrame = cf, State = st, Animations = activeAnims})  
+        end  
     end  
 end)
 
--- PLAYBACK (SMOOTH & LIGHTWEIGHT)  
+-- PLAYBACK  
 local function startPlayback()  
     if #state.timeline < 2 or state.isPlaying then return end  
     state.isPlaying = true  
       
-    for i = 1, #state.timeline - 1 do  
-        if not state.isPlaying then break end  
-        local currentData = state.timeline[i]  
-        local nextData = state.timeline[i+1]  
+    local startTime = tick()  
+    local firstNodeTime = state.timeline[1].T  
+    local totalNodes = #state.timeline  
+      
+    RootPart.CFrame = state.timeline[1].CFrame  
+      
+    local currentIndex = 1  
+    local connection  
+      
+    connection = RunService.RenderStepped:Connect(function()  
+        if not state.isPlaying then  
+            connection:Disconnect()  
+            return  
+        end  
           
-        local startCF = currentData.CFrame  
-        local endCF = nextData.CFrame  
+        local elapsedTime = tick() - startTime  
+        local targetTime = firstNodeTime + elapsedTime  
+          
+        while currentIndex < totalNodes and state.timeline[currentIndex + 1].T <= targetTime do  
+            currentIndex = currentIndex + 1  
+        end  
+          
+        if currentIndex >= totalNodes then  
+            state.isPlaying = false  
+            connection:Disconnect()  
+            Humanoid:Move(Vector3.new(0, 0, 0), false)  
+            RootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)  
+            return  
+        end  
+          
+        local currentData = state.timeline[currentIndex]  
+        local nextData = state.timeline[currentIndex + 1]  
+          
         local duration = nextData.T - currentData.T  
-        if duration <= 0 then duration = CFG.NodeInterval end  
+        if duration <= 0 then duration = 0.01 end  
           
-        local elapsed = 0  
-        while elapsed < duration do  
-            if not state.isPlaying then break end  
-            local dt = RunService.Heartbeat:Wait()  
-            elapsed = elapsed + dt  
-            local alpha = math.clamp(elapsed / duration, 0, 1)  
-              
-            local currentCF = startCF:Lerp(endCF, alpha)  
-            RootPart.CFrame = currentCF  
-              
-            local moveDir = (endCF.Position - startCF.Position)  
-            if moveDir.Magnitude > 0 then  
-                moveDir = moveDir.Unit  
-                Humanoid:Move(moveDir, false)  
-                RootPart.AssemblyLinearVelocity = Vector3.new(moveDir.X * 16, RootPart.AssemblyLinearVelocity.Y, moveDir.Z * 16)  
-            else  
-                Humanoid:Move(Vector3.new(0, 0, 0), false)  
-            end  
-              
-            if currentData.State == Enum.HumanoidStateType.Jumping then  
-                Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)  
-                RootPart.AssemblyLinearVelocity = Vector3.new(RootPart.AssemblyLinearVelocity.X, 35, RootPart.AssemblyLinearVelocity.Z)  
+        local alpha = math.clamp((targetTime - currentData.T) / duration, 0, 1)  
+          
+        RootPart.CFrame = currentData.CFrame:Lerp(nextData.CFrame, alpha)  
+          
+        local moveDir = (nextData.CFrame.Position - currentData.CFrame.Position)  
+        if moveDir.Magnitude > 0 then  
+            moveDir = moveDir.Unit  
+            Humanoid:Move(moveDir, false)  
+            RootPart.AssemblyLinearVelocity = Vector3.new(moveDir.X * 16, RootPart.AssemblyLinearVelocity.Y, moveDir.Z * 16)  
+        else  
+            Humanoid:Move(Vector3.new(0, 0, 0), false)  
+        end  
+          
+        if currentData.State == Enum.HumanoidStateType.Jumping then  
+            Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)  
+            RootPart.AssemblyLinearVelocity = Vector3.new(RootPart.AssemblyLinearVelocity.X, 35, RootPart.AssemblyLinearVelocity.Z)  
+        end  
+
+        if currentData.Animations and #currentData.Animations > 0 then  
+            local animator = Humanoid:FindFirstChildOfClass("Animator")  
+            if animator then  
+                for _, animId in ipairs(currentData.Animations) do  
+                    local track = loadedTracks[animId]  
+                    if not track then  
+                        local animObj = Instance.new("Animation")  
+                        animObj.AnimationId = animId  
+                        pcall(function()  
+                            track = animator:LoadAnimation(animObj)  
+                            loadedTracks[animId] = track  
+                        end)  
+                    end  
+                    if track and not track.IsPlaying then  
+                        track:Play()  
+                    end  
+                end  
             end  
         end  
-    end  
-      
-    state.isPlaying = false  
-    Humanoid:Move(Vector3.new(0, 0, 0), false)  
-    RootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)  
+    end)  
 end
 
 -- ROLLBACK (STITCHING)  
@@ -218,6 +271,7 @@ createBtn("RECORD START/STOP", 1, function()
     if state.isRecording then  
         state.timeline = {}  
         clearVisuals()  
+        loadedTracks = {}  
     end  
 end)
 
@@ -233,6 +287,7 @@ createBtn("CLEAR DATA", 4, function()
     state.timeline = {}  
     clearVisuals()  
     state.isPlaying = false  
+    loadedTracks = {}  
 end)
 
 print("I'M KNIGHTXORz")
