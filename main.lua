@@ -1,4 +1,4 @@
--- [[ DELTA MOBILE PRECISION CONTROL SYSTEM (FIXED) ]] --  
+-- [[ DELTA MOBILE PRECISION CONTROL SYSTEM (BIGGER BUTTONS) ]] --  
 -- Developed by Delta maker script for Aldo Tzy  
 -- Features: Virtual D-Pad, Hold Movement, W-Lock System, R6/R15 Support
 
@@ -27,8 +27,8 @@ screenGui.Parent = player:WaitForChild("PlayerGui")
 
 local mainFrame = Instance.new("Frame")  
 mainFrame.Name = "ControlsFrame"  
-mainFrame.Size = UDim2.new(0, 200, 0, 200)  
-mainFrame.Position = UDim2.new(0, 50, 1, -250)  
+mainFrame.Size = UDim2.new(0, 260, 0, 260) -- Ukuran frame diperbesar dari 200 ke 260
+mainFrame.Position = UDim2.new(0, 40, 1, -300)  
 mainFrame.BackgroundTransparency = 1  
 mainFrame.Parent = screenGui
 
@@ -41,11 +41,11 @@ local function createButton(name, pos, size, text)
 	btn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)  
 	btn.TextColor3 = Color3.fromRGB(255, 255, 255)  
 	btn.Font = Enum.Font.GothamBold  
-	btn.TextSize = 20  
+	btn.TextSize = 26 -- Ukuran teks diperbesar agar lebih jelas  
 	btn.AutoButtonColor = false  
 	  
 	local corner = Instance.new("UICorner")  
-	corner.CornerRadius = UDim.new(0, 10)  
+	corner.CornerRadius = UDim.new(0, 12)  
 	corner.Parent = btn  
 	  
 	btn.Parent = mainFrame  
@@ -68,7 +68,7 @@ local function setMove(dir, state)
 	moveState[dir] = state  
 end
 
--- Up Button Events (Added MouseLeave to prevent sticking)  
+-- Up Button Events  
 btnUp.MouseButton1Down:Connect(function() setMove("Forward", true) end)  
 btnUp.MouseButton1Up:Connect(function() setMove("Forward", false) end)
 btnUp.MouseLeave:Connect(function() setMove("Forward", false) end)
