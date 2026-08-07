@@ -1,4 +1,5 @@
--- [[ ALDO KNIGHTXORZ V4.10 MASTER ENTERPRISE EDITION ]] --
+-- [[ ALDO KNIGHTXORZ V4.18 MASTER ENTERPRISE EDITION ]] --
+print("I'M KNIGHTXORZ")
 
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -17,9 +18,17 @@ if _G.AldoKnightXorzV4_Cleanup then pcall(_G.AldoKnightXorzV4_Cleanup) end
 if _G.AldoKnightXorzV48_Cleanup then pcall(_G.AldoKnightXorzV48_Cleanup) end
 if _G.AldoKnightXorzV49_Cleanup then pcall(_G.AldoKnightXorzV49_Cleanup) end
 if _G.AldoKnightXorzV410_Cleanup then pcall(_G.AldoKnightXorzV410_Cleanup) end
+if _G.AldoKnightXorzV411_Cleanup then pcall(_G.AldoKnightXorzV411_Cleanup) end
+if _G.AldoKnightXorzV412_Cleanup then pcall(_G.AldoKnightXorzV412_Cleanup) end
+if _G.AldoKnightXorzV413_Cleanup then pcall(_G.AldoKnightXorzV413_Cleanup) end
+if _G.AldoKnightXorzV414_Cleanup then pcall(_G.AldoKnightXorzV414_Cleanup) end
+if _G.AldoKnightXorzV415_Cleanup then pcall(_G.AldoKnightXorzV415_Cleanup) end
+if _G.AldoKnightXorzV416_Cleanup then pcall(_G.AldoKnightXorzV416_Cleanup) end
+if _G.AldoKnightXorzV417_Cleanup then pcall(_G.AldoKnightXorzV417_Cleanup) end
+if _G.AldoKnightXorzV418_Cleanup then pcall(_G.AldoKnightXorzV418_Cleanup) end
 
 local currentConnections = {}
-_G.AldoKnightXorzV410_Cleanup = function()
+_G.AldoKnightXorzV418_Cleanup = function()
     for _, conn in ipairs(currentConnections) do
         if typeof(conn) == "RBXScriptConnection" then conn:Disconnect() end
     end
@@ -35,6 +44,22 @@ _G.AldoKnightXorzV410_Cleanup = function()
     RunService:UnbindFromRenderStep("AldoKnightXorzV49_Playback")
     RunService:UnbindFromRenderStep("AldoKnightXorzV410_Record")
     RunService:UnbindFromRenderStep("AldoKnightXorzV410_Playback")
+    RunService:UnbindFromRenderStep("AldoKnightXorzV411_Record")
+    RunService:UnbindFromRenderStep("AldoKnightXorzV411_Playback")
+    RunService:UnbindFromRenderStep("AldoKnightXorzV412_Record")
+    RunService:UnbindFromRenderStep("AldoKnightXorzV412_Playback")
+    RunService:UnbindFromRenderStep("AldoKnightXorzV413_Record")
+    RunService:UnbindFromRenderStep("AldoKnightXorzV413_Playback")
+    RunService:UnbindFromRenderStep("AldoKnightXorzV414_Record")
+    RunService:UnbindFromRenderStep("AldoKnightXorzV414_Playback")
+    RunService:UnbindFromRenderStep("AldoKnightXorzV415_Record")
+    RunService:UnbindFromRenderStep("AldoKnightXorzV415_Playback")
+    RunService:UnbindFromRenderStep("AldoKnightXorzV416_Record")
+    RunService:UnbindFromRenderStep("AldoKnightXorzV416_Playback")
+    RunService:UnbindFromRenderStep("AldoKnightXorzV417_Record")
+    RunService:UnbindFromRenderStep("AldoKnightXorzV417_Playback")
+    RunService:UnbindFromRenderStep("AldoKnightXorzV418_Record")
+    RunService:UnbindFromRenderStep("AldoKnightXorzV418_Playback")
     
     local playerGui = LocalPlayer:WaitForChild("PlayerGui")
     for _, gui in ipairs(playerGui:GetChildren()) do
@@ -44,12 +69,26 @@ _G.AldoKnightXorzV410_Cleanup = function()
             or gui.Name == "AldoKnightXorzV47Gui"
             or gui.Name == "AldoKnightXorzV48Gui"
             or gui.Name == "AldoKnightXorzV49Gui"
-            or gui.Name == "AldoKnightXorzV410Gui" then
+            or gui.Name == "AldoKnightXorzV410Gui"
+            or gui.Name == "AldoKnightXorzV411Gui"
+            or gui.Name == "AldoKnightXorzV412Gui"
+            or gui.Name == "AldoKnightXorzV413Gui"
+            or gui.Name == "AldoKnightXorzV414Gui"
+            or gui.Name == "AldoKnightXorzV415Gui"
+            or gui.Name == "AldoKnightXorzV416Gui"
+            or gui.Name == "AldoKnightXorzV417Gui"
+            or gui.Name == "AldoKnightXorzV418Gui" then
                 gui:Destroy()
             end
         end
     end
 end
+
+-- Pastikan unbind awal bersih dari konflik render step sebelumnya
+pcall(function()
+    RunService:UnbindFromRenderStep("AldoKnightXorzV418_Record")
+    RunService:UnbindFromRenderStep("AldoKnightXorzV418_Playback")
+end)
 
 local function setupCharacter(char)
     if stopPlayback then stopPlayback(true) end
@@ -70,7 +109,7 @@ local CFG = {
     MinDistance = 0.6,
     LineColor = Color3.fromRGB(0, 255, 255),
     AccentColor = Color3.fromRGB(170, 0, 255),
-    SaveFileName = "ALDO_KNIGHTXORZ_PURE_V4_10.json"
+    SaveFileName = "ALDO_KNIGHTXORZ_PURE_V4_18.json"
 }
 
 local state = {
@@ -87,13 +126,16 @@ local state = {
     startTime = 0,
     lastJumpState = false,
     movementSpeed = 16,
-    replayPrecision = true
+    replayPrecision = true,
+    autoLoopCount = 0,
+    maxAutoLoop = 10
 }
 
 local function normalizeTimeline(timeline)
     if #timeline == 0 then return timeline end
-    local baseTs = timeline[1].Timestamp
+    local baseTs = timeline[1].Timestamp or 0
     for _, node in ipairs(timeline) do
+        node.Timestamp = node.Timestamp or 0
         node.RelativeTimestamp = node.Timestamp - baseTs
     end
     return timeline
@@ -106,11 +148,11 @@ local function saveToDisk()
         for _, node in ipairs(data.timeline) do
             table.insert(encodedTimeline, {
                 P = {
-                    math.round(node.Position.X * 100) / 100,
-                    math.round(node.Position.Y * 100) / 100,
-                    math.round(node.Position.Z * 100) / 100
+                    math.floor(node.Position.X * 100 + 0.5) / 100,
+                    math.floor(node.Position.Y * 100 + 0.5) / 100,
+                    math.floor(node.Position.Z * 100 + 0.5) / 100
                 },
-                T = math.round(node.Timestamp * 1000) / 1000,
+                T = math.floor(node.Timestamp * 1000 + 0.5) / 1000,
                 J = node.Jump
             })
         end
@@ -131,15 +173,21 @@ local function loadFromDisk()
             local successDecode, decoded = pcall(function() return HttpService:JSONDecode(result) end)
             if successDecode and type(decoded) == "table" then
                 for slot, data in pairs(decoded) do
-                    local decodedTimeline = {}
-                    for _, node in ipairs(data.timeline) do
-                        table.insert(decodedTimeline, {
-                            Position = Vector3.new(unpack(node.P)),
-                            Timestamp = node.T,
-                            Jump = node.J or false
-                        })
+                    if data and data.timeline then
+                        local decodedTimeline = {}
+                        for _, node in ipairs(data.timeline) do
+                            table.insert(decodedTimeline, {
+                                Position = Vector3.new(
+                                    node.P[1],
+                                    node.P[2],
+                                    node.P[3]
+                                ),
+                                Timestamp = node.T,
+                                Jump = node.J or false
+                            })
+                        end
+                        state.savedFiles[tonumber(slot)] = { timeline = normalizeTimeline(decodedTimeline) }
                     end
-                    state.savedFiles[tonumber(slot)] = { timeline = normalizeTimeline(decodedTimeline) }
                 end
             end
         end
@@ -159,7 +207,7 @@ local function getOrCreateRouteFolder()
 end
 
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "AldoKnightXorzV410Gui"
+ScreenGui.Name = "AldoKnightXorzV418Gui"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
@@ -202,12 +250,13 @@ task.spawn(function()
 end)
 
 --========================================================
--- MAIN FRAME (LANDSCAPE HORIZONTAL & CENTERED & INITIALLY VISIBLE)
+-- MAIN FRAME (RESPONSIVE LANDSCAPE & CENTERED & FULLY DRAGGABLE)
 --========================================================
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 620, 0, 300)
-MainFrame.Position = UDim2.new(0.5, -310, 0.5, -150)
+MainFrame.Size = UDim2.new(0.9, 0, 0.45, 0)
+MainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+MainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
 MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
@@ -255,7 +304,7 @@ table.insert(currentConnections, OpenMenu.MouseButton1Click:Connect(function()
         TweenService:Create(
             MainFrame,
             TweenInfo.new(0.35, Enum.EasingStyle.Back),
-            {Size = UDim2.new(0, 620, 0, 300)}
+            {Size = UDim2.new(0.9, 0, 0.45, 0)}
         ):Play()
     else
         TweenService:Create(
@@ -308,28 +357,12 @@ Stroke.Thickness = 2
 Stroke.Color = CFG.AccentColor
 Stroke.Parent = MainFrame
 
-local TopGlow = Instance.new("UIGradient")
-TopGlow.Color = ColorSequence.new({
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 255, 255)),
-    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(170, 0, 255)),
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(0, 255, 255))
-})
-TopGlow.Rotation = 0
-TopGlow.Parent = Stroke
-
-task.spawn(function()
-    while MainFrame and MainFrame.Parent do
-        TopGlow.Rotation += 1
-        task.wait(0.03)
-    end
-end)
-
 -- Top Bar Header
 local Title = Instance.new("TextLabel")
 Title.Name = "TitleHeader"
 Title.Size = UDim2.new(0, 300, 0, 42)
 Title.Position = UDim2.new(0, 12, 0, 0)
-Title.Text = "ALDO KNIGHTXORZ V4.10"
+Title.Text = "ALDO KNIGHTXORZ V4.18"
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 14
@@ -351,10 +384,30 @@ StatusLabel.BackgroundTransparency = 1
 StatusLabel.ZIndex = 3
 StatusLabel.Parent = MainFrame
 
--- Dragging logic untuk MainFrame secara keseluruhan (Fully Draggable)
+-- Landscape Scrolling Container dengan Grid Layout (Button size 145x55, CanvasSize disesuaikan menjadi 520)
+local ScrollingContainer = Instance.new("ScrollingFrame")
+ScrollingContainer.Size = UDim2.new(1, -16, 1, -52)
+ScrollingContainer.Position = UDim2.new(0, 8, 0, 46)
+ScrollingContainer.BackgroundTransparency = 1
+ScrollingContainer.BorderSizePixel = 0
+ScrollingContainer.CanvasSize = UDim2.new(0, 0, 0, 520)
+ScrollingContainer.ScrollBarThickness = 4
+ScrollingContainer.ZIndex = 3
+ScrollingContainer.Parent = MainFrame
+
+local UIGrid = Instance.new("UIGridLayout")
+UIGrid.CellSize = UDim2.new(0, 145, 0, 55)
+UIGrid.CellPadding = UDim2.new(0, 8, 0, 8)
+UIGrid.SortOrder = Enum.SortOrder.LayoutOrder
+UIGrid.Parent = ScrollingContainer
+
+-- Dragging logic untuk MainFrame secara keseluruhan (Fully Draggable dengan anti-bentrok tombol)
 local mainDragging, mainDragStart, mainStartPos
 table.insert(currentConnections, MainFrame.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        if input.Target and input.Target:IsDescendantOf(ScrollingContainer) then
+            return
+        end
         mainDragging = true
         mainDragStart = input.Position
         mainStartPos = MainFrame.Position
@@ -376,23 +429,6 @@ table.insert(currentConnections, UserInputService.InputChanged:Connect(function(
         end
     end
 end))
-
--- Landscape Scrolling Container dengan Grid Layout DJ Panel style (Button size 145x55)
-local ScrollingContainer = Instance.new("ScrollingFrame")
-ScrollingContainer.Size = UDim2.new(1, -16, 1, -52)
-ScrollingContainer.Position = UDim2.new(0, 8, 0, 46)
-ScrollingContainer.BackgroundTransparency = 1
-ScrollingContainer.BorderSizePixel = 0
-ScrollingContainer.CanvasSize = UDim2.new(0, 0, 0, 320)
-ScrollingContainer.ScrollBarThickness = 4
-ScrollingContainer.ZIndex = 3
-ScrollingContainer.Parent = MainFrame
-
-local UIGrid = Instance.new("UIGridLayout")
-UIGrid.CellSize = UDim2.new(0, 145, 0, 55)
-UIGrid.CellPadding = UDim2.new(0, 8, 0, 8)
-UIGrid.SortOrder = Enum.SortOrder.LayoutOrder
-UIGrid.Parent = ScrollingContainer
 
 local function updateStatus(text)
     if not ScreenGui or not ScreenGui.Parent then return end
@@ -464,7 +500,7 @@ local function clearVisuals()
     if folder then folder:ClearAllChildren() end
 end
 
-RunService:BindToRenderStep("AldoKnightXorzV410_Record", Enum.RenderPriority.Character.Value, function()
+RunService:BindToRenderStep("AldoKnightXorzV418_Record", Enum.RenderPriority.Character.Value, function()
     if not state.isRecording or not RootPart or not Humanoid then return end
       
     local pos = RootPart.Position
@@ -508,8 +544,9 @@ stopPlayback = function(manualStop)
     if manualStop then
         state.isAutoWalk = false
     end
+    state.autoLoopCount = 0
     
-    RunService:UnbindFromRenderStep("AldoKnightXorzV410_Playback")
+    RunService:UnbindFromRenderStep("AldoKnightXorzV418_Playback")
     
     if Humanoid then
         Humanoid.AutoRotate = true
@@ -536,14 +573,11 @@ local function executePlayback()
     local playbackStartTime = 0
     local pauseOffset = 0
     local currentIndex = 1
-    local stuckTimer = 0
-    local lastCheckPos = RootPart.Position
-    local stuckJumpCooldown = 0
     local timeoutTimer = tick() + 25
 
     updateStatus("WALKING TO START")
 
-    RunService:BindToRenderStep("AldoKnightXorzV410_Playback", Enum.RenderPriority.Last.Value, function(dt)
+    RunService:BindToRenderStep("AldoKnightXorzV418_Playback", Enum.RenderPriority.Last.Value, function(dt)
         if not state.isPlaying or state.playbackID ~= currentPlaybackID or not RootPart or not Humanoid then
             stopPlayback(false)
             return
@@ -573,10 +607,6 @@ local function executePlayback()
                 pauseOffset = 0
                 currentIndex = 1
                 
-                lastCheckPos = RootPart.Position
-                stuckTimer = 0
-                stuckJumpCooldown = 0
-                
                 stateChanged = true
                 updateStatus(state.isAutoWalk and "AUTO WALK" or "PLAYING")
             end
@@ -586,17 +616,26 @@ local function executePlayback()
             while currentIndex < #state.timeline and currentTime >= state.timeline[currentIndex + 1].RelativeTimestamp do
                 currentIndex = currentIndex + 1
                 if state.timeline[currentIndex].Jump then
-                    Humanoid.Jump = true
                     Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+                    Humanoid.Jump = true
                 end
             end
 
             if currentIndex >= #state.timeline then
                 if state.isAutoWalk then
-                    playbackState = "RETURNING_TO_START"
-                    stateChanged = true
-                    timeoutTimer = tick() + 25
-                    updateStatus("WALKING TO START")
+                    state.autoLoopCount = (state.autoLoopCount or 0) + 1
+                    if state.autoLoopCount <= state.maxAutoLoop then
+                        task.wait(1)
+                        playbackState = "RETURNING_TO_START"
+                        stateChanged = true
+                        timeoutTimer = tick() + 25
+                        updateStatus("WALKING TO START (" .. state.autoLoopCount .. "/" .. state.maxAutoLoop .. ")")
+                    else
+                        state.isAutoWalk = false
+                        state.autoLoopCount = 0
+                        stopPlayback(true)
+                        updateStatus("AUTO WALK FINISHED")
+                    end
                 else
                     stopPlayback(false)
                 end
@@ -605,47 +644,15 @@ local function executePlayback()
 
             local currentNode = state.timeline[currentIndex]
             local nextNode = state.timeline[currentIndex + 1]
-            local timeDiff = nextNode.RelativeTimestamp - currentNode.RelativeTimestamp
             
-            local alpha = 0
-            if timeDiff > 0 then
-                alpha = math.clamp((currentTime - currentNode.RelativeTimestamp) / timeDiff, 0, 1)
+            if nextNode.Jump then
+                Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+                Humanoid.Jump = true
             end
 
-            local targetPos = currentNode.Position:Lerp(nextNode.Position, alpha)
-            local currentPos = RootPart.Position
-            local direction = (targetPos - currentPos)
-            local totalDist = direction.Magnitude
-
-            if (currentPos - lastCheckPos).Magnitude < 0.04 and totalDist > 0.2 then
-                stuckTimer = stuckTimer + dt
-                if stuckTimer > 2.5 and (tick() - stuckJumpCooldown > 3.0) then
-                    Humanoid.Jump = true
-                    Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-                    stuckJumpCooldown = tick()
-                    stuckTimer = 0
-                end
-            else
-                stuckTimer = 0
-                lastCheckPos = currentPos
-            end
-
-            if totalDist > 0.15 then
-                Humanoid.AutoRotate = true
-
-                local horizontal = Vector3.new(
-                    direction.X,
-                    0,
-                    direction.Z
-                )
-
-                if horizontal.Magnitude > 0 then
-                    Humanoid:Move(horizontal.Unit, false)
-                end
-
-                if direction.Y > 2 then
-                    Humanoid.Jump = true
-                end
+            local horizontal = Vector3.new(nextNode.Position.X - RootPart.Position.X, 0, nextNode.Position.Z - RootPart.Position.Z)
+            if horizontal.Magnitude > 0.1 then
+                Humanoid:Move(horizontal.Unit, true)
             else
                 Humanoid:Move(Vector3.zero, true)
             end
@@ -657,6 +664,7 @@ local function toggleAutoWalk()
     if state.isRecording then return end
     state.isAutoWalk = not state.isAutoWalk
     if state.isAutoWalk then
+        state.autoLoopCount = 0
         updateStatus("AUTO WALK")
         if not state.isPlaying then
             executePlayback()
