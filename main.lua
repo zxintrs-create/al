@@ -7,6 +7,7 @@ local player = Players.LocalPlayer
 local character
 local humanoid
 
+
 --// STATE
 local moveState = {
 	Forward = false,
@@ -19,16 +20,19 @@ local moveState = {
 
 --// CHARACTER
 local function setupCharacter(char)
+
 	character = char
 	humanoid = char:WaitForChild("Humanoid")
+
 end
+
 
 if player.Character then
 	setupCharacter(player.Character)
 end
 
+
 player.CharacterAdded:Connect(function(char)
-	task.wait()
 	setupCharacter(char)
 end)
 
@@ -36,27 +40,28 @@ end)
 
 --// GUI
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "MobileButtonControl"
+screenGui.Name = "MobileControl"
 screenGui.ResetOnSpawn = false
 screenGui.IgnoreGuiInset = true
 screenGui.Parent = player:WaitForChild("PlayerGui")
 
 
 
---// CREATE BUTTON
-local function createButton(name,text,position)
+--// BUTTON
+local function createButton(name,text,pos)
 
 	local button = Instance.new("TextButton")
+
 	button.Name = name
 	button.Size = UDim2.new(0,75,0,75)
-	button.Position = position
-	button.BackgroundColor3 = Color3.fromRGB(40,40,40)
+	button.Position = pos
+	button.BackgroundColor3 = Color3.fromRGB(35,35,35)
 	button.BackgroundTransparency = 0.25
 	button.TextColor3 = Color3.new(1,1,1)
 	button.Text = text
 	button.TextScaled = true
 	button.BorderSizePixel = 0
-	button.AutoButtonColor = true
+
 	button.Parent = screenGui
 
 	return button
@@ -64,87 +69,102 @@ end
 
 
 
---// BUTTON
-local forwardButton = createButton(
+local forward = createButton(
 	"Forward",
 	"▲",
-	UDim2.new(0,120,1,-220)
+	UDim2.new(0,120,1,-210)
 )
 
-local backwardButton = createButton(
+local backward = createButton(
 	"Backward",
 	"▼",
 	UDim2.new(0,120,1,-70)
 )
 
-local leftButton = createButton(
+local left = createButton(
 	"Left",
 	"◀",
-	UDim2.new(0,35,1,-145)
+	UDim2.new(0,35,1,-140)
 )
 
-local rightButton = createButton(
+local right = createButton(
 	"Right",
 	"▶",
-	UDim2.new(0,205,1,-145)
+	UDim2.new(0,205,1,-140)
 )
 
-local lockButton = createButton(
+local wLock = createButton(
 	"W LOCK",
 	"OFF",
-	UDim2.new(0,320,1,-145)
+	UDim2.new(0,320,1,-140)
 )
 
 
 
---// HOLD SYSTEM
-local function holdButton(button,state)
+--// HOLD BUTTON FIX MOBILE
+local function connectHold(button,state)
 
-	button.MouseButton1Down:Connect(function()
-		moveState[state] = true
+	button.InputBegan:Connect(function(input)
+
+		if input.UserInputType == Enum.UserInputType.Touch then
+
+			moveState[state] = true
+
+		end
+
 	end)
 
 
-	button.MouseButton1Up:Connect(function()
-		moveState[state] = false
-	end)
+	button.InputEnded:Connect(function(input)
 
+		if input.UserInputType == Enum.UserInputType.Touch then
 
-	button.TouchEnded:Connect(function()
-		moveState[state] = false
+			moveState[state] = false
+
+		end
+
 	end)
 
 end
 
 
-holdButton(forwardButton,"Forward")
-holdButton(backwardButton,"Backward")
-holdButton(leftButton,"Left")
-holdButton(rightButton,"Right")
+connectHold(forward,"Forward")
+connectHold(backward,"Backward")
+connectHold(left,"Left")
+connectHold(right,"Right")
 
 
 
---// W LOCK
-lockButton.MouseButton1Click:Connect(function()
+--// W LOCK BUTTON
+wLock.InputBegan:Connect(function(input)
 
-	moveState.WLock = not moveState.WLock
+	if input.UserInputType == Enum.UserInputType.Touch then
 
-	if moveState.WLock then
-		lockButton.Text = "ON"
-		lockButton.BackgroundColor3 = Color3.fromRGB(0,255,0)
-	else
-		lockButton.Text = "OFF"
-		lockButton.BackgroundColor3 = Color3.fromRGB(40,40,40)
+		moveState.WLock = not moveState.WLock
+
+
+		if moveState.WLock then
+
+			wLock.Text = "ON"
+			wLock.BackgroundColor3 = Color3.fromRGB(0,255,0)
+
+		else
+
+			wLock.Text = "OFF"
+			wLock.BackgroundColor3 = Color3.fromRGB(35,35,35)
+
+		end
+
 	end
 
 end)
 
 
 
---// RESPONSIVE MOVEMENT
+--// MOVEMENT ENGINE
 RunService.RenderStepped:Connect(function()
 
-	if not humanoid or humanoid.Health <= 0 then
+	if not humanoid then
 		return
 	end
 
@@ -156,13 +176,16 @@ RunService.RenderStepped:Connect(function()
 		input += Vector3.new(0,0,-1)
 	end
 
+
 	if moveState.Backward then
 		input += Vector3.new(0,0,1)
 	end
 
+
 	if moveState.Left then
 		input += Vector3.new(-1,0,0)
 	end
+
 
 	if moveState.Right then
 		input += Vector3.new(1,0,0)
@@ -172,16 +195,15 @@ RunService.RenderStepped:Connect(function()
 
 	if input.Magnitude > 0 then
 
-		local camera = workspace.CurrentCamera
 
-		local forward = camera.CFrame.LookVector
-		local right = camera.CFrame.RightVector
+		local camera = workspace.CurrentCamera
 
 
 		local direction =
-			(right * input.X)
+			(camera.CFrame.RightVector * input.X)
 			+
-			(forward * -input.Z)
+			(camera.CFrame.LookVector * -input.Z)
+
 
 
 		direction = Vector3.new(
@@ -199,6 +221,7 @@ RunService.RenderStepped:Connect(function()
 			)
 
 		end
+
 
 	else
 
