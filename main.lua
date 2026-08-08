@@ -1,4 +1,4 @@
--- [[ ALDO KNIGHTXORZ AUTO WALK ]] --
+-- [[ ALDO KNIGHTXORZ AUTO WALK V4.7 - SMOOTH ROUTE LINE ]] --
 
 local RunService=game:GetService("RunService")
 local UserInputService=game:GetService("UserInputService")
@@ -10,12 +10,18 @@ local LocalPlayer=Players.LocalPlayer
 local Character,RootPart,Humanoid
 local stopPlayback
 
-if _G.AldoKnightXorzV3_Cleanup then pcall(_G.AldoKnightXorzV3_Cleanup) end
-if _G.AldoKnightXorzV4_Cleanup then pcall(_G.AldoKnightXorzV4_Cleanup) end
+if _G.AldoKnightXorzV3_Cleanup then
+	pcall(_G.AldoKnightXorzV3_Cleanup)
+end
+
+if _G.AldoKnightXorzV4_Cleanup then
+	pcall(_G.AldoKnightXorzV4_Cleanup)
+end
 
 local currentConnections={}
 
 _G.AldoKnightXorzV4_Cleanup=function()
+
 	for _,conn in ipairs(currentConnections) do
 		if typeof(conn)=="RBXScriptConnection" then
 			conn:Disconnect()
@@ -43,6 +49,7 @@ _G.AldoKnightXorzV4_Cleanup=function()
 end
 
 local function setupCharacter(char)
+
 	if stopPlayback then
 		pcall(function()
 			stopPlayback(true)
@@ -70,8 +77,10 @@ table.insert(
 local CFG={
 	NodeInterval=0.18,
 	MinDistance=0.6,
+
 	LineColor=Color3.fromRGB(0,255,255),
 	AccentColor=Color3.fromRGB(170,0,255),
+
 	SaveFileName="ALDO_KNIGHTXORZ_PURE_V4_7.json",
 
 	MaxJumpAirTime=1.35,
@@ -85,7 +94,10 @@ local CFG={
 	MaxCorrectionSpeed=100,
 
 	MinPlaybackDistance=0.035,
-	HeightTolerance=0.08
+	HeightTolerance=0.08,
+
+	-- VISUAL LINE ONLY
+	SmoothLineSegments=6
 }
 
 local state={
@@ -125,6 +137,7 @@ local state={
 }
 
 local function normalizeTimeline(timeline)
+
 	if #timeline==0 then
 		return timeline
 	end
@@ -133,9 +146,13 @@ local function normalizeTimeline(timeline)
 	local lastSpeed=16
 
 	for _,node in ipairs(timeline) do
-		node.RelativeTimestamp=(node.Timestamp or 0)-baseTs
 
-		if type(node.Speed)=="number" and node.Speed>1 then
+		node.RelativeTimestamp=
+			(node.Timestamp or 0)-baseTs
+
+		if type(node.Speed)=="number"
+			and node.Speed>1 then
+
 			lastSpeed=node.Speed
 		end
 
@@ -144,24 +161,31 @@ local function normalizeTimeline(timeline)
 			and node.Speed>1
 		) and node.Speed or lastSpeed
 
-		node.Yaw=type(node.Yaw)=="number"
+		node.Yaw=
+			type(node.Yaw)=="number"
 			and node.Yaw
 			or 0
 
-		node.Grounded=node.Grounded~=false
-		node.Jump=node.Jump==true
+		node.Grounded=
+			node.Grounded~=false
+
+		node.Jump=
+			node.Jump==true
 	end
 
 	return timeline
 end
 
 local function saveToDisk()
+
 	local exportData={}
 
 	for slot,data in pairs(state.savedFiles) do
+
 		local encodedTimeline={}
 
 		for _,node in ipairs(data.timeline) do
+
 			table.insert(
 				encodedTimeline,
 				{
@@ -206,6 +230,7 @@ local function saveToDisk()
 end
 
 local function loadFromDisk()
+
 	if not readfile then
 		return
 	end
@@ -227,13 +252,16 @@ local function loadFromDisk()
 	end
 
 	for slot,data in pairs(decoded) do
+
 		if type(data)=="table"
 			and type(data.timeline)=="table" then
 
 			local decodedTimeline={}
 
 			for _,node in ipairs(data.timeline) do
+
 				if node.P then
+
 					table.insert(
 						decodedTimeline,
 						{
@@ -263,11 +291,14 @@ end
 loadFromDisk()
 
 local function getOrCreateRouteFolder()
-	local folder=workspace:FindFirstChild(
-		"KNIGHTXORZ_ROUTE"
-	)
+
+	local folder=
+		workspace:FindFirstChild(
+			"KNIGHTXORZ_ROUTE"
+		)
 
 	if not folder then
+
 		folder=Instance.new("Folder")
 		folder.Name="KNIGHTXORZ_ROUTE"
 		folder.Parent=workspace
@@ -299,20 +330,24 @@ OpenStroke.Color=Color3.fromRGB(255,255,255)
 OpenStroke.Parent=OpenMenu
 
 local OpenGradient=Instance.new("UIGradient")
+
 OpenGradient.Color=ColorSequence.new({
 	ColorSequenceKeypoint.new(
 		0,
 		Color3.fromRGB(0,255,255)
 	),
+
 	ColorSequenceKeypoint.new(
 		1,
 		Color3.fromRGB(170,0,255)
 	)
 })
+
 OpenGradient.Rotation=45
 OpenGradient.Parent=OpenMenu
 
 task.spawn(function()
+
 	while OpenMenu and OpenMenu.Parent do
 		OpenGradient.Rotation+=1
 		task.wait(0.03)
@@ -334,7 +369,10 @@ local openMoved=false
 table.insert(
 	currentConnections,
 	OpenMenu.InputChanged:Connect(function(input)
-		if input.UserInputType==Enum.UserInputType.Touch then
+
+		if input.UserInputType==
+			Enum.UserInputType.Touch then
+
 			openMoved=true
 		end
 	end)
@@ -343,12 +381,14 @@ table.insert(
 table.insert(
 	currentConnections,
 	OpenMenu.MouseButton1Click:Connect(function()
+
 		if openMoved then
 			openMoved=false
 			return
 		end
 
-		MainFrame.Visible=not MainFrame.Visible
+		MainFrame.Visible=
+			not MainFrame.Visible
 	end)
 )
 
@@ -359,8 +399,11 @@ local openStartPos
 table.insert(
 	currentConnections,
 	OpenMenu.InputBegan:Connect(function(input)
-		if input.UserInputType==Enum.UserInputType.MouseButton1
-			or input.UserInputType==Enum.UserInputType.Touch then
+
+		if input.UserInputType==
+			Enum.UserInputType.MouseButton1
+			or input.UserInputType==
+			Enum.UserInputType.Touch then
 
 			openDragging=true
 			openDragStart=input.Position
@@ -369,15 +412,19 @@ table.insert(
 
 			local changedConn
 
-			changedConn=input.Changed:Connect(function()
-				if input.UserInputState==Enum.UserInputState.End then
-					openDragging=false
+			changedConn=
+				input.Changed:Connect(function()
 
-					if changedConn then
-						changedConn:Disconnect()
+					if input.UserInputState==
+						Enum.UserInputState.End then
+
+						openDragging=false
+
+						if changedConn then
+							changedConn:Disconnect()
+						end
 					end
-				end
-			end)
+				end)
 		end
 	end)
 )
@@ -385,11 +432,16 @@ table.insert(
 table.insert(
 	currentConnections,
 	UserInputService.InputChanged:Connect(function(input)
-		if input.UserInputType==Enum.UserInputType.MouseMovement
-			or input.UserInputType==Enum.UserInputType.Touch then
+
+		if input.UserInputType==
+			Enum.UserInputType.MouseMovement
+			or input.UserInputType==
+			Enum.UserInputType.Touch then
 
 			if openDragging then
-				local delta=input.Position-openDragStart
+
+				local delta=
+					input.Position-openDragStart
 
 				if delta.Magnitude>5 then
 					openMoved=true
@@ -398,6 +450,7 @@ table.insert(
 				OpenMenu.Position=UDim2.new(
 					openStartPos.X.Scale,
 					openStartPos.X.Offset+delta.X,
+
 					openStartPos.Y.Scale,
 					openStartPos.Y.Offset+delta.Y
 				)
@@ -446,21 +499,28 @@ ScrollingContainer.Parent=MainFrame
 
 local UIList=Instance.new("UIListLayout")
 UIList.Parent=ScrollingContainer
-UIList.HorizontalAlignment=Enum.HorizontalAlignment.Center
+UIList.HorizontalAlignment=
+	Enum.HorizontalAlignment.Center
 UIList.Padding=UDim.new(0,6)
-UIList.SortOrder=Enum.SortOrder.LayoutOrder
+UIList.SortOrder=
+	Enum.SortOrder.LayoutOrder
 
 local function updateStatus(text)
+
 	if not ScreenGui or not ScreenGui.Parent then
 		return
 	end
 
-	local frame=ScreenGui:FindFirstChild("MainFrame")
+	local frame=
+		ScreenGui:FindFirstChild("MainFrame")
 
 	if frame then
-		local lbl=frame:FindFirstChild("StatusLabel")
+
+		local lbl=
+			frame:FindFirstChild("StatusLabel")
 
 		if lbl then
+
 			lbl.Text=
 				"Status: "
 				..text
@@ -471,7 +531,9 @@ local function updateStatus(text)
 end
 
 local function createBtn(text,order,callback)
+
 	local btn=Instance.new("TextButton")
+
 	btn.Size=UDim2.new(0,230,0,35)
 	btn.BackgroundColor3=Color3.fromRGB(30,30,40)
 	btn.Text=text
@@ -498,7 +560,8 @@ local function createBtn(text,order,callback)
 				btn,
 				TweenInfo.new(0.15),
 				{
-					BackgroundColor3=CFG.AccentColor
+					BackgroundColor3=
+						CFG.AccentColor
 				}
 			):Play()
 
@@ -520,10 +583,16 @@ local function createBtn(text,order,callback)
 	return btn
 end
 
+----------------------------------------------------------------
+-- LINE RENDERER
+-- BAGIAN INI SAJA YANG DIUBAH
+----------------------------------------------------------------
+
 local function drawLine(p1,p2)
+
 	local dist=(p1-p2).Magnitude
 
-	if dist<0.2 then
+	if dist<0.05 then
 		return
 	end
 
@@ -535,22 +604,26 @@ local function drawLine(p1,p2)
 		dist
 	)
 
-	part.CFrame=CFrame.new(
+	part.CFrame=CFrame.lookAt(
 		p1:Lerp(p2,0.5),
 		p2
 	)
 
 	part.Anchored=true
 	part.CanCollide=false
+	part.CanTouch=false
 	part.CanQuery=false
 	part.CastShadow=false
 	part.Locked=true
+
 	part.Material=Enum.Material.Neon
 	part.Color=CFG.LineColor
-	part.Parent=getOrCreateRouteFolder()
-	part.Name="VisualNode"
+
 	part.Transparency=
 		state.lineVisible and 0 or 1
+
+	part.Parent=getOrCreateRouteFolder()
+	part.Name="VisualNode"
 
 	table.insert(
 		state.visualNodes,
@@ -559,7 +632,9 @@ local function drawLine(p1,p2)
 end
 
 local function clearVisuals()
+
 	for _,v in pairs(state.visualNodes) do
+
 		if v then
 			v:Destroy()
 		end
@@ -577,6 +652,116 @@ local function clearVisuals()
 	end
 end
 
+local function catmullRom(p0,p1,p2,p3,t)
+
+	local t2=t*t
+	local t3=t2*t
+
+	return
+		p0*(
+			-0.5*t3
+			+t2
+			-0.5*t
+		)
+		+
+		p1*(
+			1.5*t3
+			-2.5*t2
+			+1
+		)
+		+
+		p2*(
+			-1.5*t3
+			+2*t2
+			+0.5*t
+		)
+		+
+		p3*(
+			0.5*t3
+			-0.5*t2
+		)
+end
+
+local function drawSmoothSegment(
+	p0,
+	p1,
+	p2,
+	p3,
+	segments
+)
+
+	segments=
+		segments
+		or CFG.SmoothLineSegments
+
+	local previous=p1
+
+	for i=1,segments do
+
+		local t=i/segments
+
+		local point=
+			catmullRom(
+				p0,
+				p1,
+				p2,
+				p3,
+				t
+			)
+
+		drawLine(
+			previous,
+			point
+		)
+
+		previous=point
+	end
+end
+
+local function redrawSmoothRoute()
+
+	clearVisuals()
+
+	local count=#state.timeline
+
+	if count<2 then
+		return
+	end
+
+	for i=1,count-1 do
+
+		local p0=
+			state.timeline[
+				math.max(i-1,1)
+			].Position
+
+		local p1=
+			state.timeline[i].Position
+
+		local p2=
+			state.timeline[
+				math.min(i+1,count)
+			].Position
+
+		local p3=
+			state.timeline[
+				math.min(i+2,count)
+			].Position
+
+		drawSmoothSegment(
+			p0,
+			p1,
+			p2,
+			p3,
+			CFG.SmoothLineSegments
+		)
+	end
+end
+
+----------------------------------------------------------------
+-- RECORDING DATA
+----------------------------------------------------------------
+
 local function makeNode(
 	pos,
 	timestamp,
@@ -585,6 +770,7 @@ local function makeNode(
 	speed,
 	yaw
 )
+
 	return {
 		Position=pos,
 		Timestamp=timestamp,
@@ -596,11 +782,14 @@ local function makeNode(
 end
 
 local function commitNode(node,draw)
+
 	if #state.timeline==0 then
+
 		table.insert(
 			state.timeline,
 			node
 		)
+
 		return
 	end
 
@@ -608,20 +797,25 @@ local function commitNode(node,draw)
 		state.timeline[#state.timeline]
 
 	if (node.Position-last.Position).Magnitude<0.05 then
+
 		last.Timestamp=node.Timestamp
 		last.Speed=node.Speed
 		last.Yaw=node.Yaw
-		last.Jump=last.Jump or node.Jump
+		last.Jump=
+			last.Jump or node.Jump
 		last.Grounded=node.Grounded
+
 		return
 	end
 
 	if node.Timestamp<=last.Timestamp then
+
 		node.Timestamp=
 			last.Timestamp+0.001
 	end
 
 	if draw then
+
 		drawLine(
 			last.Position,
 			node.Position
@@ -635,6 +829,7 @@ local function commitNode(node,draw)
 end
 
 local function commitAirBuffer()
+
 	if #state.airBuffer==0 then
 		return
 	end
@@ -647,6 +842,7 @@ local function commitAirBuffer()
 end
 
 local function finishLongFall(landingNode)
+
 	state.airBuffer={}
 	state.inAir=false
 	state.airStartTime=nil
@@ -656,22 +852,36 @@ local function finishLongFall(landingNode)
 	landingNode.Grounded=true
 
 	if #state.timeline==0 then
-		commitNode(landingNode,false)
+
+		commitNode(
+			landingNode,
+			false
+		)
+
 	else
+
 		local last=
 			state.timeline[#state.timeline]
 
-		if (landingNode.Position-last.Position).Magnitude
-			>=CFG.MinDistance then
+		if (
+			landingNode.Position-last.Position
+		).Magnitude>=CFG.MinDistance then
 
 			table.insert(
 				state.timeline,
 				landingNode
 			)
+
 		else
-			last.Timestamp=landingNode.Timestamp
-			last.Speed=landingNode.Speed
-			last.Yaw=landingNode.Yaw
+
+			last.Timestamp=
+				landingNode.Timestamp
+
+			last.Speed=
+				landingNode.Speed
+
+			last.Yaw=
+				landingNode.Yaw
 		end
 	end
 end
@@ -684,18 +894,25 @@ RunService:BindToRenderStep(
 		if not state.isRecording
 			or not RootPart
 			or not Humanoid then
+
 			return
 		end
 
 		local pos=RootPart.Position
 		local st=Humanoid:GetState()
-		local vel=RootPart.AssemblyLinearVelocity
-		local now=tick()-state.startTime
+		local vel=
+			RootPart.AssemblyLinearVelocity
+
+		local now=
+			tick()-state.startTime
 
 		local grounded=
-			Humanoid.FloorMaterial~=Enum.Material.Air
-			and st~=Enum.HumanoidStateType.Freefall
-			and st~=Enum.HumanoidStateType.Jumping
+			Humanoid.FloorMaterial~=
+				Enum.Material.Air
+			and st~=
+				Enum.HumanoidStateType.Freefall
+			and st~=
+				Enum.HumanoidStateType.Jumping
 
 		local air=not grounded
 
@@ -703,7 +920,8 @@ RunService:BindToRenderStep(
 			st==Enum.HumanoidStateType.Jumping
 			or (
 				vel.Y>1
-				and Humanoid.FloorMaterial==Enum.Material.Air
+				and Humanoid.FloorMaterial==
+					Enum.Material.Air
 			)
 
 		local jumpTrigger=
@@ -712,7 +930,8 @@ RunService:BindToRenderStep(
 
 		state.lastJumpState=jumpNow
 
-		local speed=Humanoid.WalkSpeed
+		local speed=
+			Humanoid.WalkSpeed
 
 		if speed>1 then
 			state.lastValidSpeed=speed
@@ -723,24 +942,29 @@ RunService:BindToRenderStep(
 		local _,yaw,_=
 			RootPart.CFrame:ToOrientation()
 
-		local node=makeNode(
-			pos,
-			now,
-			jumpTrigger,
-			grounded,
-			speed,
-			yaw
-		)
+		local node=
+			makeNode(
+				pos,
+				now,
+				jumpTrigger,
+				grounded,
+				speed,
+				yaw
+			)
 
 		if #state.timeline==0
 			and not state.inAir then
 
-			commitNode(node,false)
+			commitNode(
+				node,
+				false
+			)
 		end
 
 		if air then
 
 			if not state.inAir then
+
 				state.inAir=true
 				state.airStartTime=now
 				state.airBuffer={}
@@ -792,6 +1016,7 @@ RunService:BindToRenderStep(
 					state.routeBroken=false
 
 				else
+
 					finishLongFall(node)
 				end
 
@@ -816,16 +1041,31 @@ RunService:BindToRenderStep(
 					) then
 
 					if state.routeBroken then
-						commitNode(node,true)
+
+						commitNode(
+							node,
+							true
+						)
+
 						state.routeBroken=false
+
 					else
-						commitNode(node,true)
+
+						commitNode(
+							node,
+							true
+						)
 					end
 				end
 			end
 		end
 	end
 )
+
+----------------------------------------------------------------
+-- PLAYBACK
+-- TIDAK DIUBAH
+----------------------------------------------------------------
 
 stopPlayback=function(manualStop)
 
@@ -842,6 +1082,7 @@ stopPlayback=function(manualStop)
 	)
 
 	if Humanoid then
+
 		Humanoid.AutoRotate=
 			state.prePlaybackAutoRotate~=false
 
@@ -849,7 +1090,10 @@ stopPlayback=function(manualStop)
 			state.prePlaybackWalkSpeed
 			or state.movementSpeed
 
-		Humanoid:Move(Vector3.zero,true)
+		Humanoid:Move(
+			Vector3.zero,
+			true
+		)
 	end
 
 	state.lastPlaybackPosition=nil
@@ -859,10 +1103,12 @@ stopPlayback=function(manualStop)
 end
 
 local function getNodeSpeed(a,b)
+
 	local s1=tonumber(a.Speed) or 0
 	local s2=tonumber(b.Speed) or 0
 
 	if s1>1 and s2>1 then
+
 		return s1+(s2-s1)*0.5
 	end
 
@@ -877,7 +1123,11 @@ local function getNodeSpeed(a,b)
 	return state.movementSpeed
 end
 
-local function getTimelineTarget(index,currentTime)
+local function getTimelineTarget(
+	index,
+	currentTime
+)
+
 	local count=#state.timeline
 
 	if count<2 then
@@ -886,7 +1136,9 @@ local function getTimelineTarget(index,currentTime)
 
 	while index<count
 		and currentTime>=
-			state.timeline[index+1].RelativeTimestamp do
+			state.timeline[
+				index+1
+			].RelativeTimestamp do
 
 		index+=1
 	end
@@ -895,14 +1147,23 @@ local function getTimelineTarget(index,currentTime)
 		return count,index
 	end
 
-	local a=state.timeline[index]
-	local b=state.timeline[index+1]
+	local a=
+		state.timeline[index]
 
-	local t1=a.RelativeTimestamp
-	local t2=b.RelativeTimestamp
+	local b=
+		state.timeline[index+1]
+
+	local t1=
+		a.RelativeTimestamp
+
+	local t2=
+		b.RelativeTimestamp
 
 	local duration=
-		math.max(t2-t1,0.001)
+		math.max(
+			t2-t1,
+			0.001
+		)
 
 	local alpha=
 		math.clamp(
@@ -919,26 +1180,36 @@ local function getYaw(a,b,alpha)
 	local yawA=a.Yaw or 0
 	local yawB=b.Yaw or yawA
 
-	local diff=math.atan2(
-		math.sin(yawB-yawA),
-		math.cos(yawB-yawA)
-	)
+	local diff=
+		math.atan2(
+			math.sin(yawB-yawA),
+			math.cos(yawB-yawA)
+		)
 
 	return yawA+diff*alpha
 end
 
-local function applyPlaybackPosition(target,dt)
+local function applyPlaybackPosition(
+	target,
+	dt
+)
 
 	if not RootPart then
 		return
 	end
 
-	local current=RootPart.Position
+	local current=
+		RootPart.Position
 
-	local delta=target-current
-	local distance=delta.Magnitude
+	local delta=
+		target-current
 
-	if distance<CFG.MinPlaybackDistance then
+	local distance=
+		delta.Magnitude
+
+	if distance<
+		CFG.MinPlaybackDistance then
+
 		return
 	end
 
@@ -947,11 +1218,12 @@ local function applyPlaybackPosition(target,dt)
 			-CFG.PositionSmooth*dt
 		)
 
-	factor=math.clamp(
-		factor,
-		0,
-		1
-	)
+	factor=
+		math.clamp(
+			factor,
+			0,
+			1
+		)
 
 	local nextPos=
 		current:Lerp(
@@ -959,7 +1231,9 @@ local function applyPlaybackPosition(target,dt)
 			factor
 		)
 
-	if distance>CFG.MaxCorrectionSpeed*dt then
+	if distance>
+		CFG.MaxCorrectionSpeed*dt then
+
 		nextPos=
 			current+
 			delta.Unit*
@@ -977,14 +1251,14 @@ local function applyPlaybackPosition(target,dt)
 		)
 end
 
-local function applyPlaybackRotation(yaw,dt)
+local function applyPlaybackRotation(
+	yaw,
+	dt
+)
 
 	if not RootPart then
 		return
 	end
-
-	local currentLook=
-		RootPart.CFrame.LookVector
 
 	local targetCFrame=
 		CFrame.new(
@@ -1001,11 +1275,12 @@ local function applyPlaybackRotation(yaw,dt)
 			-CFG.RotationSmooth*dt
 		)
 
-	factor=math.clamp(
-		factor,
-		0,
-		1
-	)
+	factor=
+		math.clamp(
+			factor,
+			0,
+			1
+		)
 
 	RootPart.CFrame=
 		RootPart.CFrame:Lerp(
@@ -1020,6 +1295,7 @@ local function executePlayback()
 		or state.isPlaying
 		or not RootPart
 		or not Humanoid then
+
 		return
 	end
 
@@ -1088,6 +1364,7 @@ local function executePlayback()
 			end
 
 			if state.isPaused then
+
 				pauseOffset+=dt
 
 				Humanoid:Move(
@@ -1098,8 +1375,10 @@ local function executePlayback()
 				return
 			end
 
-			if playbackState=="WALKING_TO_START"
-				or playbackState=="RETURNING_TO_START" then
+			if playbackState==
+				"WALKING_TO_START"
+				or playbackState==
+				"RETURNING_TO_START" then
 
 				local currentPos=
 					RootPart.Position
@@ -1143,6 +1422,7 @@ local function executePlayback()
 					)
 
 				else
+
 					Humanoid:Move(
 						Vector3.zero,
 						true
@@ -1203,6 +1483,7 @@ local function executePlayback()
 				)
 
 			if not result then
+
 				stopPlayback(false)
 				return
 			end
@@ -1226,7 +1507,6 @@ local function executePlayback()
 				else
 
 					stopPlayback(false)
-
 				end
 
 				return
@@ -1234,11 +1514,14 @@ local function executePlayback()
 
 			currentIndex=result
 
-			local a=result and
+			local a=
+				result and
 				state.timeline[currentIndex]
 
 			local b=
-				state.timeline[currentIndex+1]
+				state.timeline[
+					currentIndex+1
+				]
 
 			if not a or not b then
 				return
@@ -1290,7 +1573,10 @@ local function executePlayback()
 			state.lastValidSpeed=speed
 
 			Humanoid.WalkSpeed=
-				math.max(speed,1)
+				math.max(
+					speed,
+					1
+				)
 
 			if horizontal.Magnitude>0.015 then
 
@@ -1457,6 +1743,9 @@ createBtn(
 				state.timeline
 			)
 
+			-- Hanya visual line yang digambar ulang.
+			redrawSmoothRoute()
+
 			updateStatus("IDLE")
 		end
 	end
@@ -1490,8 +1779,11 @@ createBtn(
 			not state.isPaused
 
 		if state.isPaused then
+
 			updateStatus("PAUSED")
+
 		else
+
 			updateStatus(
 				state.isAutoWalk
 				and "AUTO WALK"
@@ -1578,15 +1870,8 @@ createBtn(
 					fileData.timeline
 				)
 
-			clearVisuals()
-
-			for i=2,#state.timeline do
-
-				drawLine(
-					state.timeline[i-1].Position,
-					state.timeline[i].Position
-				)
-			end
+			-- VISUAL LINE SAJA
+			redrawSmoothRoute()
 
 			updateStatus(
 				"LOADED FILE "
