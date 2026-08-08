@@ -16,12 +16,11 @@ if _G.AldoKnightXorzV4_Cleanup then pcall(_G.AldoKnightXorzV4_Cleanup) end
 local currentConnections={}
 
 _G.AldoKnightXorzV4_Cleanup=function()
-	for _,c in ipairs(currentConnections) do
-		if typeof(c)=="RBXScriptConnection" then
-			c:Disconnect()
+	for _,conn in ipairs(currentConnections) do
+		if typeof(conn)=="RBXScriptConnection" then
+			conn:Disconnect()
 		end
 	end
-
 	currentConnections={}
 
 	RunService:UnbindFromRenderStep("AldoKnightXorzV3_Record")
@@ -29,15 +28,15 @@ _G.AldoKnightXorzV4_Cleanup=function()
 	RunService:UnbindFromRenderStep("AldoKnightXorzV4_Record")
 	RunService:UnbindFromRenderStep("AldoKnightXorzV4_Playback")
 
-	local pg=LocalPlayer:WaitForChild("PlayerGui")
+	local playerGui=LocalPlayer:WaitForChild("PlayerGui")
 
-	for _,gui in ipairs(pg:GetChildren()) do
-		if gui:IsA("ScreenGui") and (
-			gui.Name=="AldoKnightXorzV3Gui"
+	for _,gui in ipairs(playerGui:GetChildren()) do
+		if gui:IsA("ScreenGui") then
+			if gui.Name=="AldoKnightXorzV3Gui"
 			or gui.Name=="AldoKnightXorzV4Gui"
-			or gui.Name=="AldoKnightXorzV47Gui"
-		) then
-			gui:Destroy()
+			or gui.Name=="AldoKnightXorzV47Gui" then
+				gui:Destroy()
+			end
 		end
 	end
 end
@@ -52,7 +51,10 @@ local function setupCharacter(char)
 	Character=char
 	RootPart=char:WaitForChild("HumanoidRootPart")
 	Humanoid=char:WaitForChild("Humanoid")
-	Humanoid.AutoRotate=true
+
+	if Humanoid then
+		Humanoid.AutoRotate=true
+	end
 end
 
 if LocalPlayer.Character then
@@ -62,17 +64,14 @@ end
 table.insert(currentConnections,LocalPlayer.CharacterAdded:Connect(setupCharacter))
 
 local CFG={
-	NodeInterval=0.12,
+	NodeInterval=0.10,
 	MinDistance=0.35,
 
-	FallTime=0.65,
-	FallVerticalSpeed=-12,
+	FallTime=0.75,
+	FallSpeed=-14,
 
 	LineColor=Color3.fromRGB(0,255,255),
 	AccentColor=Color3.fromRGB(170,0,255),
-
-	PositionSmooth=22,
-	RotationSmooth=22,
 
 	SaveFileName="ALDO_KNIGHTXORZ_PURE_V4_7.json"
 }
@@ -93,15 +92,12 @@ local state={
 	savedFiles={},
 
 	startTime=0,
-
 	lastJumpState=false,
 	lastGrounded=true,
 
 	airStartTime=nil,
-	airStartPosition=nil,
 	airNodes={},
-
-	lastValidNode=nil,
+	lastValidIndex=1,
 
 	movementSpeed=16,
 	replayPrecision=true
@@ -112,14 +108,15 @@ local function normalizeTimeline(timeline)
 		return timeline
 	end
 
-	local base=timeline[1].Timestamp or 0
+	local baseTs=timeline[1].Timestamp or 0
 
 	for _,node in ipairs(timeline) do
-		node.RelativeTimestamp=(node.Timestamp or 0)-base
+		node.RelativeTimestamp=(node.Timestamp or 0)-baseTs
 		node.Yaw=node.Yaw or 0
-		node.Phase=node.Phase or "Ground"
+		node.Speed=node.Speed or 0
 		node.VerticalVelocity=node.VerticalVelocity or 0
 		node.Jump=node.Jump or false
+		node.Phase=node.Phase or "Ground"
 	end
 
 	return timeline
@@ -141,8 +138,9 @@ local function saveToDisk()
 				T=math.round((node.Timestamp or 0)*1000)/1000,
 				J=node.Jump or false,
 				R=node.Yaw or 0,
-				V=math.round((node.VerticalVelocity or 0)*100)/100,
-				S=node.Phase or "Ground"
+				V=node.VerticalVelocity or 0,
+				S=node.Speed or 0,
+				PHS=node.Phase or "Ground"
 			}
 		end
 
@@ -166,41 +164,42 @@ local function loadFromDisk()
 		return
 	end
 
-	local ok,result=pcall(function()
+	local success,result=pcall(function()
 		return readfile(CFG.SaveFileName)
 	end)
 
-	if not ok or not result then
+	if not success or not result then
 		return
 	end
 
-	local okDecode,decoded=pcall(function()
+	local successDecode,decoded=pcall(function()
 		return HttpService:JSONDecode(result)
 	end)
 
-	if not okDecode or type(decoded)~="table" then
+	if not successDecode or type(decoded)~="table" then
 		return
 	end
 
 	for slot,data in pairs(decoded) do
 		if type(data)=="table" and type(data.timeline)=="table" then
-			local timeline={}
+			local decodedTimeline={}
 
 			for _,node in ipairs(data.timeline) do
 				if node.P then
-					timeline[#timeline+1]={
+					decodedTimeline[#decodedTimeline+1]={
 						Position=Vector3.new(unpack(node.P)),
 						Timestamp=tonumber(node.T) or 0,
 						Jump=node.J or false,
 						Yaw=tonumber(node.R) or 0,
 						VerticalVelocity=tonumber(node.V) or 0,
-						Phase=node.S or "Ground"
+						Speed=tonumber(node.S) or 0,
+						Phase=node.PHS or "Ground"
 					}
 				end
 			end
 
 			state.savedFiles[tonumber(slot)]={
-				timeline=normalizeTimeline(timeline)
+				timeline=normalizeTimeline(decodedTimeline)
 			}
 		end
 	end
@@ -292,20 +291,20 @@ end))
 
 table.insert(currentConnections,OpenMenu.InputBegan:Connect(function(input)
 	if input.UserInputType==Enum.UserInputType.MouseButton1
-		or input.UserInputType==Enum.UserInputType.Touch then
+	or input.UserInputType==Enum.UserInputType.Touch then
 
 		openDragging=true
 		openDragStart=input.Position
 		openStartPos=OpenMenu.Position
 		openMoved=false
 
-		local changed
-		changed=input.Changed:Connect(function()
+		local changedConn
+		changedConn=input.Changed:Connect(function()
 			if input.UserInputState==Enum.UserInputState.End then
 				openDragging=false
 
-				if changed then
-					changed:Disconnect()
+				if changedConn then
+					changedConn:Disconnect()
 				end
 			end
 		end)
@@ -314,7 +313,7 @@ end))
 
 table.insert(currentConnections,UserInputService.InputChanged:Connect(function(input)
 	if input.UserInputType==Enum.UserInputType.MouseMovement
-		or input.UserInputType==Enum.UserInputType.Touch then
+	or input.UserInputType==Enum.UserInputType.Touch then
 
 		if openDragging then
 			local delta=input.Position-openDragStart
@@ -373,10 +372,14 @@ local function updateStatus(text)
 		return
 	end
 
-	local label=MainFrame:FindFirstChild("StatusLabel")
+	local frame=ScreenGui:FindFirstChild("MainFrame")
 
-	if label then
-		label.Text="Status: "..text.." | File: "..state.selectedFile
+	if frame then
+		local lbl=frame:FindFirstChild("StatusLabel")
+
+		if lbl then
+			lbl.Text="Status: "..text.." | File: "..state.selectedFile
+		end
 	end
 end
 
@@ -391,27 +394,27 @@ local function createBtn(text,order,callback)
 	btn.LayoutOrder=order
 	btn.Parent=ScrollingContainer
 
-	local c=Instance.new("UICorner")
-	c.CornerRadius=UDim.new(0,6)
-	c.Parent=btn
+	local btnCorner=Instance.new("UICorner")
+	btnCorner.CornerRadius=UDim.new(0,6)
+	btnCorner.Parent=btn
 
-	local s=Instance.new("UIStroke")
-	s.Thickness=1
-	s.Color=Color3.fromRGB(70,70,90)
-	s.Parent=btn
+	local btnStroke=Instance.new("UIStroke")
+	btnStroke.Thickness=1
+	btnStroke.Color=Color3.fromRGB(70,70,90)
+	btnStroke.Parent=btn
 
 	table.insert(currentConnections,btn.MouseButton1Click:Connect(function()
 		TweenService:Create(
 			btn,
-			TweenInfo.new(0.12),
+			TweenInfo.new(0.15),
 			{BackgroundColor3=CFG.AccentColor}
 		):Play()
 
-		task.wait(0.12)
+		task.wait(0.15)
 
 		TweenService:Create(
 			btn,
-			TweenInfo.new(0.12),
+			TweenInfo.new(0.15),
 			{BackgroundColor3=Color3.fromRGB(30,30,40)}
 		):Play()
 
@@ -424,17 +427,13 @@ end
 local function drawLine(p1,p2)
 	local dist=(p1-p2).Magnitude
 
-	if dist<0.1 then
+	if dist<0.15 then
 		return
 	end
 
 	local part=Instance.new("Part")
-	part.Name="VisualNode"
 	part.Size=Vector3.new(0.15,0.15,dist)
-	part.CFrame=CFrame.new(
-		p1:Lerp(p2,0.5),
-		p2
-	)
+	part.CFrame=CFrame.new(p1:Lerp(p2,0.5),p2)
 	part.Anchored=true
 	part.CanCollide=false
 	part.CanQuery=false
@@ -442,10 +441,27 @@ local function drawLine(p1,p2)
 	part.Locked=true
 	part.Material=Enum.Material.Neon
 	part.Color=CFG.LineColor
-	part.Transparency=state.lineVisible and 0 or 1
 	part.Parent=getOrCreateRouteFolder()
+	part.Name="VisualNode"
+	part.Transparency=state.lineVisible and 0 or 1
 
-	state.visualNodes[#state.visualNodes+1]=part
+	table.insert(state.visualNodes,part)
+end
+
+local function clearVisuals()
+	for _,v in ipairs(state.visualNodes) do
+		if v then
+			v:Destroy()
+		end
+	end
+
+	state.visualNodes={}
+
+	local folder=workspace:FindFirstChild("KNIGHTXORZ_ROUTE")
+
+	if folder then
+		folder:ClearAllChildren()
+	end
 end
 
 local function rebuildVisuals()
@@ -459,20 +475,13 @@ local function rebuildVisuals()
 	end
 end
 
-function clearVisuals()
-	for _,part in ipairs(state.visualNodes) do
-		if part then
-			part:Destroy()
-		end
+local function getYaw()
+	if not RootPart then
+		return 0
 	end
 
-	state.visualNodes={}
-
-	local folder=workspace:FindFirstChild("KNIGHTXORZ_ROUTE")
-
-	if folder then
-		folder:ClearAllChildren()
-	end
+	local _,yaw,_=RootPart.CFrame:ToOrientation()
+	return yaw
 end
 
 local function getPhase()
@@ -488,32 +497,22 @@ local function getPhase()
 	end
 
 	if humanoidState==Enum.HumanoidStateType.Freefall then
-		if velocityY>=0 then
-			return "Jump"
+		if velocityY<0 then
+			return "Fall"
 		end
 
-		return "Fall"
+		return "Jump"
 	end
 
 	if Humanoid.FloorMaterial==Enum.Material.Air then
-		if velocityY>=0 then
-			return "Jump"
+		if velocityY<0 then
+			return "Fall"
 		end
 
-		return "Fall"
+		return "Jump"
 	end
 
 	return "Ground"
-end
-
-local function getYaw()
-	if not RootPart then
-		return 0
-	end
-
-	local _,yaw,_=RootPart.CFrame:ToOrientation()
-
-	return yaw
 end
 
 local function removeAirNodes()
@@ -521,16 +520,16 @@ local function removeAirNodes()
 		return
 	end
 
-	local removeSet={}
+	local removeLookup={}
 
 	for _,node in ipairs(state.airNodes) do
-		removeSet[node]=true
+		removeLookup[node]=true
 	end
 
 	local newTimeline={}
 
 	for _,node in ipairs(state.timeline) do
-		if not removeSet[node] then
+		if not removeLookup[node] then
 			newTimeline[#newTimeline+1]=node
 		end
 	end
@@ -538,74 +537,67 @@ local function removeAirNodes()
 	state.timeline=newTimeline
 	state.airNodes={}
 
+	if #state.timeline>0 then
+		state.lastValidIndex=#state.timeline
+	else
+		state.lastValidIndex=1
+	end
+
 	rebuildVisuals()
-
-	state.lastValidNode=state.timeline[#state.timeline]
 end
 
-local function appendNode(pos,timestamp,jump,phase,velocity,yaw)
-	local node={
-		Position=pos,
-		Timestamp=timestamp,
-		Jump=jump or false,
-		Phase=phase or "Ground",
-		VerticalVelocity=velocity or 0,
-		Yaw=yaw or 0
-	}
-
-	state.timeline[#state.timeline+1]=node
-
-	return node
-end
-
-local function recordNode(pos,now,jump,phase,velocity,yaw,isAir)
+local function addRecordNode(pos,timestamp,jump,phase,velocity,yaw,speed)
 	local last=state.timeline[#state.timeline]
 
 	if not last then
-		local node=appendNode(
-			pos,
-			now,
-			jump,
-			phase,
-			velocity,
-			yaw
-		)
+		local node={
+			Position=pos,
+			Timestamp=timestamp,
+			Jump=jump,
+			Phase=phase,
+			VerticalVelocity=velocity,
+			Yaw=yaw,
+			Speed=speed
+		}
 
-		state.lastValidNode=node
+		table.insert(state.timeline,node)
 
-		if isAir then
-			state.airNodes={node}
+		if phase=="Ground" then
+			state.lastValidIndex=#state.timeline
+		else
+			table.insert(state.airNodes,node)
 		end
 
 		return
 	end
 
 	local distance=(pos-last.Position).Magnitude
-	local timeDiff=now-last.Timestamp
+	local timeDiff=timestamp-last.Timestamp
 
-	if jump or
-		phase~=last.Phase or
-		timeDiff>=CFG.NodeInterval or
-		distance>=CFG.MinDistance then
+	if jump
+	or phase~=last.Phase
+	or timeDiff>=CFG.NodeInterval
+	or distance>=CFG.MinDistance then
 
-		local node=appendNode(
-			pos,
-			now,
-			jump,
-			phase,
-			velocity,
-			yaw
-		)
+		local node={
+			Position=pos,
+			Timestamp=timestamp,
+			Jump=jump,
+			Phase=phase,
+			VerticalVelocity=velocity,
+			Yaw=yaw,
+			Speed=speed
+		}
 
-		if isAir then
-			state.airNodes[#state.airNodes+1]=node
-		end
+		table.insert(state.timeline,node)
+
+		drawLine(last.Position,pos)
 
 		if phase=="Ground" then
-			state.lastValidNode=node
+			state.lastValidIndex=#state.timeline
+		else
+			table.insert(state.airNodes,node)
 		end
-
-		drawLine(last.Position,node.Position)
 	end
 end
 
@@ -613,36 +605,45 @@ RunService:BindToRenderStep(
 	"AldoKnightXorzV4_Record",
 	Enum.RenderPriority.Character.Value,
 	function()
-		if not state.isRecording
-			or not RootPart
-			or not Humanoid then
+		if not state.isRecording or not RootPart or not Humanoid then
 			return
 		end
 
-		local now=tick()-state.startTime
 		local pos=RootPart.Position
 		local velocity=RootPart.AssemblyLinearVelocity
+		local now=tick()-state.startTime
+
+		local horizontalVelocity=Vector3.new(
+			velocity.X,
+			0,
+			velocity.Z
+		)
+
+		local speed=horizontalVelocity.Magnitude
 		local phase=getPhase()
 		local grounded=Humanoid.FloorMaterial~=Enum.Material.Air
 
-		if grounded then
+		if not grounded then
+			if not state.airStartTime then
+				state.airStartTime=now
+				state.airNodes={}
+			end
+
+			local airDuration=now-state.airStartTime
+
+			if airDuration>CFG.FallTime
+			and velocity.Y<CFG.FallSpeed then
+				return
+			end
+		else
 			if state.airStartTime then
 				local airDuration=now-state.airStartTime
 
-				if airDuration>CFG.FallTime
-					and state.lastValidNode then
-
+				if airDuration>CFG.FallTime then
 					removeAirNodes()
 				end
 
 				state.airStartTime=nil
-				state.airStartPosition=nil
-				state.airNodes={}
-			end
-		else
-			if not state.airStartTime then
-				state.airStartTime=now
-				state.airStartPosition=pos
 				state.airNodes={}
 			end
 		end
@@ -650,62 +651,34 @@ RunService:BindToRenderStep(
 		local jumpTrigger=false
 
 		if not grounded
-			and state.lastGrounded
-			and phase=="Jump" then
-
+		and state.lastGrounded
+		and phase=="Jump" then
 			jumpTrigger=true
 		end
 
 		state.lastGrounded=grounded
 
-		local isAir=not grounded
-
-		if not grounded
-			and state.airStartTime
-			and now-state.airStartTime>CFG.FallTime
-			and velocity.Y<CFG.FallVerticalSpeed then
-
-			return
-		end
-
-		recordNode(
+		addRecordNode(
 			pos,
 			now,
 			jumpTrigger,
 			phase,
 			velocity.Y,
 			getYaw(),
-			isAir
+			speed
 		)
 	end
 )
 
-local function lerpAngle(a,b,t)
-	local diff=(b-a+math.pi)%(math.pi*2)-math.pi
-
-	return a+diff*t
-end
-
-local function smoothVector(current,target,speed,dt)
-	local alpha=1-math.exp(-speed*dt)
-
-	return current:Lerp(target,alpha)
-end
-
-local function moveTowardsRoute(pos,target)
-	local direction=target-pos
-
-	local horizontal=Vector3.new(
-		direction.X,
-		0,
-		direction.Z
+local function angleDifference(a,b)
+	return math.atan2(
+		math.sin(b-a),
+		math.cos(b-a)
 	)
+end
 
-	if horizontal.Magnitude>0.01 then
-		Humanoid:Move(horizontal.Unit,false)
-	else
-		Humanoid:Move(Vector3.zero,false)
-	end
+local function lerpYaw(a,b,alpha)
+	return a+angleDifference(a,b)*alpha
 end
 
 stopPlayback=function(manualStop)
@@ -717,11 +690,13 @@ stopPlayback=function(manualStop)
 		state.isAutoWalk=false
 	end
 
-	RunService:UnbindFromRenderStep("AldoKnightXorzV4_Playback")
+	RunService:UnbindFromRenderStep(
+		"AldoKnightXorzV4_Playback"
+	)
 
 	if Humanoid then
 		Humanoid.AutoRotate=true
-		Humanoid:Move(Vector3.zero,false)
+		Humanoid:Move(Vector3.zero,true)
 	end
 
 	updateStatus("IDLE")
@@ -729,188 +704,252 @@ end
 
 local function executePlayback()
 	if #state.timeline<2
-		or state.isPlaying
-		or not RootPart
-		or not Humanoid then
+	or state.isPlaying
+	or not RootPart
+	or not Humanoid then
 		return
 	end
 
 	normalizeTimeline(state.timeline)
 
-	state.isPlaying=false
-	state.playbackID+=1
-
-	local playbackID=state.playbackID
-
 	state.isPlaying=true
 	state.isPaused=false
+	state.playbackID+=1
 
-	local index=1
-	local routePosition=RootPart.Position
-	local routeYaw=state.timeline[1].Yaw or 0
+	local currentPlaybackID=state.playbackID
 
-	local jumpIndex=-1
-	local playDistance=0
+	local playbackState="WALKING_TO_START"
+	local stateChanged=true
 
-	local connection
+	local startPos=state.timeline[1].Position
 
-	Humanoid.AutoRotate=false
-	Humanoid.WalkSpeed=state.movementSpeed
+	local playbackStartTime=0
+	local pauseOffset=0
 
-	updateStatus("PLAYING")
+	local currentIndex=1
+	local currentSegmentTime=0
 
-	connection=RunService.Heartbeat:Connect(function(dt)
-		if not state.isPlaying
-			or state.playbackID~=playbackID
+	local lastTarget=RootPart.Position
+	local currentYaw=getYaw()
+
+	local originalWalkSpeed=Humanoid.WalkSpeed
+
+	updateStatus("WALKING TO START")
+
+	RunService:BindToRenderStep(
+		"AldoKnightXorzV4_Playback",
+		Enum.RenderPriority.Last.Value,
+		function(dt)
+
+			if not state.isPlaying
+			or state.playbackID~=currentPlaybackID
 			or not RootPart
 			or not Humanoid then
 
-			if connection then
-				connection:Disconnect()
-			end
-
-			return
-		end
-
-		if state.isPaused then
-			Humanoid:Move(Vector3.zero,false)
-			return
-		end
-
-		local count=#state.timeline
-
-		if count<2 then
-			stopPlayback(false)
-
-			if connection then
-				connection:Disconnect()
-			end
-
-			return
-		end
-
-		while index<count do
-			local a=state.timeline[index]
-			local b=state.timeline[index+1]
-
-			local segment=(b.Position-a.Position).Magnitude
-
-			if segment<0.01 then
-				index+=1
-			else
-				break
-			end
-		end
-
-		if index>=count then
-			if state.isAutoWalk then
-				index=1
-				routePosition=state.timeline[1].Position
-				routeYaw=state.timeline[1].Yaw or routeYaw
-				jumpIndex=-1
-				playDistance=0
-				updateStatus("AUTO WALK")
-			else
 				stopPlayback(false)
+				return
+			end
 
-				if connection then
-					connection:Disconnect()
+			if state.isPaused then
+				pauseOffset+=dt
+				Humanoid:Move(Vector3.zero,true)
+				return
+			end
+
+			if playbackState=="WALKING_TO_START"
+			or playbackState=="RETURNING_TO_START" then
+
+				if stateChanged then
+					Humanoid:MoveTo(startPos)
+					stateChanged=false
+				end
+
+				local dist=(RootPart.Position-startPos).Magnitude
+
+				if dist<=1.5 then
+					playbackState="PLAYING"
+					playbackStartTime=tick()
+					pauseOffset=0
+					currentIndex=1
+					currentSegmentTime=0
+					lastTarget=RootPart.Position
+					currentYaw=state.timeline[1].Yaw or getYaw()
+					stateChanged=true
+
+					updateStatus(
+						state.isAutoWalk
+						and "AUTO WALK"
+						or "PLAYING"
+					)
 				end
 
 				return
 			end
-		end
 
-		local a=state.timeline[index]
-		local b=state.timeline[index+1]
+			if playbackState~="PLAYING" then
+				return
+			end
 
-		local segmentVector=b.Position-a.Position
-		local segmentLength=segmentVector.Magnitude
+			local count=#state.timeline
 
-		if segmentLength<0.01 then
-			index+=1
-			return
-		end
+			if currentIndex>=count then
+				if state.isAutoWalk then
+					playbackState="RETURNING_TO_START"
+					stateChanged=true
+					updateStatus("WALKING TO START")
+					return
+				else
+					stopPlayback(false)
+					return
+				end
+			end
 
-		local direction=segmentVector.Unit
+			local currentNode=state.timeline[currentIndex]
+			local nextNode=state.timeline[currentIndex+1]
 
-		local speedDistance=state.movementSpeed*dt
+			local segmentVector=
+				nextNode.Position-currentNode.Position
 
-		local currentDistance=(routePosition-a.Position):Dot(direction)
+			local segmentDistance=segmentVector.Magnitude
 
-		local desiredDistance=currentDistance+speedDistance
+			if segmentDistance<0.05 then
+				currentIndex+=1
+				currentSegmentTime=0
+				return
+			end
 
-		local alpha=math.clamp(
-			desiredDistance/segmentLength,
-			0,
-			1
-		)
+			local recordedTime=
+				(nextNode.Timestamp-currentNode.Timestamp)
 
-		local target=a.Position:Lerp(
-			b.Position,
-			alpha
-		)
+			if recordedTime<=0.001 then
+				recordedTime=
+					segmentDistance/
+					math.max(
+						currentNode.Speed,
+						1
+					)
+			end
 
-		routePosition=smoothVector(
-			routePosition,
-			target,
-			CFG.PositionSmooth,
-			dt
-		)
+			local recordSpeed=currentNode.Speed or 0
 
-		local yawA=a.Yaw or routeYaw
-		local yawB=b.Yaw or yawA
+			if recordSpeed<1 then
+				recordSpeed=
+					segmentDistance/
+					math.max(recordedTime,0.016)
+			end
 
-		routeYaw=lerpAngle(
-			yawA,
-			yawB,
-			alpha
-		)
+			recordSpeed=math.max(recordSpeed,1)
 
-		moveTowardsRoute(
-			RootPart.Position,
-			routePosition
-		)
+			local effectiveTime=recordedTime
 
-		local currentPhase=a.Phase or "Ground"
+			if effectiveTime>1.5 then
+				effectiveTime=
+					segmentDistance/
+					recordSpeed
+			end
 
-		if a.Jump and jumpIndex~=index then
-			Humanoid.Jump=true
-			Humanoid:ChangeState(
-				Enum.HumanoidStateType.Jumping
+			effectiveTime=math.max(
+				effectiveTime,
+				0.016
 			)
 
-			jumpIndex=index
+			currentSegmentTime+=dt
+
+			local alpha=
+				math.clamp(
+					currentSegmentTime/effectiveTime,
+					0,
+					1
+				)
+
+			local targetPosition=
+				currentNode.Position:Lerp(
+					nextNode.Position,
+					alpha
+				)
+
+			local movementDelta=
+				targetPosition-lastTarget
+
+			local horizontalDelta=Vector3.new(
+				movementDelta.X,
+				0,
+				movementDelta.Z
+			)
+
+			local horizontalDirection=
+				Vector3.new(
+					segmentVector.X,
+					0,
+					segmentVector.Z
+				)
+
+			if horizontalDirection.Magnitude>0.01 then
+				horizontalDirection=
+					horizontalDirection.Unit
+
+				Humanoid:Move(
+					horizontalDirection,
+					false
+				)
+			end
+
+			local yawA=currentNode.Yaw or currentYaw
+			local yawB=nextNode.Yaw or yawA
+
+			currentYaw=
+				lerpYaw(
+					yawA,
+					yawB,
+					alpha
+				)
+
+			Humanoid.AutoRotate=false
+
+			local lookDirection=
+				Vector3.new(
+					math.sin(currentYaw),
+					0,
+					math.cos(currentYaw)
+				)
+
+			if lookDirection.Magnitude>0.01 then
+				local targetRotation=
+					CFrame.lookAt(
+						RootPart.Position,
+						RootPart.Position+lookDirection
+					)
+
+				local rotationAlpha=
+					math.clamp(dt*12,0,1)
+
+				RootPart.CFrame=
+					RootPart.CFrame:Lerp(
+						targetRotation,
+						rotationAlpha
+					)
+			end
+
+			local phase=currentNode.Phase
+
+			if currentNode.Jump then
+				Humanoid.Jump=true
+				Humanoid:ChangeState(
+					Enum.HumanoidStateType.Jumping
+				)
+			elseif phase=="Jump"
+			and currentNode.VerticalVelocity>1 then
+				Humanoid.Jump=true
+			end
+
+			lastTarget=targetPosition
+
+			if alpha>=0.999 then
+				currentIndex+=1
+				currentSegmentTime=0
+			end
 		end
-
-		if currentPhase=="Jump" then
-			Humanoid.Jump=false
-		elseif currentPhase=="Fall" then
-			Humanoid.Jump=false
-		end
-
-		local rotationAlpha=1-math.exp(
-			-CFG.RotationSmooth*dt
-		)
-
-		local currentCF=RootPart.CFrame
-
-		local targetCF=
-			CFrame.new(routePosition)*
-			CFrame.Angles(0,routeYaw,0)
-
-		RootPart.CFrame=currentCF:Lerp(
-			targetCF,
-			rotationAlpha
-		)
-
-		if alpha>=0.999 then
-			index+=1
-			playDistance=0
-		end
-	end)
-
-	table.insert(currentConnections,connection)
+	)
 end
 
 local function toggleAutoWalk()
@@ -942,11 +981,9 @@ createBtn(
 
 			state.timeline={}
 			state.airNodes={}
-			state.lastValidNode=nil
 			state.airStartTime=nil
-			state.airStartPosition=nil
-			state.lastJumpState=false
 			state.lastGrounded=true
+			state.lastValidIndex=1
 			state.startTime=tick()
 
 			clearVisuals()
@@ -956,6 +993,7 @@ createBtn(
 			normalizeTimeline(state.timeline)
 
 			state.airNodes={}
+			state.airStartTime=nil
 
 			updateStatus("IDLE")
 		end
@@ -1051,11 +1089,15 @@ createBtn(
 		local fileData=
 			state.savedFiles[state.selectedFile]
 
-		if fileData and fileData.timeline then
+		if fileData
+		and fileData.timeline then
+
 			stopPlayback(true)
 
 			state.timeline=
-				normalizeTimeline(fileData.timeline)
+				normalizeTimeline(
+					fileData.timeline
+				)
 
 			rebuildVisuals()
 
@@ -1074,7 +1116,8 @@ createBtn(
 
 		state.timeline={}
 		state.airNodes={}
-		state.lastValidNode=nil
+		state.airStartTime=nil
+		state.lastValidIndex=1
 
 		clearVisuals()
 
@@ -1086,7 +1129,8 @@ createBtn(
 	"SHOW / HIDE LINE",
 	14,
 	function()
-		state.lineVisible=not state.lineVisible
+		state.lineVisible=
+			not state.lineVisible
 
 		local folder=
 			workspace:FindFirstChild(
@@ -1097,7 +1141,9 @@ createBtn(
 			for _,part in ipairs(folder:GetChildren()) do
 				if part:IsA("Part") then
 					part.Transparency=
-						state.lineVisible and 0 or 1
+						state.lineVisible
+						and 0
+						or 1
 				end
 			end
 		end
