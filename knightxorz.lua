@@ -1,4 +1,4 @@
--- [[ ALDO KNIGHTXORZ V4.41 KINEMATIC FIX ]]
+-- [[ ALDO KNIGHTXORZ V4.43 ANIMATION SMOOTH FIX ]]
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -8,7 +8,6 @@ local HttpService = game:GetService("HttpService")
 
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
-
 
 ----------------------------------------------------------------
 -- CLEAN OLD VERSION
@@ -21,27 +20,33 @@ pcall(function()
 end)
 
 pcall(function()
-	_G.AldoKnightXorzV441_Cleanup()
+	if _G.AldoKnightXorzV441_Cleanup then
+		_G.AldoKnightXorzV441_Cleanup()
+	end
 end)
 
 pcall(function()
-	RunService:UnbindFromRenderStep(
-		"AldoKnightXorzV440_Record"
-	)
-
-	RunService:UnbindFromRenderStep(
-		"AldoKnightXorzV440_Playback"
-	)
-
-	RunService:UnbindFromRenderStep(
-		"AldoKnightXorzV441_Record"
-	)
-
-	RunService:UnbindFromRenderStep(
-		"AldoKnightXorzV441_Playback"
-	)
+	if _G.AldoKnightXorzV442_Cleanup then
+		_G.AldoKnightXorzV442_Cleanup()
+	end
 end)
 
+pcall(function()
+	if _G.AldoKnightXorzV443_Cleanup then
+		_G.AldoKnightXorzV443_Cleanup()
+	end
+end)
+
+pcall(function()
+	RunService:UnbindFromRenderStep("AldoKnightXorzV440_Record")
+	RunService:UnbindFromRenderStep("AldoKnightXorzV440_Playback")
+	RunService:UnbindFromRenderStep("AldoKnightXorzV441_Record")
+	RunService:UnbindFromRenderStep("AldoKnightXorzV441_Playback")
+	RunService:UnbindFromRenderStep("AldoKnightXorzV442_Record")
+	RunService:UnbindFromRenderStep("AldoKnightXorzV442_Playback")
+	RunService:UnbindFromRenderStep("AldoKnightXorzV443_Record")
+	RunService:UnbindFromRenderStep("AldoKnightXorzV443_Playback")
+end)
 
 ----------------------------------------------------------------
 -- CHARACTER
@@ -54,80 +59,26 @@ local Animator
 
 local stopPlayback
 
-
 ----------------------------------------------------------------
--- KINEMATIC RESTORE DATA
+-- SAVED STATE
 ----------------------------------------------------------------
 
 local playbackPartState = {}
 local playbackHumanoidState = nil
-local playbackAnimationState = {}
-
 
 ----------------------------------------------------------------
--- CHARACTER SETUP
-----------------------------------------------------------------
-
-local function setupCharacter(char)
-
-	if stopPlayback then
-		pcall(function()
-			stopPlayback(true)
-		end)
-	end
-
-	Character = char
-
-	Humanoid = char:WaitForChild(
-		"Humanoid",
-		10
-	)
-
-	RootPart = char:WaitForChild(
-		"HumanoidRootPart",
-		10
-	)
-
-	Animator = nil
-
-	if Humanoid then
-		Animator = Humanoid:FindFirstChildOfClass(
-			"Animator"
-		)
-	end
-
-	if Humanoid then
-		Humanoid.AutoRotate = true
-	end
-end
-
-
-if LocalPlayer.Character then
-	setupCharacter(
-		LocalPlayer.Character
-	)
-end
-
-
-----------------------------------------------------------------
--- CONNECTION STORAGE
+-- CONNECTIONS
 ----------------------------------------------------------------
 
 local currentConnections = {}
 
-
 local function addConnection(connection)
-
 	if connection then
-		table.insert(
-			currentConnections,
-			connection
-		)
+		table.insert(currentConnections, connection)
 	end
 
 	return connection
 end
-
 
 ----------------------------------------------------------------
 -- CONFIG
@@ -135,78 +86,48 @@ end
 
 local CFG = {
 
-	--------------------------------------------------------------
-	-- RECORD
-	--------------------------------------------------------------
-
+	-- Record rate
 	NodeInterval = 1 / 30,
 
-	MinDistance = 0.025,
+	-- Minimum movement to create node
+	MinDistance = 0.015,
 
-
-	--------------------------------------------------------------
-	-- PLAYBACK
-	--------------------------------------------------------------
-
+	-- Playback speed
 	PlaybackSpeed = 1,
 
+	-- End tolerance
 	EndTolerance = 0.001,
 
-
-	--------------------------------------------------------------
-	-- INTERPOLATION
-	--------------------------------------------------------------
-
-	-- 1 = smoothstep
-	-- 0 = linear
-
+	-- Smoothing
 	InterpolationPower = 1,
 
+	-- Route line
+	LineColor = Color3.fromRGB(
+		0,
+		255,
+		255
+	),
 
-	--------------------------------------------------------------
-	-- ROUTE
-	--------------------------------------------------------------
+	AccentColor = Color3.fromRGB(
+		170,
+		0,
+		255
+	),
 
-	LineColor =
-		Color3.fromRGB(
-			0,
-			255,
-			255
-		),
-
-	AccentColor =
-		Color3.fromRGB(
-			170,
-			0,
-			255
-		),
-
-	ButtonColor =
-		Color3.fromRGB(
-			30,
-			30,
-			40
-		),
+	ButtonColor = Color3.fromRGB(
+		30,
+		30,
+		40
+	),
 
 	RouteFolderName =
-		"KNIGHTXORZ_ROUTE_V441",
-
-
-	--------------------------------------------------------------
-	-- SAVE
-	--------------------------------------------------------------
+		"KNIGHTXORZ_ROUTE_V443",
 
 	SaveFileName =
-		"ALDO_KNIGHTXORZ_V4_41.json",
-
-
-	--------------------------------------------------------------
-	-- GUI
-	--------------------------------------------------------------
+		"ALDO_KNIGHTXORZ_V4_43.json",
 
 	OpenButtonSize = 58
 }
-
 
 ----------------------------------------------------------------
 -- STATE
@@ -255,19 +176,72 @@ local state = {
 	pauseStarted = 0
 }
 
+----------------------------------------------------------------
+-- CHARACTER SETUP
+----------------------------------------------------------------
 
-----------------------------------------------------------------
--- CHARACTER CONNECTION
-----------------------------------------------------------------
+local function setupCharacter(char)
+
+	if stopPlayback then
+		pcall(function()
+			stopPlayback(true)
+		end)
+	end
+
+	Character = char
+
+	Humanoid = char:WaitForChild(
+		"Humanoid",
+		10
+	)
+
+	RootPart = char:WaitForChild(
+		"HumanoidRootPart",
+		10
+	)
+
+	Animator = nil
+
+	if Humanoid then
+
+		Animator =
+			Humanoid:FindFirstChildOfClass(
+				"Animator"
+			)
+
+		if not Animator then
+
+			pcall(function()
+
+				Animator =
+					Instance.new("Animator")
+
+				Animator.Parent =
+					Humanoid
+
+			end)
+
+		end
+
+		Humanoid.AutoRotate = true
+	end
+end
+
+if LocalPlayer.Character then
+	setupCharacter(
+		LocalPlayer.Character
+	)
+end
 
 addConnection(
 	LocalPlayer.CharacterAdded:Connect(
 		function(char)
+
 			setupCharacter(char)
+
 		end
 	)
 )
-
 
 ----------------------------------------------------------------
 -- UTILITY
@@ -276,7 +250,6 @@ addConnection(
 local function getNow()
 	return os.clock()
 end
-
 
 local function isCharacterAlive()
 
@@ -288,7 +261,6 @@ local function isCharacterAlive()
 		and Humanoid.Parent
 		and Humanoid.Health > 0
 end
-
 
 ----------------------------------------------------------------
 -- TIMELINE NORMALIZATION
@@ -303,20 +275,21 @@ local function normalizeTimeline(timeline)
 	end
 
 	local base =
-		timeline[1].Timestamp or 0
+		timeline[1].Timestamp
+		or 0
 
 	for _, node in ipairs(timeline) do
 
 		node.RelativeTimestamp =
 			math.max(
 				0,
-				(node.Timestamp or base) - base
+				(node.Timestamp or base)
+					- base
 			)
 	end
 
 	return timeline
 end
-
 
 ----------------------------------------------------------------
 -- CLONE TIMELINE
@@ -326,7 +299,9 @@ local function cloneTimeline(source)
 
 	local result = {}
 
-	for _, node in ipairs(source or {}) do
+	for _, node in ipairs(
+		source or {}
+	) do
 
 		table.insert(
 			result,
@@ -339,16 +314,19 @@ local function cloneTimeline(source)
 					node.Position,
 
 				Timestamp =
-					node.Timestamp or 0,
+					node.Timestamp
+					or 0,
 
 				RelativeTimestamp =
-					node.RelativeTimestamp or 0,
+					node.RelativeTimestamp
+					or 0,
 
 				Jump =
 					node.Jump == true,
 
 				WalkSpeed =
-					node.WalkSpeed or 16,
+					node.WalkSpeed
+					or 16,
 
 				HumanoidState =
 					node.HumanoidState,
@@ -356,14 +334,12 @@ local function cloneTimeline(source)
 				MovementDirection =
 					node.MovementDirection
 					or Vector3.zero
-
 			}
 		)
 	end
 
 	return result
 end
-
 
 ----------------------------------------------------------------
 -- ROUTE FOLDER
@@ -390,7 +366,6 @@ local function getRouteFolder()
 
 	return folder
 end
-
 
 ----------------------------------------------------------------
 -- CLEAR VISUALS
@@ -420,7 +395,6 @@ local function clearVisuals()
 		folder:ClearAllChildren()
 	end
 end
-
 
 ----------------------------------------------------------------
 -- CREATE ROUTE SEGMENT
@@ -498,7 +472,6 @@ local function createRouteSegment(
 	)
 end
 
-
 ----------------------------------------------------------------
 -- REBUILD ROUTE
 ----------------------------------------------------------------
@@ -513,10 +486,9 @@ local function rebuildRoute()
 
 	local previousPosition
 
-	for i = 1, #state.timeline do
-
-		local node =
-			state.timeline[i]
+	for _, node in ipairs(
+		state.timeline
+	) do
 
 		if node.Position then
 
@@ -526,6 +498,7 @@ local function rebuildRoute()
 					previousPosition,
 					node.Position
 				)
+
 			end
 
 			previousPosition =
@@ -533,7 +506,6 @@ local function rebuildRoute()
 		end
 	end
 end
-
 
 ----------------------------------------------------------------
 -- SAVE
@@ -601,33 +573,37 @@ local function saveToDisk()
 							T =
 								math.round(
 									(node.Timestamp or 0)
-									* 1000
+										* 1000
 								) / 1000,
 
 							J =
 								node.Jump == true,
 
 							W =
-								node.WalkSpeed or 16,
+								node.WalkSpeed
+								or 16,
 
 							S =
 								tostring(
 									node.HumanoidState
-									or
-									Enum.HumanoidStateType.Running
+									or Enum.HumanoidStateType.Running
 								),
 
 							D =
 								node.MovementDirection
 								and {
+
 									node.MovementDirection.X,
 									node.MovementDirection.Y,
 									node.MovementDirection.Z
+
 								}
 								or {
+
 									0,
 									0,
 									0
+
 								}
 						}
 					)
@@ -637,7 +613,9 @@ local function saveToDisk()
 			exportData[
 				tostring(slot)
 			] = {
-				timeline = encoded
+
+				timeline =
+					encoded
 			}
 		end
 	end
@@ -656,10 +634,11 @@ local function saveToDisk()
 					exportData
 				)
 			)
+
 		end
+
 	end)
 end
-
 
 ----------------------------------------------------------------
 -- LOAD
@@ -680,6 +659,7 @@ local function loadFromDisk()
 					return readfile(
 						CFG.SaveFileName
 					)
+
 				end)
 
 			if success
@@ -692,6 +672,7 @@ local function loadFromDisk()
 						return HttpService:JSONDecode(
 							content
 						)
+
 					end)
 
 				if successDecode then
@@ -699,8 +680,8 @@ local function loadFromDisk()
 				end
 			end
 		end
-	end)
 
+	end)
 
 	if not decoded
 		and state.memoryStorage
@@ -710,13 +691,11 @@ local function loadFromDisk()
 			state.memoryStorage
 	end
 
-
 	if type(decoded)
 		~= "table" then
 
 		return
 	end
-
 
 	for slot, data in pairs(
 		decoded
@@ -748,6 +727,7 @@ local function loadFromDisk()
 									node.C
 								)
 							)
+
 					end)
 
 					if cf then
@@ -773,8 +753,8 @@ local function loadFromDisk()
 						)
 				end
 
-
-				if position and cf then
+				if position
+					and cf then
 
 					local direction =
 						Vector3.zero
@@ -791,7 +771,6 @@ local function loadFromDisk()
 								node.D[3]
 							)
 					end
-
 
 					table.insert(
 						timeline,
@@ -824,11 +803,9 @@ local function loadFromDisk()
 				end
 			end
 
-
 			normalizeTimeline(
 				timeline
 			)
-
 
 			state.savedFiles[
 				tonumber(slot)
@@ -842,9 +819,7 @@ local function loadFromDisk()
 	end
 end
 
-
 loadFromDisk()
-
 
 ----------------------------------------------------------------
 -- GUI
@@ -854,7 +829,7 @@ local ScreenGui =
 	Instance.new("ScreenGui")
 
 ScreenGui.Name =
-	"AldoKnightXorzV441Gui"
+	"AldoKnightXorzV443Gui"
 
 ScreenGui.ResetOnSpawn =
 	false
@@ -867,7 +842,6 @@ ScreenGui.ZIndexBehavior =
 
 ScreenGui.Parent =
 	PlayerGui
-
 
 ----------------------------------------------------------------
 -- OPEN BUTTON
@@ -915,7 +889,6 @@ OpenMenu.ZIndex =
 OpenMenu.Parent =
 	ScreenGui
 
-
 local OpenCorner =
 	Instance.new("UICorner")
 
@@ -927,7 +900,6 @@ OpenCorner.CornerRadius =
 
 OpenCorner.Parent =
 	OpenMenu
-
 
 local OpenStroke =
 	Instance.new("UIStroke")
@@ -944,7 +916,6 @@ OpenStroke.Color =
 
 OpenStroke.Parent =
 	OpenMenu
-
 
 local IconImage =
 	Instance.new("ImageLabel")
@@ -979,7 +950,6 @@ IconImage.ZIndex =
 
 IconImage.Parent =
 	OpenMenu
-
 
 ----------------------------------------------------------------
 -- MAIN FRAME
@@ -1027,7 +997,6 @@ MainFrame.ZIndex =
 MainFrame.Parent =
 	ScreenGui
 
-
 local MainCorner =
 	Instance.new("UICorner")
 
@@ -1039,7 +1008,6 @@ MainCorner.CornerRadius =
 
 MainCorner.Parent =
 	MainFrame
-
 
 local MainStroke =
 	Instance.new("UIStroke")
@@ -1053,7 +1021,6 @@ MainStroke.Color =
 MainStroke.Parent =
 	MainFrame
 
-
 ----------------------------------------------------------------
 -- OPEN BUTTON DRAG
 ----------------------------------------------------------------
@@ -1062,7 +1029,6 @@ local openDragging = false
 local openMoved = false
 local openDragStart
 local openStartPos
-
 
 addConnection(
 	OpenMenu.InputBegan:Connect(
@@ -1085,7 +1051,6 @@ addConnection(
 		end
 	)
 )
-
 
 addConnection(
 	UserInputService.InputChanged:Connect(
@@ -1127,7 +1092,6 @@ addConnection(
 	)
 )
 
-
 addConnection(
 	UserInputService.InputEnded:Connect(
 		function(input)
@@ -1142,7 +1106,6 @@ addConnection(
 		end
 	)
 )
-
 
 addConnection(
 	OpenMenu.Activated:Connect(
@@ -1161,7 +1124,6 @@ addConnection(
 	)
 )
 
-
 ----------------------------------------------------------------
 -- TITLE
 ----------------------------------------------------------------
@@ -1178,7 +1140,7 @@ Title.Size =
 	)
 
 Title.Text =
-	"ALDO KNIGHTXORZ V4.41 KINEMATIC FIX"
+	"ALDO KNIGHTXORZ V4.43 ANIMATION SMOOTH"
 
 Title.TextColor3 =
 	Color3.fromRGB(
@@ -1201,7 +1163,6 @@ Title.ZIndex =
 
 Title.Parent =
 	MainFrame
-
 
 ----------------------------------------------------------------
 -- STATUS
@@ -1250,9 +1211,8 @@ StatusLabel.ZIndex =
 StatusLabel.Parent =
 	MainFrame
 
-
 ----------------------------------------------------------------
--- SCROLLING
+-- SCROLL
 ----------------------------------------------------------------
 
 local ScrollingContainer =
@@ -1303,7 +1263,6 @@ ScrollingContainer.ZIndex =
 ScrollingContainer.Parent =
 	MainFrame
 
-
 local UIGrid =
 	Instance.new("UIGridLayout")
 
@@ -1324,7 +1283,6 @@ UIGrid.SortOrder =
 
 UIGrid.Parent =
 	ScrollingContainer
-
 
 ----------------------------------------------------------------
 -- STATUS UPDATE
@@ -1348,7 +1306,6 @@ local function updateStatus(text)
 		.. "-"
 		.. tostring(state.cutEnd)
 end
-
 
 ----------------------------------------------------------------
 -- BUTTON CREATOR
@@ -1407,7 +1364,6 @@ local function createButton(
 	button.Parent =
 		ScrollingContainer
 
-
 	local corner =
 		Instance.new("UICorner")
 
@@ -1419,7 +1375,6 @@ local function createButton(
 
 	corner.Parent =
 		button
-
 
 	local stroke =
 		Instance.new("UIStroke")
@@ -1436,7 +1391,6 @@ local function createButton(
 
 	stroke.Parent =
 		button
-
 
 	addConnection(
 		button.Activated:Connect(
@@ -1457,7 +1411,6 @@ local function createButton(
 					}
 				):Play()
 
-
 				task.defer(
 					function()
 
@@ -1467,11 +1420,10 @@ local function createButton(
 						if not success then
 
 							warn(
-								"[ALDO KNIGHTXORZ V4.41]",
+								"[ALDO KNIGHTXORZ V4.43]",
 								err
 							)
 						end
-
 
 						if button.Parent then
 
@@ -1489,6 +1441,7 @@ local function createButton(
 										CFG.ButtonColor
 								}
 							):Play()
+
 						end
 					end
 				)
@@ -1496,87 +1449,52 @@ local function createButton(
 		)
 	)
 
-
 	return button
 end
 
-
 ----------------------------------------------------------------
--- STOP ALL ANIMATIONS
+-- ANIMATION PROTECTION
+----------------------------------------------------------------
+-- TIDAK ADA AnimationTrack:Stop()
+-- TIDAK ADA AnimationTrack:Play()
+-- TIDAK ADA perubahan Motor6D
+--
+-- Animator dibiarkan bekerja sendiri.
 ----------------------------------------------------------------
 
-local function stopCharacterAnimations()
+local function protectAnimator()
 
-	playbackAnimationState = {}
-
-	if not Animator then
+	if not Humanoid then
 		return
 	end
 
-	for _, track in ipairs(
-		Animator:GetPlayingAnimationTracks()
-	) do
-
-		if track then
-
-			playbackAnimationState[track] = {
-				IsPlaying = true,
-				TimePosition = track.TimePosition,
-				Speed = track.Speed,
-				Weight = track.WeightCurrent
-			}
-
-			pcall(function()
-				track:Stop(0)
-			end)
-		end
-	end
+	-- Jangan disable Animator
+	-- Jangan stop animation
+	-- Jangan ubah Motor6D
 end
 
-
 ----------------------------------------------------------------
--- RESTORE ANIMATIONS
+-- ROOT PHYSICS ONLY
 ----------------------------------------------------------------
 
-local function restoreCharacterAnimations()
+local function zeroRootPhysics()
 
-	if not Animator then
-		playbackAnimationState = {}
+	if not RootPart
+		or not RootPart.Parent then
+
 		return
 	end
 
-	-- Intentionally do not restart old tracks.
-	-- Humanoid/Animate will resume naturally after playback.
+	pcall(function()
 
-	playbackAnimationState = {}
+		RootPart.AssemblyLinearVelocity =
+			Vector3.zero
+
+		RootPart.AssemblyAngularVelocity =
+			Vector3.zero
+
+	end)
 end
-
-
-----------------------------------------------------------------
--- ZERO PHYSICS
-----------------------------------------------------------------
-
-local function zeroCharacterPhysics()
-
-	if not Character then
-		return
-	end
-
-	for _, object in ipairs(
-		Character:GetDescendants()
-	) do
-
-		if object:IsA("BasePart") then
-
-			object.AssemblyLinearVelocity =
-				Vector3.zero
-
-			object.AssemblyAngularVelocity =
-				Vector3.zero
-		end
-	end
-end
-
 
 ----------------------------------------------------------------
 -- ENABLE KINEMATIC
@@ -1592,13 +1510,7 @@ local function enableKinematic()
 		return true
 	end
 
-
 	playbackPartState = {}
-
-
-	--------------------------------------------------------------
-	-- SAVE HUMANOID
-	--------------------------------------------------------------
 
 	playbackHumanoidState = {
 
@@ -1618,89 +1530,57 @@ local function enableKinematic()
 			Humanoid.PlatformStand
 	}
 
-
 	--------------------------------------------------------------
-	-- HUMANOID CANNOT CONTROL TRAJECTORY
+	-- HUMANOID
 	--------------------------------------------------------------
 
 	Humanoid.AutoRotate =
 		false
 
-	Humanoid.WalkSpeed =
-		0
-
-	Humanoid.JumpPower =
-		0
-
-	Humanoid.JumpHeight =
-		0
-
+	-- Jangan paksa PlatformStand.
 	Humanoid.PlatformStand =
+		false
+
+	--------------------------------------------------------------
+	-- ROOT ONLY
+	--------------------------------------------------------------
+
+	playbackPartState[RootPart] = {
+
+		Anchored =
+			RootPart.Anchored,
+
+		CanCollide =
+			RootPart.CanCollide,
+
+		CanTouch =
+			RootPart.CanTouch,
+
+		CanQuery =
+			RootPart.CanQuery
+	}
+
+	RootPart.Anchored =
 		true
 
+	RootPart.CanCollide =
+		false
 
-	--------------------------------------------------------------
-	-- STOP ANIMATION MOTOR OUTPUT
-	--------------------------------------------------------------
+	RootPart.CanTouch =
+		false
 
-	stopCharacterAnimations()
+	RootPart.CanQuery =
+		false
 
+	zeroRootPhysics()
 
-	--------------------------------------------------------------
-	-- ANCHOR EVERYTHING
-	--------------------------------------------------------------
-
-	for _, object in ipairs(
-		Character:GetDescendants()
-	) do
-
-		if object:IsA("BasePart") then
-
-			playbackPartState[object] = {
-
-				Anchored =
-					object.Anchored,
-
-				CanCollide =
-					object.CanCollide,
-
-				CanTouch =
-					object.CanTouch,
-
-				CanQuery =
-					object.CanQuery
-			}
-
-
-			object.Anchored =
-				true
-
-			object.CanCollide =
-				false
-
-			object.CanTouch =
-				false
-
-			object.CanQuery =
-				false
-
-
-			object.AssemblyLinearVelocity =
-				Vector3.zero
-
-			object.AssemblyAngularVelocity =
-				Vector3.zero
-		end
-	end
-
+	protectAnimator()
 
 	state.kinematicActive =
 		true
 
-
 	return true
 end
-
 
 ----------------------------------------------------------------
 -- DISABLE KINEMATIC
@@ -1712,49 +1592,53 @@ local function disableKinematic()
 		return
 	end
 
-
 	--------------------------------------------------------------
-	-- RESTORE PARTS
+	-- ROOT
 	--------------------------------------------------------------
 
-	for object, saved in pairs(
-		playbackPartState
-	) do
+	if RootPart
+		and RootPart.Parent then
 
-		if object
-			and object.Parent
-			and saved then
+		local saved =
+			playbackPartState[
+				RootPart
+			]
 
-			pcall(function()
+		pcall(function()
 
-				object.Anchored =
-					saved.Anchored
+			RootPart.Anchored =
+				saved
+				and saved.Anchored
+				or false
 
-				object.CanCollide =
-					saved.CanCollide
+			RootPart.CanCollide =
+				saved
+				and saved.CanCollide
+				or true
 
-				object.CanTouch =
-					saved.CanTouch
+			RootPart.CanTouch =
+				saved
+				and saved.CanTouch
+				or true
 
-				object.CanQuery =
-					saved.CanQuery
+			RootPart.CanQuery =
+				saved
+				and saved.CanQuery
+				or true
 
-				object.AssemblyLinearVelocity =
-					Vector3.zero
+			RootPart.AssemblyLinearVelocity =
+				Vector3.zero
 
-				object.AssemblyAngularVelocity =
-					Vector3.zero
+			RootPart.AssemblyAngularVelocity =
+				Vector3.zero
 
-			end)
-		end
+		end)
 	end
-
 
 	playbackPartState = {}
 
-
 	--------------------------------------------------------------
-	-- RESTORE HUMANOID
+	-- HUMANOID
 	--------------------------------------------------------------
 
 	if Humanoid
@@ -1777,18 +1661,12 @@ local function disableKinematic()
 			playbackHumanoidState.PlatformStand
 	end
 
-
 	playbackHumanoidState =
 		nil
-
-
-	restoreCharacterAnimations()
-
 
 	state.kinematicActive =
 		false
 end
-
 
 ----------------------------------------------------------------
 -- RECORD START
@@ -1800,11 +1678,9 @@ local function beginRecording()
 		return
 	end
 
-
 	if state.isPlaying then
 		stopPlayback(true)
 	end
-
 
 	state.isRecording =
 		true
@@ -1827,15 +1703,12 @@ local function beginRecording()
 	state.cutEnd =
 		1
 
-
 	clearVisuals()
-
 
 	updateStatus(
 		"RECORDING"
 	)
 end
-
 
 ----------------------------------------------------------------
 -- FINISH RECORD
@@ -1866,14 +1739,13 @@ local function finishRecording()
 	)
 end
 
-
 ----------------------------------------------------------------
 -- RECORD LOOP
 ----------------------------------------------------------------
 
 RunService:BindToRenderStep(
 
-	"AldoKnightXorzV441_Record",
+	"AldoKnightXorzV443_Record",
 
 	Enum.RenderPriority.Character.Value,
 
@@ -1887,10 +1759,8 @@ RunService:BindToRenderStep(
 			return
 		end
 
-
 		local now =
 			getNow()
-
 
 		if now
 			- state.lastRecordTime
@@ -1899,10 +1769,8 @@ RunService:BindToRenderStep(
 			return
 		end
 
-
 		state.lastRecordTime =
 			now
-
 
 		local cf =
 			RootPart.CFrame
@@ -1910,15 +1778,12 @@ RunService:BindToRenderStep(
 		local position =
 			cf.Position
 
-
 		local humanoidState =
 			Humanoid:GetState()
-
 
 		local timestamp =
 			now
 			- state.startTime
-
 
 		local jumping =
 			humanoidState
@@ -1926,19 +1791,15 @@ RunService:BindToRenderStep(
 			or humanoidState
 			== Enum.HumanoidStateType.Freefall
 
-
 		local jumpTrigger =
 			jumping
 			and not state.lastJumpState
 
-
 		state.lastJumpState =
 			jumping
 
-
 		local movement =
 			Humanoid.MoveDirection
-
 
 		if #state.timeline == 0 then
 
@@ -1972,7 +1833,6 @@ RunService:BindToRenderStep(
 				}
 			)
 
-
 			state.cutStart =
 				1
 
@@ -1982,12 +1842,10 @@ RunService:BindToRenderStep(
 			return
 		end
 
-
 		local previous =
 			state.timeline[
 				#state.timeline
 			]
-
 
 		local distance =
 			(
@@ -1995,32 +1853,26 @@ RunService:BindToRenderStep(
 				- previous.Position
 			).Magnitude
 
-
 		local timeDifference =
 			timestamp
 			- previous.Timestamp
-
 
 		local shouldRecord =
 			distance >= CFG.MinDistance
 			and timeDifference >= CFG.NodeInterval
 
-
 		if jumpTrigger then
 			shouldRecord = true
 		end
-
 
 		if not shouldRecord then
 			return
 		end
 
-
 		createRouteSegment(
 			previous.Position,
 			position
 		)
-
 
 		table.insert(
 			state.timeline,
@@ -2052,17 +1904,14 @@ RunService:BindToRenderStep(
 			}
 		)
 
-
 		normalizeTimeline(
 			state.timeline
 		)
-
 
 		state.cutEnd =
 			#state.timeline
 	end
 )
-
 
 ----------------------------------------------------------------
 -- SMOOTH ALPHA
@@ -2077,11 +1926,9 @@ local function smoothAlpha(alpha)
 			1
 		)
 
-
 	if CFG.InterpolationPower == 0 then
 		return alpha
 	end
-
 
 	return alpha
 		* alpha
@@ -2091,9 +1938,8 @@ local function smoothAlpha(alpha)
 		)
 end
 
-
 ----------------------------------------------------------------
--- FIND PLAYBACK CFRAME
+-- PLAYBACK CFRAME
 ----------------------------------------------------------------
 
 local function getPlaybackCFrame(
@@ -2104,25 +1950,20 @@ local function getPlaybackCFrame(
 	local count =
 		#timeline
 
-
 	if count == 0 then
 		return nil
 	end
-
 
 	if count == 1 then
 		return timeline[1].CFrame
 	end
 
-
 	if playbackTime <= 0 then
 		return timeline[1].CFrame
 	end
 
-
 	local last =
 		timeline[count]
-
 
 	if playbackTime >=
 		last.RelativeTimestamp then
@@ -2130,14 +1971,8 @@ local function getPlaybackCFrame(
 		return last.CFrame
 	end
 
-
-	--------------------------------------------------------------
-	-- BINARY SEARCH
-	--------------------------------------------------------------
-
 	local low = 1
 	local high = count
-
 
 	while low <= high do
 
@@ -2146,10 +1981,9 @@ local function getPlaybackCFrame(
 				(low + high) / 2
 			)
 
-
 		local value =
-			timeline[middle].RelativeTimestamp
-
+			timeline[middle]
+				.RelativeTimestamp
 
 		if value <= playbackTime then
 
@@ -2163,7 +1997,6 @@ local function getPlaybackCFrame(
 		end
 	end
 
-
 	local indexA =
 		math.clamp(
 			high,
@@ -2171,10 +2004,8 @@ local function getPlaybackCFrame(
 			count - 1
 		)
 
-
 	local indexB =
 		indexA + 1
-
 
 	local nodeA =
 		timeline[indexA]
@@ -2182,16 +2013,13 @@ local function getPlaybackCFrame(
 	local nodeB =
 		timeline[indexB]
 
-
 	local duration =
 		nodeB.RelativeTimestamp
 		- nodeA.RelativeTimestamp
 
-
 	if duration <= 0 then
 		return nodeB.CFrame
 	end
-
 
 	local alpha =
 		(
@@ -2200,7 +2028,6 @@ local function getPlaybackCFrame(
 		)
 		/ duration
 
-
 	alpha =
 		math.clamp(
 			alpha,
@@ -2208,21 +2035,14 @@ local function getPlaybackCFrame(
 			1
 		)
 
-
 	alpha =
 		smoothAlpha(alpha)
-
-
-	--------------------------------------------------------------
-	-- ONLY CFRAME INTERPOLATION
-	--------------------------------------------------------------
 
 	return nodeA.CFrame:Lerp(
 		nodeB.CFrame,
 		alpha
 	)
 end
-
 
 ----------------------------------------------------------------
 -- STOP PLAYBACK
@@ -2240,23 +2060,21 @@ stopPlayback =
 		state.playbackID +=
 			1
 
-
 		pcall(function()
 
 			RunService:UnbindFromRenderStep(
-				"AldoKnightXorzV441_Playback"
+				"AldoKnightXorzV443_Playback"
 			)
-		end)
 
+		end)
 
 		disableKinematic()
 
-
 		if manualStop then
+
 			state.isAutoWalk =
 				false
 		end
-
 
 		state.playbackTime =
 			0
@@ -2264,18 +2082,14 @@ stopPlayback =
 		state.pauseStarted =
 			0
 
-
 		if isCharacterAlive() then
-
-			zeroCharacterPhysics()
+			zeroRootPhysics()
 		end
-
 
 		updateStatus(
 			"IDLE"
 		)
 	end
-
 
 ----------------------------------------------------------------
 -- PLAYBACK
@@ -2287,16 +2101,13 @@ local function executePlayback()
 		return
 	end
 
-
 	if state.isPlaying then
 		return
 	end
 
-
 	if not isCharacterAlive() then
 		return
 	end
-
 
 	if #state.timeline < 2 then
 
@@ -2307,11 +2118,9 @@ local function executePlayback()
 		return
 	end
 
-
 	normalizeTimeline(
 		state.timeline
 	)
-
 
 	if not enableKinematic() then
 
@@ -2322,7 +2131,6 @@ local function executePlayback()
 		return
 	end
 
-
 	state.isPlaying =
 		true
 
@@ -2332,14 +2140,11 @@ local function executePlayback()
 	state.playbackID +=
 		1
 
-
 	local playbackID =
 		state.playbackID
 
-
 	local timeline =
 		state.timeline
-
 
 	state.playbackTime =
 		0
@@ -2347,28 +2152,22 @@ local function executePlayback()
 	state.pauseStarted =
 		0
 
-
 	local totalDuration =
 		timeline[
 			#timeline
 		].RelativeTimestamp
 
-
 	local startCFrame =
 		timeline[1].CFrame
 
-
 	--------------------------------------------------------------
-	-- EXACT START
+	-- INITIAL ROOT POSITION
 	--------------------------------------------------------------
 
-	Character:PivotTo(
+	RootPart.CFrame =
 		startCFrame
-	)
 
-
-	zeroCharacterPhysics()
-
+	zeroRootPhysics()
 
 	updateStatus(
 		state.isAutoWalk
@@ -2376,34 +2175,24 @@ local function executePlayback()
 		or "PLAYING"
 	)
 
-
-	--------------------------------------------------------------
-	-- CLOCK
-	--------------------------------------------------------------
-
 	local lastClock =
 		getNow()
-
-
-	--------------------------------------------------------------
-	-- PLAYBACK RENDER
-	--
-	-- Last render priority:
-	-- trajectory becomes the final transform
-	-- written on the frame.
-	--------------------------------------------------------------
 
 	pcall(function()
 
 		RunService:UnbindFromRenderStep(
-			"AldoKnightXorzV441_Playback"
+			"AldoKnightXorzV443_Playback"
 		)
+
 	end)
 
+	--------------------------------------------------------------
+	-- PLAYBACK LOOP
+	--------------------------------------------------------------
 
 	RunService:BindToRenderStep(
 
-		"AldoKnightXorzV441_Playback",
+		"AldoKnightXorzV443_Playback",
 
 		Enum.RenderPriority.Last.Value,
 
@@ -2416,14 +2205,12 @@ local function executePlayback()
 				return
 			end
 
-
 			if not isCharacterAlive() then
 
 				stopPlayback(false)
 
 				return
 			end
-
 
 			------------------------------------------------------
 			-- PAUSE
@@ -2434,41 +2221,35 @@ local function executePlayback()
 				lastClock =
 					getNow()
 
-				zeroCharacterPhysics()
+				zeroRootPhysics()
 
 				return
 			end
 
-
 			------------------------------------------------------
-			-- TIME
+			-- DELTA TIME
 			------------------------------------------------------
 
 			local now =
 				getNow()
 
-
 			local dt =
 				now
 				- lastClock
 
-
 			lastClock =
 				now
-
 
 			dt =
 				math.clamp(
 					dt,
 					0,
-					0.1
+					0.05
 				)
-
 
 			state.playbackTime +=
 				dt
 				* CFG.PlaybackSpeed
-
 
 			------------------------------------------------------
 			-- END
@@ -2478,34 +2259,25 @@ local function executePlayback()
 				>= totalDuration
 				- CFG.EndTolerance then
 
-
-				Character:PivotTo(
+				RootPart.CFrame =
 					timeline[
 						#timeline
 					].CFrame
-				)
 
-
-				zeroCharacterPhysics()
-
+				zeroRootPhysics()
 
 				if state.isAutoWalk then
 
 					state.playbackTime =
 						0
 
-
-					Character:PivotTo(
+					RootPart.CFrame =
 						startCFrame
-					)
 
-
-					zeroCharacterPhysics()
-
+					zeroRootPhysics()
 
 					lastClock =
 						getNow()
-
 
 					updateStatus(
 						"AUTO WALK"
@@ -2521,7 +2293,6 @@ local function executePlayback()
 				end
 			end
 
-
 			------------------------------------------------------
 			-- TARGET
 			------------------------------------------------------
@@ -2532,31 +2303,34 @@ local function executePlayback()
 					state.playbackTime
 				)
 
-
 			if not targetCFrame then
 				return
 			end
 
-
 			------------------------------------------------------
-			-- ONE AND ONLY POSITION CONTROLLER
+			-- IMPORTANT:
+			-- HANYA ROOT YANG DIPINDAHKAN.
+			--
+			-- BUKAN:
+			-- Character:PivotTo()
+			--
+			-- Dengan begini Animator/Motor6D
+			-- tetap bebas menggerakkan tangan,
+			-- kaki, kepala, torso, dll.
 			------------------------------------------------------
 
-			Character:PivotTo(
+			RootPart.CFrame =
 				targetCFrame
-			)
-
 
 			------------------------------------------------------
-			-- ZERO PHYSICS AFTER PIVOT
+			-- ROOT SAJA
 			------------------------------------------------------
 
-			zeroCharacterPhysics()
+			zeroRootPhysics()
 
 		end
 	)
 end
-
 
 ----------------------------------------------------------------
 -- AUTO WALK
@@ -2567,7 +2341,6 @@ local function toggleAutoWalk()
 	if state.isRecording then
 		return
 	end
-
 
 	if state.isAutoWalk then
 
@@ -2583,7 +2356,6 @@ local function toggleAutoWalk()
 		return
 	end
 
-
 	if #state.timeline < 2 then
 
 		updateStatus(
@@ -2593,21 +2365,17 @@ local function toggleAutoWalk()
 		return
 	end
 
-
 	state.isAutoWalk =
 		true
-
 
 	updateStatus(
 		"AUTO WALK ON"
 	)
 
-
 	if not state.isPlaying then
 		executePlayback()
 	end
 end
-
 
 ----------------------------------------------------------------
 -- RECORD BUTTON
@@ -2619,14 +2387,16 @@ createButton(
 	function()
 
 		if state.isRecording then
-			finishRecording()
-		else
-			beginRecording()
-		end
 
+			finishRecording()
+
+		else
+
+			beginRecording()
+
+		end
 	end
 )
-
 
 ----------------------------------------------------------------
 -- PLAY
@@ -2647,10 +2417,8 @@ createButton(
 		if not state.isPlaying then
 			executePlayback()
 		end
-
 	end
 )
-
 
 ----------------------------------------------------------------
 -- PAUSE / RESUME
@@ -2665,10 +2433,8 @@ createButton(
 			return
 		end
 
-
 		state.isPaused =
 			not state.isPaused
-
 
 		if state.isPaused then
 
@@ -2684,10 +2450,8 @@ createButton(
 				or "PLAYING"
 			)
 		end
-
 	end
 )
-
 
 ----------------------------------------------------------------
 -- AUTO WALK
@@ -2697,10 +2461,11 @@ createButton(
 	"AUTO WALK",
 	4,
 	function()
+
 		toggleAutoWalk()
+
 	end
 )
-
 
 ----------------------------------------------------------------
 -- STOP
@@ -2710,10 +2475,11 @@ createButton(
 	"STOP",
 	5,
 	function()
+
 		stopPlayback(true)
+
 	end
 )
-
 
 ----------------------------------------------------------------
 -- CUT START
@@ -2728,7 +2494,6 @@ createButton(
 			return
 		end
 
-
 		state.cutStart =
 			math.clamp(
 
@@ -2742,13 +2507,11 @@ createButton(
 				)
 			)
 
-
 		updateStatus(
 			"CUT CONFIG"
 		)
 	end
 )
-
 
 ----------------------------------------------------------------
 -- CUT END
@@ -2763,7 +2526,6 @@ createButton(
 			return
 		end
 
-
 		state.cutEnd =
 			math.clamp(
 
@@ -2777,13 +2539,11 @@ createButton(
 				#state.timeline
 			)
 
-
 		updateStatus(
 			"CUT CONFIG"
 		)
 	end
 )
-
 
 ----------------------------------------------------------------
 -- APPLY CUT
@@ -2798,16 +2558,13 @@ createButton(
 			return
 		end
 
-
 		if state.cutStart
 			>= state.cutEnd then
 
 			return
 		end
 
-
 		local newTimeline = {}
-
 
 		for i =
 			state.cutStart,
@@ -2815,7 +2572,6 @@ createButton(
 
 			local node =
 				state.timeline[i]
-
 
 			table.insert(
 				newTimeline,
@@ -2848,10 +2604,8 @@ createButton(
 			)
 		end
 
-
 		local firstTime =
 			newTimeline[1].Timestamp
-
 
 		for _, node in ipairs(
 			newTimeline
@@ -2861,14 +2615,12 @@ createButton(
 				math.max(
 					0,
 					node.Timestamp
-					- firstTime
+						- firstTime
 				)
 		end
 
-
 		state.timeline =
 			newTimeline
-
 
 		state.cutStart =
 			1
@@ -2876,17 +2628,13 @@ createButton(
 		state.cutEnd =
 			#state.timeline
 
-
 		rebuildRoute()
-
 
 		updateStatus(
 			"CUT APPLIED"
 		)
-
 	end
 )
-
 
 ----------------------------------------------------------------
 -- PUT TOGETHER
@@ -2902,7 +2650,6 @@ createButton(
 				state.selectedFile
 			]
 
-
 		if not base
 			or not base.timeline
 			or #base.timeline == 0 then
@@ -2914,7 +2661,6 @@ createButton(
 			return
 		end
 
-
 		if #state.timeline == 0 then
 
 			updateStatus(
@@ -2924,32 +2670,26 @@ createButton(
 			return
 		end
 
-
 		local merged =
 			cloneTimeline(
 				base.timeline
 			)
 
-
 		normalizeTimeline(
 			merged
 		)
-
 
 		local lastNode =
 			merged[
 				#merged
 			]
 
-
 		local offset =
 			lastNode.RelativeTimestamp
 			+ CFG.NodeInterval
 
-
 		local baseTimestamp =
 			merged[1].Timestamp
-
 
 		for _, node in ipairs(
 			state.timeline
@@ -2960,23 +2700,19 @@ createButton(
 					{node}
 				)[1]
 
-
 			copy.RelativeTimestamp =
 				offset
 				+ node.RelativeTimestamp
 
-
 			copy.Timestamp =
 				baseTimestamp
 				+ copy.RelativeTimestamp
-
 
 			table.insert(
 				merged,
 				copy
 			)
 		end
-
 
 		for i = 2, #merged do
 
@@ -2989,15 +2725,12 @@ createButton(
 			end
 		end
 
-
 		normalizeTimeline(
 			merged
 		)
 
-
 		state.timeline =
 			merged
-
 
 		state.cutStart =
 			1
@@ -3005,17 +2738,13 @@ createButton(
 		state.cutEnd =
 			#state.timeline
 
-
 		rebuildRoute()
-
 
 		updateStatus(
 			"MERGED ROUTE"
 		)
-
 	end
 )
-
 
 ----------------------------------------------------------------
 -- FILE 1-5
@@ -3025,7 +2754,6 @@ for i = 1, 5 do
 
 	local fileNumber =
 		i
-
 
 	createButton(
 
@@ -3040,19 +2768,15 @@ for i = 1, 5 do
 				return
 			end
 
-
 			if state.isPlaying then
 				stopPlayback(true)
 			end
 
-
 			state.selectedFile =
 				fileNumber
 
-
 			state.cutStart =
 				1
-
 
 			state.cutEnd =
 				math.max(
@@ -3060,20 +2784,17 @@ for i = 1, 5 do
 					#state.timeline
 				)
 
-
 			updateStatus(
 				"FILE "
 				.. tostring(fileNumber)
 				.. " SELECTED"
 			)
-
 		end
 	)
 end
 
-
 ----------------------------------------------------------------
--- SAVE FILE
+-- SAVE
 ----------------------------------------------------------------
 
 createButton(
@@ -3090,11 +2811,9 @@ createButton(
 			return
 		end
 
-
 		normalizeTimeline(
 			state.timeline
 		)
-
 
 		state.savedFiles[
 			state.selectedFile
@@ -3106,9 +2825,7 @@ createButton(
 				)
 		}
 
-
 		saveToDisk()
-
 
 		updateStatus(
 			"SAVED FILE "
@@ -3116,13 +2833,11 @@ createButton(
 				state.selectedFile
 			)
 		)
-
 	end
 )
 
-
 ----------------------------------------------------------------
--- LOAD FILE
+-- LOAD
 ----------------------------------------------------------------
 
 createButton(
@@ -3134,12 +2849,10 @@ createButton(
 			return
 		end
 
-
 		local data =
 			state.savedFiles[
 				state.selectedFile
 			]
-
 
 		if not data
 			or not data.timeline
@@ -3152,20 +2865,16 @@ createButton(
 			return
 		end
 
-
 		stopPlayback(true)
-
 
 		state.timeline =
 			cloneTimeline(
 				data.timeline
 			)
 
-
 		normalizeTimeline(
 			state.timeline
 		)
-
 
 		state.cutStart =
 			1
@@ -3173,9 +2882,7 @@ createButton(
 		state.cutEnd =
 			#state.timeline
 
-
 		rebuildRoute()
-
 
 		updateStatus(
 			"LOADED FILE "
@@ -3183,10 +2890,8 @@ createButton(
 				state.selectedFile
 			)
 		)
-
 	end
 )
-
 
 ----------------------------------------------------------------
 -- CLEAR
@@ -3199,14 +2904,11 @@ createButton(
 
 		stopPlayback(true)
 
-
 		state.isRecording =
 			false
 
-
 		state.timeline =
 			{}
-
 
 		state.cutStart =
 			1
@@ -3217,17 +2919,13 @@ createButton(
 		state.lastJumpState =
 			false
 
-
 		clearVisuals()
-
 
 		updateStatus(
 			"CLEARED"
 		)
-
 	end
 )
-
 
 ----------------------------------------------------------------
 -- LINE VISIBLE
@@ -3241,12 +2939,10 @@ createButton(
 		state.lineVisible =
 			not state.lineVisible
 
-
 		local folder =
 			workspace:FindFirstChild(
 				CFG.RouteFolderName
 			)
-
 
 		if folder then
 
@@ -3265,22 +2961,19 @@ createButton(
 			end
 		end
 
-
 		updateStatus(
 			state.lineVisible
 			and "LINE ON"
 			or "LINE OFF"
 		)
-
 	end
 )
-
 
 ----------------------------------------------------------------
 -- GLOBAL CLEANUP
 ----------------------------------------------------------------
 
-_G.AldoKnightXorzV441_Cleanup =
+_G.AldoKnightXorzV443_Cleanup =
 	function()
 
 		state.isRecording =
@@ -3298,27 +2991,23 @@ _G.AldoKnightXorzV441_Cleanup =
 		state.playbackID +=
 			1
 
-
 		pcall(function()
 
 			RunService:UnbindFromRenderStep(
-				"AldoKnightXorzV441_Record"
+				"AldoKnightXorzV443_Record"
 			)
 
 		end)
 
-
 		pcall(function()
 
 			RunService:UnbindFromRenderStep(
-				"AldoKnightXorzV441_Playback"
+				"AldoKnightXorzV443_Playback"
 			)
 
 		end)
-
 
 		disableKinematic()
-
 
 		for _, connection in ipairs(
 			currentConnections
@@ -3330,16 +3019,14 @@ _G.AldoKnightXorzV441_Cleanup =
 				pcall(function()
 					connection:Disconnect()
 				end)
+
 			end
 		end
-
 
 		currentConnections =
 			{}
 
-
 		clearVisuals()
-
 
 		pcall(function()
 
@@ -3348,12 +3035,10 @@ _G.AldoKnightXorzV441_Cleanup =
 			end
 
 		end)
-
 	end
 
-
 ----------------------------------------------------------------
--- FINAL STATUS
+-- FINAL
 ----------------------------------------------------------------
 
 updateStatus(
