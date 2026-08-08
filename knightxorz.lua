@@ -31,9 +31,7 @@ end
 
 local function destroyGui(name)
 	local obj=playerGui:FindFirstChild(name)
-	if obj then
-		obj:Destroy()
-	end
+	if obj then obj:Destroy() end
 end
 
 _G.DeltaMobileControlsCleanup=function()
@@ -82,9 +80,7 @@ local function isPressInput(input)
 end
 
 local function updateWLock()
-	if not btnWLock or not btnWLock.Parent then
-		return
-	end
+	if not btnWLock or not btnWLock.Parent then return end
 
 	btnWLock.BackgroundColor3=moveState.WLock
 		and Color3.fromRGB(0,150,0)
@@ -106,15 +102,10 @@ local function clearMovement()
 end
 
 local function releaseInput(input)
-	if not input then
-		return
-	end
+	if not input then return end
 
 	local action=inputActions[input]
-
-	if not action then
-		return
-	end
+	if not action then return end
 
 	inputActions[input]=nil
 
@@ -181,69 +172,15 @@ local function createButton(name,position,size,text,zIndex)
 	return button
 end
 
-local btnUp=createButton(
-	"Up",
-	UDim2.new(.35,0,0,0),
-	UDim2.new(.3,0,.3,0),
-	"▲",
-	10
-)
+local btnUp=createButton("Up",UDim2.new(.35,0,0,0),UDim2.new(.3,0,.3,0),"▲",10)
+local btnDown=createButton("Down",UDim2.new(.35,0,.7,0),UDim2.new(.3,0,.3,0),"▼",10)
+local btnLeft=createButton("Left",UDim2.new(0,0,.35,0),UDim2.new(.3,0,.3,0),"◀",10)
+local btnRight=createButton("Right",UDim2.new(.7,0,.35,0),UDim2.new(.3,0,.3,0),"▶",10)
 
-local btnDown=createButton(
-	"Down",
-	UDim2.new(.35,0,.7,0),
-	UDim2.new(.3,0,.3,0),
-	"▼",
-	10
-)
-
-local btnLeft=createButton(
-	"Left",
-	UDim2.new(0,0,.35,0),
-	UDim2.new(.3,0,.3,0),
-	"◀",
-	10
-)
-
-local btnRight=createButton(
-	"Right",
-	UDim2.new(.7,0,.35,0),
-	UDim2.new(.3,0,.3,0),
-	"▶",
-	10
-)
-
-local btnUL=createButton(
-	"UpLeft",
-	UDim2.new(.08,0,.08,0),
-	UDim2.new(.22,0,.22,0),
-	"↖",
-	11
-)
-
-local btnUR=createButton(
-	"UpRight",
-	UDim2.new(.70,0,.08,0),
-	UDim2.new(.22,0,.22,0),
-	"↗",
-	11
-)
-
-local btnDL=createButton(
-	"DownLeft",
-	UDim2.new(.08,0,.70,0),
-	UDim2.new(.22,0,.22,0),
-	"↙",
-	11
-)
-
-local btnDR=createButton(
-	"DownRight",
-	UDim2.new(.70,0,.70,0),
-	UDim2.new(.22,0,.22,0),
-	"↘",
-	11
-)
+local btnUL=createButton("UpLeft",UDim2.new(.08,0,.08,0),UDim2.new(.22,0,.22,0),"↖",11)
+local btnUR=createButton("UpRight",UDim2.new(.70,0,.08,0),UDim2.new(.22,0,.22,0),"↗",11)
+local btnDL=createButton("DownLeft",UDim2.new(.08,0,.70,0),UDim2.new(.22,0,.22,0),"↙",11)
+local btnDR=createButton("DownRight",UDim2.new(.70,0,.70,0),UDim2.new(.22,0,.22,0),"↘",11)
 
 btnWLock=Instance.new("TextButton")
 btnWLock.Name="WLock"
@@ -280,13 +217,8 @@ for button,name in pairs(movementButtons) do
 	buttonInputs[name]={}
 
 	connect(button.InputBegan,function(input)
-		if destroyed or not isPressInput(input) then
-			return
-		end
-
-		if inputActions[input] then
-			return
-		end
+		if destroyed or not isPressInput(input) then return end
+		if inputActions[input] then return end
 
 		inputActions[input]=name
 		buttonInputs[name][input]=true
@@ -311,9 +243,7 @@ connect(UserInputService.WindowFocusReleased,function()
 end)
 
 connect(btnWLock.Activated,function()
-	if destroyed then
-		return
-	end
+	if destroyed then return end
 
 	moveState.WLock=not moveState.WLock
 	updateWLock()
@@ -321,10 +251,7 @@ end)
 
 local function getMoveVector()
 	local camera=workspace.CurrentCamera
-
-	if not camera then
-		return Vector3.zero
-	end
+	if not camera then return Vector3.zero end
 
 	local look=camera.CFrame.LookVector
 	local right=camera.CFrame.RightVector
@@ -332,8 +259,7 @@ local function getMoveVector()
 	local forward=Vector3.new(look.X,0,look.Z)
 	local side=Vector3.new(right.X,0,right.Z)
 
-	if forward.Magnitude<0.001
-		or side.Magnitude<0.001 then
+	if forward.Magnitude<.001 or side.Magnitude<.001 then
 		return Vector3.zero
 	end
 
@@ -343,41 +269,15 @@ local function getMoveVector()
 	local x=0
 	local z=0
 
-	if moveState.Forward then
-		z+=1
-	end
+	if moveState.Forward then z+=1 end
+	if moveState.Backward then z-=1 end
+	if moveState.Left then x-=1 end
+	if moveState.Right then x+=1 end
 
-	if moveState.Backward then
-		z-=1
-	end
-
-	if moveState.Left then
-		x-=1
-	end
-
-	if moveState.Right then
-		x+=1
-	end
-
-	if moveState.UpLeft then
-		x-=1
-		z+=1
-	end
-
-	if moveState.UpRight then
-		x+=1
-		z+=1
-	end
-
-	if moveState.DownLeft then
-		x-=1
-		z-=1
-	end
-
-	if moveState.DownRight then
-		x+=1
-		z-=1
-	end
+	if moveState.UpLeft then x-=1; z+=1 end
+	if moveState.UpRight then x+=1; z+=1 end
+	if moveState.DownLeft then x-=1; z-=1 end
+	if moveState.DownRight then x+=1; z-=1 end
 
 	if x==0 and z==0 then
 		if moveState.WLock then
@@ -389,7 +289,7 @@ local function getMoveVector()
 
 	local movement=side*x+forward*z
 
-	if movement.Magnitude<0.001 then
+	if movement.Magnitude<.001 then
 		return Vector3.zero
 	end
 
@@ -397,33 +297,23 @@ local function getMoveVector()
 end
 
 connect(RunService.RenderStepped,function()
-	if destroyed then
-		return
-	end
-
-	if not character or not character.Parent then
-		return
-	end
-
-	if not humanoid or humanoid.Parent~=character then
-		return
-	end
-
-	if humanoid.Health<=0 then
-		return
-	end
+	if destroyed then return end
+	if not character or not character.Parent then return end
+	if not humanoid or humanoid.Parent~=character then return end
+	if humanoid.Health<=0 then return end
 
 	humanoid:Move(getMoveVector(),false)
 end)
 
 --==================================================
--- JUMP POSITION / SIZE SETTINGS
+-- ERGO / ONE MENU
 --==================================================
 
 local x=.70
 local y=.70
 local size=.30
 local step=.018
+local jumpButton=nil
 
 local gui=Instance.new("ScreenGui")
 gui.Name="DeltaMobileErgo"
@@ -457,6 +347,7 @@ local function makeButton(parent,name,position,sizeValue,text,bg,zIndex)
 	return button
 end
 
+-- ONE OPEN MENU
 local menu=makeButton(
 	gui,
 	"OpenMenu",
@@ -471,10 +362,14 @@ local menuCorner=Instance.new("UICorner")
 menuCorner.CornerRadius=UDim.new(1,0)
 menuCorner.Parent=menu
 
+--==================================================
+-- SETTINGS FRAME
+--==================================================
+
 local settings=Instance.new("Frame")
 settings.Name="SettingsFrame"
-settings.Size=UDim2.fromOffset(280,340)
-settings.Position=UDim2.new(.5,-140,.5,-170)
+settings.Size=UDim2.fromOffset(300,500)
+settings.Position=UDim2.new(.5,-150,.5,-250)
 settings.BackgroundColor3=Color3.fromRGB(25,25,25)
 settings.BorderSizePixel=0
 settings.Visible=false
@@ -485,71 +380,168 @@ local settingsCorner=Instance.new("UICorner")
 settingsCorner.CornerRadius=UDim.new(0,14)
 settingsCorner.Parent=settings
 
-local title=Instance.new("TextLabel")
-title.Size=UDim2.new(1,0,0,40)
-title.BackgroundTransparency=1
-title.Text="JUMP SETTINGS"
-title.TextColor3=Color3.new(1,1,1)
-title.Font=Enum.Font.GothamBold
-title.TextSize=20
-title.ZIndex=41
-title.Parent=settings
+local settingsStroke=Instance.new("UIStroke")
+settingsStroke.Color=Color3.fromRGB(70,70,70)
+settingsStroke.Thickness=1
+settingsStroke.Parent=settings
 
-local moveUp=makeButton(
-	settings,
-	"MoveUp",
-	UDim2.new(.5,-30,0,48),
-	UDim2.fromOffset(60,42),
-	"↑"
-)
+--==================================================
+-- CAMERA SENSI SECTION
+--==================================================
 
-local moveLeft=makeButton(
-	settings,
-	"MoveLeft",
-	UDim2.new(.12,0,0,95),
-	UDim2.fromOffset(60,42),
-	"←"
-)
+local cameraSection=Instance.new("Frame")
+cameraSection.Name="CameraSensiSetting"
+cameraSection.Position=UDim2.fromOffset(10,10)
+cameraSection.Size=UDim2.new(1,-20,0,190)
+cameraSection.BackgroundColor3=Color3.fromRGB(32,32,38)
+cameraSection.BorderSizePixel=0
+cameraSection.ZIndex=41
+cameraSection.Parent=settings
 
-local moveRight=makeButton(
-	settings,
-	"MoveRight",
-	UDim2.new(.88,-60,0,95),
-	UDim2.fromOffset(60,42),
-	"→"
-)
+local cameraCorner=Instance.new("UICorner")
+cameraCorner.CornerRadius=UDim.new(0,12)
+cameraCorner.Parent=cameraSection
 
-local moveDown=makeButton(
-	settings,
-	"MoveDown",
-	UDim2.new(.5,-30,0,142),
-	UDim2.fromOffset(60,42),
-	"↓"
-)
+local cameraTitle=Instance.new("TextLabel")
+cameraTitle.Size=UDim2.new(1,0,0,40)
+cameraTitle.Text="CAMERA SENSI SETTING"
+cameraTitle.TextColor3=Color3.new(1,1,1)
+cameraTitle.Font=Enum.Font.GothamBold
+cameraTitle.TextSize=17
+cameraTitle.BackgroundTransparency=1
+cameraTitle.ZIndex=42
+cameraTitle.Parent=cameraSection
 
-local sizePlus=makeButton(
-	settings,
-	"SizePlus",
-	UDim2.new(.08,0,0,200),
-	UDim2.fromOffset(90,42),
-	"SIZE +"
-)
+local CFG={
+	DefaultSens=1,
+	MinSens=.1,
+	MaxSens=10,
+	AccentColor=Color3.fromRGB(170,0,255),
+	ButtonColor=Color3.fromRGB(45,45,55)
+}
 
-local sizeMinus=makeButton(
-	settings,
-	"SizeMinus",
-	UDim2.new(.92,-90,0,200),
-	UDim2.fromOffset(90,42),
-	"SIZE -"
-)
+local state={
+	CurrentSens=CFG.DefaultSens
+}
 
-local center=makeButton(
-	settings,
-	"Center",
-	UDim2.new(.5,-45,0,250),
-	UDim2.fromOffset(90,36),
-	"CENTER"
-)
+local sensLabel=Instance.new("TextLabel")
+sensLabel.Size=UDim2.new(1,0,0,30)
+sensLabel.Position=UDim2.fromOffset(0,42)
+sensLabel.Text="Multiplier: 1.0x"
+sensLabel.TextColor3=Color3.fromRGB(200,200,200)
+sensLabel.Font=Enum.Font.Gotham
+sensLabel.TextSize=14
+sensLabel.BackgroundTransparency=1
+sensLabel.ZIndex=42
+sensLabel.Parent=cameraSection
+
+local function sensButton(text,pos)
+	return makeButton(
+		cameraSection,
+		text,
+		pos,
+		UDim2.fromOffset(75,38),
+		text,
+		CFG.ButtonColor,
+		43
+	)
+end
+
+local sensMinus=sensButton("-",UDim2.new(.10,0,0,90))
+local sensReset=sensButton("RESET",UDim2.new(.5,-37,0,90))
+local sensPlus=sensButton("+",UDim2.new(.90,-75,0,90))
+
+local function updateSensitivity(amount)
+	state.CurrentSens=math.clamp(
+		state.CurrentSens+amount,
+		CFG.MinSens,
+		CFG.MaxSens
+	)
+
+	sensLabel.Text=
+		"Multiplier: "..string.format("%.1f",state.CurrentSens).."x"
+
+	pcall(function()
+		UserSettings().GameSettings.MouseSensitivity=state.CurrentSens
+	end)
+end
+
+sensMinus.Activated:Connect(function()
+	updateSensitivity(-.1)
+end)
+
+sensPlus.Activated:Connect(function()
+	updateSensitivity(.1)
+end)
+
+sensReset.Activated:Connect(function()
+	state.CurrentSens=CFG.DefaultSens
+
+	sensLabel.Text="Multiplier: 1.0x"
+
+	pcall(function()
+		UserSettings().GameSettings.MouseSensitivity=CFG.DefaultSens
+	end)
+end)
+
+updateSensitivity(0)
+
+--==================================================
+-- JUMP SECTION
+--==================================================
+
+local jumpSection=Instance.new("Frame")
+jumpSection.Name="JumpSetting"
+jumpSection.Position=UDim2.fromOffset(10,210)
+jumpSection.Size=UDim2.new(1,-20,0,235)
+jumpSection.BackgroundColor3=Color3.fromRGB(32,32,38)
+jumpSection.BorderSizePixel=0
+jumpSection.ZIndex=41
+jumpSection.Parent=settings
+
+local jumpCorner=Instance.new("UICorner")
+jumpCorner.CornerRadius=UDim.new(0,12)
+jumpCorner.Parent=jumpSection
+
+local jumpTitle=Instance.new("TextLabel")
+jumpTitle.Size=UDim2.new(1,0,0,40)
+jumpTitle.Text="JUMP SETTING"
+jumpTitle.TextColor3=Color3.new(1,1,1)
+jumpTitle.Font=Enum.Font.GothamBold
+jumpTitle.TextSize=17
+jumpTitle.BackgroundTransparency=1
+jumpTitle.ZIndex=42
+jumpTitle.Parent=jumpSection
+
+local function jumpControl(name,pos,text)
+	return makeButton(
+		jumpSection,
+		name,
+		pos,
+		UDim2.fromOffset(58,38),
+		text,
+		Color3.fromRGB(45,45,55),
+		43
+	)
+end
+
+local moveUp=jumpControl("MoveUp",UDim2.new(.5,-29,0,45),"↑")
+local moveLeft=jumpControl("MoveLeft",UDim2.new(.12,0,0,88),"←")
+local moveRight=jumpControl("MoveRight",UDim2.new(.88,-58,0,88),"→")
+local moveDown=jumpControl("MoveDown",UDim2.new(.5,-29,0,131),"↓")
+
+local sizePlus=jumpControl("SizePlus",UDim2.new(.08,0,0,180),"SIZE +")
+sizePlus.Size=UDim2.fromOffset(85,32)
+
+local sizeMinus=jumpControl("SizeMinus",UDim2.new(.92,-85,0,180),"SIZE -")
+sizeMinus.Size=UDim2.fromOffset(85,32)
+
+local center=jumpControl("Center",UDim2.new(.5,-42,0,180),"CENTER")
+center.Size=UDim2.fromOffset(80,32)
+
+--==================================================
+-- CLOSE
+--==================================================
 
 local close=makeButton(
 	settings,
@@ -557,17 +549,17 @@ local close=makeButton(
 	UDim2.new(.5,-90,1,-45),
 	UDim2.fromOffset(180,34),
 	"CLOSE",
-	Color3.fromRGB(150,0,0)
+	Color3.fromRGB(150,0,0),
+	43
 )
 
-local jumpButton=nil
+--==================================================
+-- JUMP FUNCTIONS
+--==================================================
 
 local function findJump()
 	local touchGui=playerGui:FindFirstChild("TouchGui")
-
-	if not touchGui then
-		return nil
-	end
+	if not touchGui then return nil end
 
 	local found=touchGui:FindFirstChild("JumpButton",true)
 
@@ -587,29 +579,22 @@ local function getJump()
 	end
 
 	jumpButton=findJump()
-
 	return jumpButton
 end
 
 local updatingJump=false
 
 local function updateJump()
-	if destroyed or updatingJump then
-		return
-	end
+	if destroyed or updatingJump then return end
 
 	local jump=getJump()
 	local camera=workspace.CurrentCamera
 
-	if not jump or not camera then
-		return
-	end
+	if not jump or not camera then return end
 
 	local viewport=camera.ViewportSize
 
-	if viewport.X<=0 or viewport.Y<=0 then
-		return
-	end
+	if viewport.X<=0 or viewport.Y<=0 then return end
 
 	updatingJump=true
 
@@ -656,10 +641,7 @@ end
 
 local function releaseHoldInput(input)
 	local button=holdActions[input]
-
-	if not button then
-		return
-	end
+	if not button then return end
 
 	holdActions[input]=nil
 
@@ -684,13 +666,8 @@ end
 
 local function bindHoldButton(button,dx,dy)
 	connect(button.InputBegan,function(input)
-		if destroyed or not isPressInput(input) then
-			return
-		end
-
-		if holdActions[input] then
-			return
-		end
+		if destroyed or not isPressInput(input) then return end
+		if holdActions[input] then return end
 
 		holdActions[input]=button
 		holdInputs[button][input]=true
@@ -725,9 +702,7 @@ connect(UserInputService.WindowFocusReleased,function()
 end)
 
 connect(RunService.RenderStepped,function()
-	if destroyed then
-		return
-	end
+	if destroyed then return end
 
 	local moved=false
 
@@ -756,278 +731,34 @@ connect(RunService.RenderStepped,function()
 	end
 end)
 
-connect(sizePlus.Activated,function()
+sizePlus.Activated:Connect(function()
 	size=math.clamp(size+.05,.05,.50)
 	updateJump()
 end)
 
-connect(sizeMinus.Activated,function()
+sizeMinus.Activated:Connect(function()
 	size=math.clamp(size-.05,.05,.50)
 	updateJump()
 end)
 
-connect(center.Activated,function()
+center.Activated:Connect(function()
 	x=.70
 	y=.70
 	updateJump()
 end)
 
+--==================================================
+-- ONE MENU CONTROL
+--==================================================
+
 connect(menu.Activated,function()
+	if destroyed then return end
+
 	settings.Visible=not settings.Visible
 end)
 
 connect(close.Activated,function()
 	settings.Visible=false
-end)
-
---==================================================
--- CAMERA SENSITIVITY GUI
---==================================================
-
-local CFG={
-	DefaultSens=1,
-	MinSens=.1,
-	MaxSens=10,
-	AccentColor=Color3.fromRGB(170,0,255),
-	BgColor=Color3.fromRGB(20,20,25),
-	TextColor=Color3.fromRGB(255,255,255),
-	ButtonColor=Color3.fromRGB(35,35,45)
-}
-
-local state={
-	CurrentSens=CFG.DefaultSens,
-	IsOpen=false
-}
-
-local sensGui=Instance.new("ScreenGui")
-sensGui.Name="KnightXorzSensGui"
-sensGui.ResetOnSpawn=false
-sensGui.IgnoreGuiInset=true
-sensGui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
-sensGui.DisplayOrder=999
-sensGui.Parent=playerGui
-
-local MainFrame=Instance.new("Frame")
-MainFrame.Name="MainFrame"
-MainFrame.Size=UDim2.fromOffset(220,180)
-MainFrame.Position=UDim2.new(.8,0,.4,0)
-MainFrame.BackgroundColor3=CFG.BgColor
-MainFrame.BorderSizePixel=0
-MainFrame.Active=true
-MainFrame.Visible=false
-MainFrame.ZIndex=10
-MainFrame.Parent=sensGui
-
-local Corner=Instance.new("UICorner")
-Corner.CornerRadius=UDim.new(0,12)
-Corner.Parent=MainFrame
-
-local Stroke=Instance.new("UIStroke")
-Stroke.Thickness=2
-Stroke.Color=CFG.AccentColor
-Stroke.Parent=MainFrame
-
-local Title=Instance.new("TextLabel")
-Title.Size=UDim2.new(1,0,0,40)
-Title.Text="CAMERA SENSITIVITY"
-Title.TextColor3=CFG.TextColor
-Title.Font=Enum.Font.GothamBold
-Title.TextSize=14
-Title.BackgroundTransparency=1
-Title.ZIndex=11
-Title.Parent=MainFrame
-
-local StatusLabel=Instance.new("TextLabel")
-StatusLabel.Size=UDim2.new(1,0,0,30)
-StatusLabel.Position=UDim2.new(0,0,0,40)
-StatusLabel.Text="Multiplier: "..string.format("%.1f",state.CurrentSens).."x"
-StatusLabel.TextColor3=Color3.fromRGB(200,200,200)
-StatusLabel.Font=Enum.Font.Gotham
-StatusLabel.TextSize=13
-StatusLabel.BackgroundTransparency=1
-StatusLabel.ZIndex=11
-StatusLabel.Parent=MainFrame
-
-local function createSensButton(text,pos,callback)
-	local btn=Instance.new("TextButton")
-	btn.Size=UDim2.fromOffset(80,35)
-	btn.Position=pos
-	btn.BackgroundColor3=CFG.ButtonColor
-	btn.Text=text
-	btn.TextColor3=CFG.TextColor
-	btn.Font=Enum.Font.GothamBold
-	btn.TextSize=14
-	btn.AutoButtonColor=false
-	btn.Active=true
-	btn.Selectable=false
-	btn.BorderSizePixel=0
-	btn.ZIndex=12
-	btn.Parent=MainFrame
-
-	local corner=Instance.new("UICorner")
-	corner.CornerRadius=UDim.new(0,6)
-	corner.Parent=btn
-
-	btn.Activated:Connect(function()
-		TweenService:Create(
-			btn,
-			TweenInfo.new(.08),
-			{BackgroundColor3=CFG.AccentColor}
-		):Play()
-
-		task.delay(.08,function()
-			if btn and btn.Parent then
-				TweenService:Create(
-					btn,
-					TweenInfo.new(.08),
-					{BackgroundColor3=CFG.ButtonColor}
-				):Play()
-			end
-		end)
-
-		callback()
-	end)
-
-	return btn
-end
-
-local function updateSensitivity(amount)
-	state.CurrentSens=math.clamp(
-		state.CurrentSens+amount,
-		CFG.MinSens,
-		CFG.MaxSens
-	)
-
-	StatusLabel.Text=
-		"Multiplier: "..string.format("%.1f",state.CurrentSens).."x"
-
-	pcall(function()
-		UserSettings().GameSettings.MouseSensitivity=state.CurrentSens
-	end)
-end
-
-createSensButton(
-	"-",
-	UDim2.new(.2,0,.5,0),
-	function()
-		updateSensitivity(-.1)
-	end
-)
-
-createSensButton(
-	"+",
-	UDim2.new(.6,0,.5,0),
-	function()
-		updateSensitivity(.1)
-	end
-)
-
-local ResetBtn=createSensButton(
-	"RESET",
-	UDim2.new(.3,0,.75,0),
-	function()
-		state.CurrentSens=CFG.DefaultSens
-
-		StatusLabel.Text=
-			"Multiplier: "..string.format("%.1f",state.CurrentSens).."x"
-
-		pcall(function()
-			UserSettings().GameSettings.MouseSensitivity=CFG.DefaultSens
-		end)
-	end
-)
-
-ResetBtn.Size=UDim2.fromOffset(110,30)
-
--- APPLY INITIAL CAMERA SENSITIVITY
-updateSensitivity(0)
-
---==================================================
--- CAMERA OPEN MENU
---==================================================
-
-local OpenMenu=Instance.new("TextButton")
-OpenMenu.Name="OpenMenu"
-OpenMenu.Size=UDim2.fromOffset(56,56)
-OpenMenu.AnchorPoint=Vector2.new(1,1)
-OpenMenu.Position=UDim2.new(1,-20,1,-20)
-OpenMenu.BackgroundColor3=CFG.BgColor
-OpenMenu.BorderSizePixel=0
-OpenMenu.Text="⚙"
-OpenMenu.TextColor3=CFG.TextColor
-OpenMenu.Font=Enum.Font.GothamBold
-OpenMenu.TextSize=25
-OpenMenu.AutoButtonColor=false
-OpenMenu.Active=true
-OpenMenu.Selectable=false
-OpenMenu.ZIndex=100
-OpenMenu.Parent=sensGui
-
-local OpenCorner=Instance.new("UICorner")
-OpenCorner.CornerRadius=UDim.new(1,0)
-OpenCorner.Parent=OpenMenu
-
-local OpenStroke=Instance.new("UIStroke")
-OpenStroke.Color=CFG.AccentColor
-OpenStroke.Thickness=2
-OpenStroke.Parent=OpenMenu
-
-connect(OpenMenu.Activated,function()
-	if destroyed then
-		return
-	end
-
-	state.IsOpen=not state.IsOpen
-	MainFrame.Visible=state.IsOpen
-end)
-
---==================================================
--- DRAG CAMERA SETTINGS
---==================================================
-
-local dragging=false
-local dragInput=nil
-local dragStart=nil
-local startPosition=nil
-
-connect(MainFrame.InputBegan,function(input)
-	if input.UserInputType==Enum.UserInputType.Touch
-		or input.UserInputType==Enum.UserInputType.MouseButton1 then
-
-		dragging=true
-		dragInput=input
-		dragStart=input.Position
-		startPosition=MainFrame.Position
-	end
-end)
-
-connect(MainFrame.InputChanged,function(input)
-	if input.UserInputType==Enum.UserInputType.Touch
-		or input.UserInputType==Enum.UserInputType.MouseMovement then
-		dragInput=input
-	end
-end)
-
-connect(UserInputService.InputChanged,function(input)
-	if not dragging or input~=dragInput then
-		return
-	end
-
-	local delta=input.Position-dragStart
-
-	MainFrame.Position=UDim2.new(
-		startPosition.X.Scale,
-		startPosition.X.Offset+delta.X,
-		startPosition.Y.Scale,
-		startPosition.Y.Offset+delta.Y
-	)
-end)
-
-connect(UserInputService.InputEnded,function(input)
-	if input==dragInput then
-		dragging=false
-		dragInput=nil
-	end
 end)
 
 --==================================================
@@ -1071,9 +802,7 @@ end)
 
 task.spawn(function()
 	for _=1,200 do
-		if destroyed then
-			return
-		end
+		if destroyed then return end
 
 		if getJump() then
 			updateJump()
