@@ -1,7 +1,5 @@
 --============================================================
--- ALDO KNIGHTXORZ V4.30
--- STUDIO / STUDIO LITE
--- PREMIUM ARC-LENGTH RECORD PLAYBACK
+-- ALDO KNIGHTXORZ V4.53
 --============================================================
 
 local Players = game:GetService("Players")
@@ -12,28 +10,111 @@ local TweenService = game:GetService("TweenService")
 local Player = Players.LocalPlayer
 local PlayerGui = Player:WaitForChild("PlayerGui")
 
---============================================================
--- CLEAN OLD VERSION
---============================================================
+print("KNIGHTXORZ V4.53")
+
+local RECORD_BIND = "AldoKnightXorz_Record"
+local PLAYBACK_BIND = "AldoKnightXorz_Playback"
 
 pcall(function()
-	RunService:UnbindFromRenderStep("AldoKnightXorzV430_Record")
-	RunService:UnbindFromRenderStep("AldoKnightXorzV430_Playback")
+	RunService:UnbindFromRenderStep(RECORD_BIND)
+	RunService:UnbindFromRenderStep(PLAYBACK_BIND)
 end)
 
-pcall(function()
-	local old = PlayerGui:FindFirstChild("AldoKnightXorzV430Gui")
+for _, name in ipairs({
+	"AldoKnightXorzV440Gui",
+	"AldoKnightXorzV450Gui",
+	"AldoKnightXorzV451Gui",
+	"AldoKnightXorzV451FinalGui",
+	"AldoKnightXorzV452Gui",
+	"AldoKnightXorzV453Gui",
+}) do
+	local old = PlayerGui:FindFirstChild(name)
 	if old then
 		old:Destroy()
 	end
-end)
+end
 
-pcall(function()
-	local old = PlayerGui:FindFirstChild("AldoKnightXorzV429Gui")
-	if old then
-		old:Destroy()
-	end
-end)
+local CFG = {
+
+	-- RECORD
+	RecordSampleRate = 0.045,
+	MinDistance = 0.045,
+	DirectionThreshold = 0.10,
+	SpeedThreshold = 0.35,
+
+	-- PLAYBACK
+	PlaybackSpeedMultiplier = 1,
+
+	-- MOVEMENT
+	MovementTolerance = 2.75,
+	HardCorrectionDistance = 6,
+	CorrectionCooldown = 0.18,
+
+	-- START
+	StartDistance = 2.5,
+	StartTimeout = 20,
+
+	-- ROUTE
+	LineThickness = 0.12,
+	LineColor = Color3.fromRGB(0,255,255),
+
+	-- GUI
+	MainWidth = 550,
+	MainHeight = 325,
+
+	AccentA = Color3.fromRGB(0,255,255),
+	AccentB = Color3.fromRGB(170,0,255),
+
+	PanelColor = Color3.fromRGB(12,12,20),
+	ButtonColor = Color3.fromRGB(25,25,38)
+}
+
+--============================================================
+-- STATE
+-- PENTING:
+-- STATE DIBUAT SEBELUM SetupCharacter()
+--============================================================
+
+local State = {
+
+	Recording = false,
+	Playing = false,
+	Paused = false,
+	AutoWalk = false,
+
+	LineVisible = true,
+
+	SelectedFile = 1,
+
+	Timeline = {},
+	JumpEvents = {},
+
+	SavedFiles = {},
+
+	VisualNodes = {},
+
+	RecordStart = 0,
+	LastRecordTime = 0,
+	LastPosition = nil,
+
+	CurrentElapsed = 0,
+
+	PlaybackToken = 0,
+
+	OriginalWalkSpeed = 16,
+	PlaybackWalkSpeed = 16,
+
+	LastCorrection = 0,
+
+	CurrentNodeIndex = 1,
+
+	FinishHandled = false,
+
+	LastJumpEventIndex = 1,
+	PlaybackJumpIndex = 1,
+
+	PlaybackConnectionActive = false
+}
 
 --============================================================
 -- CHARACTER
@@ -43,36 +124,23 @@ local Character
 local Humanoid
 local RootPart
 
-local function SetupCharacter(char)
+local CharacterConnections = {}
 
-	Character = char
+local function DisconnectCharacterConnections()
 
-	Humanoid = char:WaitForChild("Humanoid", 10)
-	RootPart = char:WaitForChild("HumanoidRootPart", 10)
-
-	if Humanoid then
-		Humanoid.AutoRotate = true
+	for _, connection in ipairs(CharacterConnections) do
+		pcall(function()
+			connection:Disconnect()
+		end)
 	end
+
+	table.clear(CharacterConnections)
 end
-
-if Player.Character then
-	SetupCharacter(Player.Character)
-end
-
-Player.CharacterAdded:Connect(function(char)
-
-	SetupCharacter(char)
-
-	task.wait(0.2)
-
-	if Humanoid then
-		Humanoid.AutoRotate = true
-	end
-end)
 
 local function CharacterAlive()
 
-	return Character
+	return
+		Character
 		and Character.Parent
 		and Humanoid
 		and Humanoid.Parent
@@ -82,73 +150,127 @@ local function CharacterAlive()
 end
 
 --============================================================
--- CONFIG
+-- STATUS
 --============================================================
 
-local CFG = {
+local StatusLabel
 
-	NodeInterval = 0.12,
-	MinDistance = 0.45,
+local function SetStatus(text)
 
-	CurveSamples = 24,
+	if StatusLabel and StatusLabel.Parent then
 
-	ArcLookupSamples = 8,
+		StatusLabel.Text =
+			"STATUS  •  "
+			.. tostring(text)
+			.. "  •  FILE "
+			.. tostring(State.SelectedFile)
 
-	RotationSmoothSpeed = 9,
-
-	LookAheadDistance = 1.5,
-
-	StartTimeout = 25,
-
-	LineThickness = 0.12,
-
-	LineColor = Color3.fromRGB(0,255,255),
-
-	AccentA = Color3.fromRGB(0,255,255),
-
-	AccentB = Color3.fromRGB(170,0,255),
-
-	PanelColor = Color3.fromRGB(12,12,20),
-
-	ButtonColor = Color3.fromRGB(25,25,38)
-}
+	end
+end
 
 --============================================================
--- STATE
+-- CHARACTER SETUP
 --============================================================
 
-local State = {
+local function SetupCharacter(char)
 
-	Recording = false,
+	DisconnectCharacterConnections()
 
-	Playing = false,
+	Character = char
 
-	Paused = false,
+	Humanoid = char:WaitForChild(
+		"Humanoid",
+		10
+	)
 
-	AutoWalk = false,
+	RootPart = char:WaitForChild(
+		"HumanoidRootPart",
+		10
+	)
 
-	LineVisible = true,
+	if not Humanoid or not RootPart then
+		return
+	end
 
-	SelectedFile = 1,
+	Humanoid.AutoRotate = true
 
-	Timeline = {},
+	State.OriginalWalkSpeed =
+		Humanoid.WalkSpeed
 
-	SavedFiles = {},
+	--========================================================
+	-- REAL JUMP EVENT
+	--========================================================
 
-	VisualNodes = {},
+	table.insert(
+		CharacterConnections,
 
-	RecordStart = 0,
+		Humanoid.StateChanged:Connect(
+			function(oldState,newState)
 
-	LastJump = false,
+				if not State then
+					return
+				end
 
-	PlaybackToken = 0,
+				if not State.Recording then
+					return
+				end
 
-	MovementSpeed = 16,
+				if newState ==
+					Enum.HumanoidStateType.Jumping
+				then
 
-	PauseTime = 0,
+					local now =
+						os.clock()
 
-	PauseStarted = nil
-}
+					table.insert(
+						State.JumpEvents,
+						{
+							Timestamp =
+								math.max(
+									0,
+									now
+									-
+									State.RecordStart
+								),
+
+							Type = "Jump"
+						}
+					)
+
+				end
+			end
+		)
+	)
+end
+
+--============================================================
+-- INITIAL CHARACTER
+--============================================================
+
+if Player.Character then
+	SetupCharacter(Player.Character)
+end
+
+--============================================================
+-- ROUTE FOLDER
+--============================================================
+
+local RouteFolder =
+	workspace:FindFirstChild(
+		"KNIGHTXORZ_ROUTE"
+	)
+
+if not RouteFolder then
+
+	RouteFolder =
+		Instance.new("Folder")
+
+	RouteFolder.Name =
+		"KNIGHTXORZ_ROUTE"
+
+	RouteFolder.Parent =
+		workspace
+end
 
 --============================================================
 -- UTILITY
@@ -160,27 +282,82 @@ local function CopyCFrame(cf)
 		return nil
 	end
 
-	return CFrame.new(cf:GetComponents())
+	return CFrame.new(
+		cf:GetComponents()
+	)
+end
+
+local function CloneVector3(v)
+
+	if not v then
+		return Vector3.zero
+	end
+
+	return Vector3.new(
+		v.X,
+		v.Y,
+		v.Z
+	)
 end
 
 local function CloneTimeline(source)
 
 	local result = {}
 
-	for _, node in ipairs(source) do
+	for _,node in ipairs(source) do
 
-		table.insert(result, {
+		table.insert(
+			result,
+			{
+				CFrame =
+					CopyCFrame(
+						node.CFrame
+					),
 
-			CFrame = CopyCFrame(node.CFrame),
+				Position =
+					CloneVector3(
+						node.Position
+					),
 
-			Position = node.Position,
+				Timestamp =
+					node.Timestamp or 0,
 
-			Timestamp = node.Timestamp,
+				RelativeTimestamp =
+					node.RelativeTimestamp or 0,
 
-			RelativeTimestamp = node.RelativeTimestamp,
+				WalkSpeed =
+					node.WalkSpeed or 16,
 
-			Jump = node.Jump
-		})
+				MoveDirection =
+					CloneVector3(
+						node.MoveDirection
+					),
+
+				HumanoidState =
+					node.HumanoidState
+			}
+		)
+	end
+
+	return result
+end
+
+local function CloneJumpEvents(source)
+
+	local result = {}
+
+	for _,event in ipairs(source or {}) do
+
+		table.insert(
+			result,
+			{
+				Timestamp =
+					event.Timestamp or 0,
+
+				Type =
+					event.Type or "Jump"
+			}
+		)
 	end
 
 	return result
@@ -192,29 +369,107 @@ local function NormalizeTimeline(timeline)
 		return timeline
 	end
 
-	local firstTime = timeline[1].Timestamp or 0
+	table.sort(
+		timeline,
+		function(a,b)
+			return
+				(a.Timestamp or 0)
+				<
+				(b.Timestamp or 0)
+		end
+	)
 
-	for _, node in ipairs(timeline) do
+	local first =
+		timeline[1].Timestamp or 0
+
+	for _,node in ipairs(timeline) do
+
+		node.Timestamp =
+			node.Timestamp or first
 
 		node.RelativeTimestamp =
-			(node.Timestamp or 0) - firstTime
+			math.max(
+				0,
+				node.Timestamp - first
+			)
+
+		if not node.Position
+			and node.CFrame
+		then
+			node.Position =
+				node.CFrame.Position
+		end
+
+		if not node.Position then
+			node.Position =
+				Vector3.zero
+		end
+
+		if not node.CFrame then
+			node.CFrame =
+				CFrame.new(
+					node.Position
+				)
+		end
+
+		if not node.MoveDirection then
+			node.MoveDirection =
+				Vector3.zero
+		end
+
+		if not node.WalkSpeed then
+			node.WalkSpeed = 16
+		end
 	end
 
 	return timeline
 end
 
---============================================================
--- ROUTE FOLDER
---============================================================
+local function NormalizeJumpEvents(events)
 
-local RouteFolder =
-	workspace:FindFirstChild("KNIGHTXORZ_ROUTE")
+	table.sort(
+		events,
+		function(a,b)
+			return
+				(a.Timestamp or 0)
+				<
+				(b.Timestamp or 0)
+		end
+	)
 
-if not RouteFolder then
+	local last = 0
 
-	RouteFolder = Instance.new("Folder")
-	RouteFolder.Name = "KNIGHTXORZ_ROUTE"
-	RouteFolder.Parent = workspace
+	for _,event in ipairs(events) do
+
+		event.Timestamp =
+			math.max(
+				event.Timestamp or 0,
+				last
+			)
+
+		last =
+			event.Timestamp
+	end
+
+	return events
+end
+
+local function GetTimelineDuration()
+
+	if #State.Timeline == 0 then
+		return 0
+	end
+
+	NormalizeTimeline(
+		State.Timeline
+	)
+
+	return math.max(
+		State.Timeline[
+			#State.Timeline
+		].RelativeTimestamp or 0,
+		0
+	)
 end
 
 --============================================================
@@ -223,43 +478,56 @@ end
 
 local function ClearVisuals()
 
-	for _, part in ipairs(State.VisualNodes) do
+	for _,part in ipairs(
+		State.VisualNodes
+	) do
 
 		if part and part.Parent then
 			part:Destroy()
 		end
 	end
 
-	State.VisualNodes = {}
+	table.clear(
+		State.VisualNodes
+	)
 
-	for _, child in ipairs(RouteFolder:GetChildren()) do
+	for _,child in ipairs(
+		RouteFolder:GetChildren()
+	) do
 		child:Destroy()
 	end
 end
 
 local function DrawLine(a,b)
 
-	local distance = (b-a).Magnitude
-
-	if distance < 0.05 then
+	if not a or not b then
 		return
 	end
 
-	local part = Instance.new("Part")
+	local distance =
+		(b-a).Magnitude
 
-	part.Name = "KnightXorzRouteLine"
+	if distance < 0.03 then
+		return
+	end
+
+	local part =
+		Instance.new("Part")
+
+	part.Name =
+		"KnightXorzRouteLine"
 
 	part.Anchored = true
-
 	part.CanCollide = false
 	part.CanTouch = false
 	part.CanQuery = false
-
 	part.CastShadow = false
 
-	part.Material = Enum.Material.Neon
+	part.Material =
+		Enum.Material.Neon
 
-	part.Color = CFG.LineColor
+	part.Color =
+		CFG.LineColor
 
 	part.Size =
 		Vector3.new(
@@ -275,9 +543,12 @@ local function DrawLine(a,b)
 		)
 
 	part.Transparency =
-		State.LineVisible and 0 or 1
+		State.LineVisible
+		and 0
+		or 1
 
-	part.Parent = RouteFolder
+	part.Parent =
+		RouteFolder
 
 	table.insert(
 		State.VisualNodes,
@@ -289,773 +560,554 @@ local function RedrawRoute()
 
 	ClearVisuals()
 
+	if #State.Timeline < 2 then
+		return
+	end
+
 	for i = 2,#State.Timeline do
 
-		DrawLine(
-			State.Timeline[i-1].Position,
-			State.Timeline[i].Position
-		)
+		local a =
+			State.Timeline[i-1]
+
+		local b =
+			State.Timeline[i]
+
+		if a.Position and b.Position then
+			DrawLine(
+				a.Position,
+				b.Position
+			)
+		end
 	end
 end
 
 --============================================================
--- RECORD
+-- RECORD NODE
 --============================================================
 
-RunService:BindToRenderStep(
-	"AldoKnightXorzV430_Record",
-	Enum.RenderPriority.Character.Value,
-	function()
+local function AddRecordNode(force)
 
-		if not State.Recording then
-			return
-		end
+	if not CharacterAlive() then
+		return
+	end
 
-		if not CharacterAlive() then
-			return
-		end
+	local now =
+		os.clock()
 
-		local cf = RootPart.CFrame
-		local pos = cf.Position
+	local elapsed =
+		now - State.RecordStart
 
-		local timestamp =
-			os.clock() - State.RecordStart
+	local cf =
+		RootPart.CFrame
 
-		local velocity =
-			RootPart.AssemblyLinearVelocity
+	local position =
+		RootPart.Position
 
-		local humanoidState =
-			Humanoid:GetState()
+	local humanoidState =
+		Humanoid:GetState()
 
-		local airborne =
-			Humanoid.FloorMaterial ==
-			Enum.Material.Air
+	local moveDirection =
+		Humanoid.MoveDirection
 
-		local jumping =
-			(
-				airborne
-				and velocity.Y > 1
-			)
-			or humanoidState ==
-				Enum.HumanoidStateType.Jumping
+	local walkSpeed =
+		Humanoid.WalkSpeed
 
-		local jumpTrigger =
-			jumping
-			and not State.LastJump
+	--========================================================
+	-- FIRST NODE
+	--========================================================
 
-		State.LastJump = jumping
+	if #State.Timeline == 0 then
 
-		if #State.Timeline == 0 then
+		table.insert(
+			State.Timeline,
+			{
+				CFrame =
+					CopyCFrame(cf),
 
-			table.insert(
-				State.Timeline,
-				{
-					CFrame = CopyCFrame(cf),
-					Position = pos,
-					Timestamp = timestamp,
-					RelativeTimestamp = 0,
-					Jump = jumpTrigger
-				}
-			)
+				Position =
+					CloneVector3(position),
 
-			return
-		end
+				Timestamp =
+					now,
 
-		local last =
-			State.Timeline[#State.Timeline]
+				RelativeTimestamp =
+					0,
 
-		local distance =
-			(pos-last.Position).Magnitude
+				WalkSpeed =
+					walkSpeed,
 
-		local timeDelta =
-			timestamp-last.Timestamp
+				MoveDirection =
+					CloneVector3(
+						moveDirection
+					),
+
+				HumanoidState =
+					humanoidState.Name
+			}
+		)
+
+		State.LastRecordTime =
+			now
+
+		State.LastPosition =
+			position
+
+		return
+	end
+
+	--========================================================
+	-- SAMPLE RATE
+	--========================================================
+
+	if not force then
 
 		if
-			(
-				timeDelta >= CFG.NodeInterval
-				and distance >= CFG.MinDistance
-			)
-			or jumpTrigger
+			now
+			-
+			State.LastRecordTime
+			<
+			CFG.RecordSampleRate
 		then
-
-			table.insert(
-				State.Timeline,
-				{
-					CFrame = CopyCFrame(cf),
-					Position = pos,
-					Timestamp = timestamp,
-					RelativeTimestamp = 0,
-					Jump = jumpTrigger
-				}
-			)
-
-			DrawLine(
-				last.Position,
-				pos
-			)
+			return
 		end
 	end
-)
 
---============================================================
--- CATMULL-ROM
---============================================================
+	local last =
+		State.Timeline[
+			#State.Timeline
+		]
 
-local function GetPoint(index)
+	local lastPosition =
+		last.Position
+		or
+		Vector3.zero
 
-	local count = #State.Timeline
+	local lastDirection =
+		last.MoveDirection
+		or
+		Vector3.zero
 
-	if count == 0 then
-		return Vector3.zero
-	end
+	local distance =
+		(position-lastPosition).Magnitude
 
-	index =
-		math.clamp(
-			index,
-			1,
-			count
+	local directionDifference =
+		(
+			moveDirection
+			-
+			lastDirection
+		).Magnitude
+
+	local speedDifference =
+		math.abs(
+			walkSpeed
+			-
+			(last.WalkSpeed or walkSpeed)
 		)
 
-	return State.Timeline[index].Position
-end
+	local stateChanged =
+		last.HumanoidState
+		~=
+		humanoidState.Name
 
-local function GetSafePoint(index)
+	local shouldRecord =
+		force
+		or distance >= CFG.MinDistance
+		or directionDifference >= CFG.DirectionThreshold
+		or speedDifference >= CFG.SpeedThreshold
+		or stateChanged
 
-	local count = #State.Timeline
-
-	if count <= 1 then
-		return GetPoint(1)
+	if not shouldRecord then
+		return
 	end
-
-	if index < 1 then
-
-		local p1 = GetPoint(1)
-		local p2 = GetPoint(2)
-
-		return p1-(p2-p1)
-	end
-
-	if index > count then
-
-		local p1 = GetPoint(count)
-		local p0 = GetPoint(count-1)
-
-		return p1+(p1-p0)
-	end
-
-	return GetPoint(index)
-end
-
-local function Centripetal(
-	p0,
-	p1,
-	p2,
-	p3,
-	t
-)
-
-	local alpha = 0.5
-
-	local function Param(a,b)
-
-		return math.max(
-			(b-a).Magnitude ^ alpha,
-			0.00001
-		)
-	end
-
-	local t0 = 0
-
-	local t1 =
-		t0+Param(p0,p1)
-
-	local t2 =
-		t1+Param(p1,p2)
-
-	local t3 =
-		t2+Param(p2,p3)
-
-	local localT =
-		t1+(t2-t1)*math.clamp(t,0,1)
-
-	local function LerpParam(
-		a,
-		b,
-		ta,
-		tb
-	)
-
-		if math.abs(tb-ta)<0.00001 then
-			return a
-		end
-
-		local u =
-			(localT-ta)/(tb-ta)
-
-		return a+(b-a)*u
-	end
-
-	local A1 =
-		LerpParam(
-			p0,
-			p1,
-			t0,
-			t1
-		)
-
-	local A2 =
-		LerpParam(
-			p1,
-			p2,
-			t1,
-			t2
-		)
-
-	local A3 =
-		LerpParam(
-			p2,
-			p3,
-			t2,
-			t3
-		)
-
-	local B1 =
-		LerpParam(
-			A1,
-			A2,
-			t0,
-			t2
-		)
-
-	local B2 =
-		LerpParam(
-			A2,
-			A3,
-			t1,
-			t3
-		)
-
-	return LerpParam(
-		B1,
-		B2,
-		t1,
-		t2
-	)
-end
-
-local function CurvePosition(
-	segment,
-	alpha
-)
-
-	return Centripetal(
-		GetSafePoint(segment-1),
-		GetSafePoint(segment),
-		GetSafePoint(segment+1),
-		GetSafePoint(segment+2),
-		alpha
-	)
-end
-
---============================================================
--- ARC LENGTH CACHE
---============================================================
-
-local function BuildArcCache()
-
-	local cache = {}
-
-	local count = #State.Timeline
-
-	if count < 2 then
-		return cache,0
-	end
-
-	local total = 0
 
 	table.insert(
-		cache,
+		State.Timeline,
 		{
-			Length = 0,
-			Segment = 1,
-			Alpha = 0
+			CFrame =
+				CopyCFrame(cf),
+
+			Position =
+				CloneVector3(position),
+
+			Timestamp =
+				now,
+
+			RelativeTimestamp =
+				elapsed,
+
+			WalkSpeed =
+				walkSpeed,
+
+			MoveDirection =
+				CloneVector3(
+					moveDirection
+				),
+
+			HumanoidState =
+				humanoidState.Name
 		}
 	)
 
-	for segment = 1,count-1 do
+	State.LastRecordTime =
+		now
 
-		local previous =
-			CurvePosition(
-				segment,
-				0
-			)
+	State.LastPosition =
+		position
 
-		for sample = 1,CFG.CurveSamples do
+	if last.Position then
 
-			local alpha =
-				sample/CFG.CurveSamples
-
-			local current =
-				CurvePosition(
-					segment,
-					alpha
-				)
-
-			total +=
-				(current-previous).Magnitude
-
-			table.insert(
-				cache,
-				{
-					Length = total,
-					Segment = segment,
-					Alpha = alpha
-				}
-			)
-
-			previous = current
-		end
-	end
-
-	return cache,total
-end
-
---============================================================
--- ARC LOOKUP
---============================================================
-
-local function ArcPosition(
-	cache,
-	totalLength,
-	distance
-)
-
-	if #cache == 0 then
-		return State.Timeline[1].Position
-	end
-
-	distance =
-		math.clamp(
-			distance,
-			0,
-			totalLength
+		DrawLine(
+			last.Position,
+			position
 		)
 
-	local low = 1
-	local high = #cache
-
-	while low < high do
-
-		local middle =
-			math.floor(
-				(low+high)/2
-			)
-
-		if cache[middle].Length <
-			distance
-		then
-
-			low = middle+1
-
-		else
-
-			high = middle
-		end
 	end
-
-	local current = cache[low]
-	local previous = cache[math.max(low-1,1)]
-
-	local range =
-		current.Length-
-		previous.Length
-
-	local factor = 0
-
-	if range > 0 then
-
-		factor =
-			(distance-previous.Length)
-			/range
-	end
-
-	local alpha =
-		previous.Alpha+
-		(current.Alpha-previous.Alpha)
-		*factor
-
-	return CurvePosition(
-		current.Segment,
-		alpha
-	)
 end
 
 --============================================================
--- TIMESTAMP → ARC LENGTH TABLE
+-- RECORD HEARTBEAT
 --============================================================
 
-local function BuildTimeArcTable(
-	cache,
-	totalLength
-)
+local RecordHeartbeatConnection
 
-	local tableResult = {}
+RecordHeartbeatConnection =
+	RunService.Heartbeat:Connect(
+		function()
 
-	local totalTime =
-		State.Timeline[#State.Timeline]
-		.RelativeTimestamp
-
-	if totalTime <= 0 then
-		totalTime = 0.01
-	end
-
-	for i = 0,CFG.ArcLookupSamples do
-
-		local time =
-			totalTime*
-			(i/CFG.ArcLookupSamples)
-
-		local low = 1
-		local high = #State.Timeline
-
-		while low < high do
-
-			local mid =
-				math.floor(
-					(low+high)/2
-				)
-
-			if
-				(State.Timeline[mid]
-				.RelativeTimestamp or 0)
-				< time
-			then
-				low = mid+1
-			else
-				high = mid
+			if not State.Recording then
+				return
 			end
+
+			if not CharacterAlive() then
+				return
+			end
+
+			AddRecordNode(false)
 		end
-
-		local current =
-			State.Timeline[low]
-
-		local previous =
-			State.Timeline[
-				math.max(low-1,1)
-			]
-
-		local t0 =
-			previous.RelativeTimestamp or 0
-
-		local t1 =
-			current.RelativeTimestamp or 0
-
-		local f = 0
-
-		if t1 > t0 then
-
-			f =
-				(time-t0)
-				/(t1-t0)
-		end
-
-		local p0 =
-			previous.Position
-
-		local p1 =
-			current.Position
-
-		local rawDistance =
-			(p0:Lerp(p1,f)-
-			State.Timeline[1].Position).Magnitude
-
-		table.insert(
-			tableResult,
-			{
-				Time = time,
-				ApproxDistance = rawDistance
-			}
-		)
-	end
-
-	return tableResult,totalTime
-end
+	)
 
 --============================================================
--- BETTER TIME → ARC SOLVER
+-- NODE SEARCH
 --============================================================
 
-local function GetDistanceForTime(
-	time,
-	totalLength,
-	totalTime
-)
+local function GetNodePair(time)
 
-	if totalTime <= 0 then
-		return 0
+	local timeline =
+		State.Timeline
+
+	local count =
+		#timeline
+
+	if count == 0 then
+		return nil,nil,0,0
 	end
 
-	local count = #State.Timeline
+	if count == 1 then
 
-	if count < 2 then
-		return 0
-	end
-
-	time =
-		math.clamp(
-			time,
+		return
+			timeline[1],
+			timeline[1],
 			0,
-			totalTime
-		)
+			1
+	end
+
+	if time <= 0 then
+
+		return
+			timeline[1],
+			timeline[2],
+			0,
+			1
+	end
+
+	local duration =
+		GetTimelineDuration()
+
+	if time >= duration then
+
+		return
+			timeline[count],
+			timeline[count],
+			1,
+			count
+	end
 
 	local low = 1
 	local high = count
 
 	while low < high do
 
-		local mid =
+		local middle =
 			math.floor(
-				(low+high)/2
+				(low + high) / 2
 			)
 
-		if
-			(State.Timeline[mid]
-			.RelativeTimestamp or 0)
-			< time
-		then
+		local nodeTime =
+			timeline[middle]
+			.RelativeTimestamp
+			or 0
 
-			low = mid+1
-
+		if nodeTime < time then
+			low =
+				middle + 1
 		else
-
-			high = mid
+			high =
+				middle
 		end
 	end
 
-	local i2 = low
-	local i1 = math.max(i2-1,1)
+	local index2 =
+		math.clamp(
+			low,
+			2,
+			count
+		)
 
-	local n1 = State.Timeline[i1]
-	local n2 = State.Timeline[i2]
+	local index1 =
+		index2 - 1
+
+	local a =
+		timeline[index1]
+
+	local b =
+		timeline[index2]
 
 	local t1 =
-		n1.RelativeTimestamp or 0
+		a.RelativeTimestamp or 0
 
 	local t2 =
-		n2.RelativeTimestamp or 0
+		b.RelativeTimestamp or 0
 
-	local f = 0
+	local range =
+		t2 - t1
 
-	if t2 > t1 then
+	local alpha = 0
 
-		f =
-			(time-t1)
-			/(t2-t1)
+	if range > 0 then
+		alpha =
+			(time-t1)/range
 	end
 
-	-- The original recording segment defines
-	-- how much time is spent between nodes.
+	alpha =
+		math.clamp(
+			alpha,
+			0,
+			1
+		)
 
-	-- Find arc-length boundaries of this segment
-	-- through a local numerical approximation.
+	return
+		a,
+		b,
+		alpha,
+		index1
+end
 
-	local p1 = n1.Position
-	local p2 = n2.Position
+--============================================================
+-- PLAYBACK DATA
+--============================================================
 
-	local directDistance =
-		(p2-p1).Magnitude
+local function GetPlaybackData(time)
 
-	if directDistance <= 0.001 then
+	local a,b,alpha,index =
+		GetNodePair(time)
 
-		return 0
+	if not a then
+		return nil
 	end
 
-	-- Approximate route distance using
-	-- cumulative curve distance.
+	if not b or a == b then
 
-	local targetFraction = f
+		return {
 
-	-- Blend by original segment timing.
-	-- This preserves recorded timing while
-	-- the curve supplies the smooth path.
+			Position =
+				a.Position,
 
-	local cumulative = 0
-	local segmentIndex = 1
+			LookVector =
+				a.CFrame.LookVector,
 
-	for s = 1,count-1 do
+			MoveDirection =
+				a.MoveDirection
+				or Vector3.zero,
 
-		local a =
-			State.Timeline[s].Position
+			WalkSpeed =
+				a.WalkSpeed or 16,
 
-		local b =
-			State.Timeline[s+1].Position
+			NodeIndex =
+				index
+		}
+	end
 
-		local d =
-			(b-a).Magnitude
+	local position =
+		a.Position:Lerp(
+			b.Position,
+			alpha
+		)
 
-		if s < i1 then
-			cumulative += d
-		elseif s == i1 then
-			cumulative += d*f
+	local moveDirection =
+		a.MoveDirection:Lerp(
+			b.MoveDirection
+			or Vector3.zero,
+			alpha
+		)
+
+	local speed =
+		(a.WalkSpeed or 16)
+		+
+		(
+			(b.WalkSpeed or 16)
+			-
+			(a.WalkSpeed or 16)
+		)
+		*
+		alpha
+
+	local look =
+		a.CFrame.LookVector:Lerp(
+			b.CFrame.LookVector,
+			alpha
+		)
+
+	if look.Magnitude < 0.01 then
+		look =
+			a.CFrame.LookVector
+	end
+
+	return {
+
+		Position =
+			position,
+
+		LookVector =
+			look.Unit,
+
+		MoveDirection =
+			moveDirection,
+
+		WalkSpeed =
+			math.max(
+				speed,
+				0
+			),
+
+		NodeIndex =
+			index
+	}
+end
+
+--============================================================
+-- JUMP PLAYBACK
+--============================================================
+
+local function TriggerRecordedJump()
+
+	if not CharacterAlive() then
+		return
+	end
+
+	local currentState =
+		Humanoid:GetState()
+
+	if
+		currentState ==
+		Enum.HumanoidStateType.Jumping
+		or
+		currentState ==
+		Enum.HumanoidStateType.Freefall
+	then
+		return
+	end
+
+	Humanoid.Jump =
+		true
+
+	pcall(function()
+		Humanoid:ChangeState(
+			Enum.HumanoidStateType.Jumping
+		)
+	end)
+end
+
+local function ProcessJumpEvents(
+	oldTime,
+	newTime
+)
+
+	local events =
+		State.JumpEvents
+
+	while
+		State.PlaybackJumpIndex
+		<=
+		#events
+	do
+
+		local event =
+			events[
+				State.PlaybackJumpIndex
+			]
+
+		local eventTime =
+			event.Timestamp or 0
+
+		if eventTime > newTime then
 			break
 		end
-	end
 
-	local ratio =
-		cumulative /
-		math.max(
-			(State.Timeline[count].Position-
-			State.Timeline[1].Position).Magnitude,
-			0.001
-		)
+		if eventTime >= oldTime then
 
-	-- Scale against actual curve length.
-	-- This avoids using linear progress over
-	-- total route duration.
+			if event.Type == "Jump" then
+				TriggerRecordedJump()
+			end
 
-	return math.clamp(
-		ratio*totalLength,
-		0,
-		totalLength
-	)
-end
+		end
 
---============================================================
--- DIRECTION
---============================================================
-
-local function GetDirection(
-	cache,
-	totalLength,
-	distance
-)
-
-	local sample =
-		math.max(
-			CFG.LookAheadDistance,
-			totalLength*0.004
-		)
-
-	local current =
-		ArcPosition(
-			cache,
-			totalLength,
-			distance
-		)
-
-	local ahead =
-		ArcPosition(
-			cache,
-			totalLength,
-			math.min(
-				distance+sample,
-				totalLength
-			)
-		)
-
-	local direction =
-		ahead-current
-
-	if direction.Magnitude < 0.01 then
-
-		local behind =
-			ArcPosition(
-				cache,
-				totalLength,
-				math.max(
-					distance-sample,
-					0
-				)
-			)
-
-		direction =
-			current-behind
-	end
-
-	if direction.Magnitude < 0.01 then
-		return Vector3.zero
-	end
-
-	return direction.Unit
-end
-
---============================================================
--- ROTATION
---============================================================
-
-local function SmoothRotation(
-	current,
-	target,
-	dt
-)
-
-	local alpha =
-		1-math.exp(
-			-CFG.RotationSmoothSpeed*dt
-		)
-
-	return current:Lerp(
-		target,
-		math.clamp(alpha,0,1)
-	)
-end
-
---============================================================
--- STATUS GUI PLACEHOLDER
---============================================================
-
-local StatusLabel
-
-local function SetStatus(text)
-
-	if StatusLabel then
-
-		StatusLabel.Text =
-			"STATUS  •  "
-			..text
-			.."  •  FILE "
-			..State.SelectedFile
+		State.PlaybackJumpIndex += 1
 	end
 end
 
 --============================================================
--- STOP
+-- STOP PLAYBACK
 --============================================================
 
-local function StopPlayback(
+local function StopPlayback(manual)
 
-	manual
-)
+	State.PlaybackToken += 1
 
 	State.Playing = false
 	State.Paused = false
-	State.PlaybackToken += 1
+
+	State.CurrentElapsed = 0
+	State.CurrentNodeIndex = 1
+
+	State.FinishHandled = false
+
+	State.PlaybackJumpIndex = 1
+
+	State.PlaybackConnectionActive =
+		false
+
+	pcall(function()
+		RunService:UnbindFromRenderStep(
+			PLAYBACK_BIND
+		)
+	end)
 
 	if manual then
 		State.AutoWalk = false
 	end
 
-	pcall(function()
-
-		RunService:UnbindFromRenderStep(
-			"AldoKnightXorzV430_Playback"
-		)
-	end)
-
 	if CharacterAlive() then
 
-		Humanoid.AutoRotate = true
+		Humanoid.AutoRotate =
+			true
 
 		Humanoid:Move(
 			Vector3.zero,
 			true
 		)
 
-		RootPart.AssemblyLinearVelocity =
-			Vector3.zero
-
-		RootPart.AssemblyAngularVelocity =
-			Vector3.zero
+		Humanoid.WalkSpeed =
+			State.OriginalWalkSpeed
 	end
 
 	SetStatus("IDLE")
@@ -1074,15 +1126,14 @@ local function WalkToStart(
 		return false
 	end
 
-	Humanoid.AutoRotate = true
+	local started =
+		os.clock()
+
+	Humanoid.AutoRotate =
+		true
 
 	Humanoid.WalkSpeed =
-		State.MovementSpeed
-
-	Humanoid:MoveTo(position)
-
-	local start =
-		os.clock()
+		State.OriginalWalkSpeed
 
 	while
 		State.Playing
@@ -1091,23 +1142,156 @@ local function WalkToStart(
 	do
 
 		if State.Paused then
+
+			Humanoid:Move(
+				Vector3.zero,
+				true
+			)
+
 			RunService.Heartbeat:Wait()
+
 			continue
 		end
 
-		local distance =
-			(RootPart.Position-position)
-			.Magnitude
+		local offset =
+			position
+			-
+			RootPart.Position
 
-		if distance <= 1.5 then
+		local horizontal =
+			Vector3.new(
+				offset.X,
+				0,
+				offset.Z
+			)
+
+		local distance =
+			horizontal.Magnitude
+
+		if distance <= CFG.StartDistance then
+
+			Humanoid:Move(
+				Vector3.zero,
+				true
+			)
+
 			return true
 		end
 
-		if os.clock()-start >
-			CFG.StartTimeout
-		then
+		if distance > 0.05 then
 
-			return distance <= 5
+			Humanoid:Move(
+				horizontal.Unit,
+				false
+			)
+
+		else
+
+			Humanoid:Move(
+				Vector3.zero,
+				true
+			)
+		end
+
+		if
+			os.clock()-started
+			>= CFG.StartTimeout
+		then
+			return false
+		end
+
+		RunService.Heartbeat:Wait()
+	end
+
+	return false
+end
+
+--============================================================
+-- RETURN TO START
+--============================================================
+
+local function ReturnToStart(
+	position,
+	token
+)
+
+	if not CharacterAlive() then
+		return false
+	end
+
+	local started =
+		os.clock()
+
+	Humanoid.AutoRotate =
+		true
+
+	Humanoid.WalkSpeed =
+		State.OriginalWalkSpeed
+
+	while
+		State.Playing
+		and State.AutoWalk
+		and State.PlaybackToken == token
+		and CharacterAlive()
+	do
+
+		if State.Paused then
+
+			Humanoid:Move(
+				Vector3.zero,
+				true
+			)
+
+			RunService.Heartbeat:Wait()
+
+			continue
+		end
+
+		local offset =
+			position
+			-
+			RootPart.Position
+
+		local horizontal =
+			Vector3.new(
+				offset.X,
+				0,
+				offset.Z
+			)
+
+		local distance =
+			horizontal.Magnitude
+
+		if distance <= CFG.StartDistance then
+
+			Humanoid:Move(
+				Vector3.zero,
+				true
+			)
+
+			return true
+		end
+
+		if distance > 0.05 then
+
+			Humanoid:Move(
+				horizontal.Unit,
+				false
+			)
+
+		else
+
+			Humanoid:Move(
+				Vector3.zero,
+				true
+			)
+		end
+
+		if
+			os.clock()-started
+			>= CFG.StartTimeout
+		then
+			return false
 		end
 
 		RunService.Heartbeat:Wait()
@@ -1120,94 +1304,36 @@ end
 -- PLAYBACK
 --============================================================
 
-local function ExecutePlayback()
-
-	if #State.Timeline < 2 then
-
-		SetStatus("NO ROUTE")
-		return
-	end
-
-	if State.Playing then
-		return
-	end
+local function StartPlaybackRun(token)
 
 	if not CharacterAlive() then
-		return
+		return false
 	end
 
-	NormalizeTimeline(State.Timeline)
-
-	State.Playing = true
-	State.Paused = false
-	State.PlaybackToken += 1
-
-	local token =
-		State.PlaybackToken
-
-	local timeline =
-		State.Timeline
-
-	local cache,totalLength =
-		BuildArcCache()
-
-	if totalLength <= 0 then
-
-		StopPlayback(false)
-		return
+	if #State.Timeline < 2 then
+		return false
 	end
 
-	local startPosition =
-		timeline[1].Position
+	local duration =
+		GetTimelineDuration()
 
-	SetStatus("WALKING TO START")
-
-	local reached =
-		WalkToStart(
-			startPosition,
-			token
-		)
-
-	if not reached
-		or not State.Playing
-		or State.PlaybackToken ~= token
-	then
-
-		StopPlayback(false)
-		return
+	if duration <= 0 then
+		return false
 	end
 
-	--========================================================
-	-- PLAYBACK CONTROL
-	--========================================================
+	local elapsed = 0
+	local lastTime = -0.000001
 
-	Humanoid.AutoRotate = false
+	State.CurrentElapsed = 0
+	State.CurrentNodeIndex = 1
+	State.FinishHandled = false
+	State.PlaybackJumpIndex = 1
 
-	Humanoid.WalkSpeed =
-		State.MovementSpeed
+	State.PlaybackConnectionActive =
+		true
 
-	local startTime =
-		os.clock()
-
-	local pausedDuration = 0
-	local pauseStarted = nil
-
-	local totalTime =
-		timeline[#timeline]
-		.RelativeTimestamp
-
-	if totalTime <= 0 then
-		totalTime = 0.01
-	end
-
-	local currentRotation =
-		RootPart.CFrame -
-		RootPart.CFrame.Position
-
-	local lastPosition =
-		RootPart.Position
-
-	local lastJumpIndex = 0
+	Humanoid.AutoRotate =
+		true
 
 	SetStatus(
 		State.AutoWalk
@@ -1215,11 +1341,14 @@ local function ExecutePlayback()
 		or "PLAYING"
 	)
 
+	--========================================================
+	-- PLAYBACK RENDER LOOP
+	--========================================================
+
 	RunService:BindToRenderStep(
+		PLAYBACK_BIND,
 
-		"AldoKnightXorzV430_Playback",
-
-		Enum.RenderPriority.Character.Value+2,
+		Enum.RenderPriority.Character.Value + 3,
 
 		function(dt)
 
@@ -1229,7 +1358,15 @@ local function ExecutePlayback()
 				or not CharacterAlive()
 			then
 
-				StopPlayback(false)
+				pcall(function()
+					RunService:UnbindFromRenderStep(
+						PLAYBACK_BIND
+					)
+				end)
+
+				State.PlaybackConnectionActive =
+					false
+
 				return
 			end
 
@@ -1239,20 +1376,6 @@ local function ExecutePlayback()
 
 			if State.Paused then
 
-				if not pauseStarted then
-					pauseStarted = os.clock()
-				end
-
-				RootPart.AssemblyLinearVelocity =
-					Vector3.zero
-
-				RootPart.AssemblyAngularVelocity =
-					Vector3.zero
-
-				RootPart.CFrame =
-					CFrame.new(lastPosition)
-					*currentRotation
-
 				Humanoid:Move(
 					Vector3.zero,
 					true
@@ -1261,254 +1384,531 @@ local function ExecutePlayback()
 				return
 			end
 
-			if pauseStarted then
-
-				pausedDuration +=
-					os.clock()-pauseStarted
-
-				pauseStarted = nil
-			end
-
 			--================================================
-			-- ORIGINAL RECORDING TIME
+			-- TIME
 			--================================================
 
-			local elapsed =
-				os.clock()
-				-startTime
-				-pausedDuration
-
-			local progress =
+			local safeDt =
 				math.clamp(
-					elapsed/totalTime,
+					dt,
 					0,
-					1
+					0.1
+				)
+
+			local newTime =
+				math.min(
+					elapsed
+					+
+					safeDt
+					*
+					CFG.PlaybackSpeedMultiplier,
+					duration
 				)
 
 			--================================================
-			-- IMPORTANT:
-			-- TIME IS FROM RECORDING.
-			-- CURVE ONLY DETERMINES PATH.
+			-- JUMP EVENTS
 			--================================================
 
-			local targetDistance =
-				GetDistanceForTime(
-					elapsed,
-					totalLength,
-					totalTime
-				)
-
-			local targetPosition =
-				ArcPosition(
-					cache,
-					totalLength,
-					targetDistance
-				)
-
-			--================================================
-			-- ROTATION
-			--================================================
-
-			local direction =
-				GetDirection(
-					cache,
-					totalLength,
-					targetDistance
-				)
-
-			if direction.Magnitude > 0.001 then
-
-				local targetRotation =
-					CFrame.lookAt(
-						Vector3.zero,
-						direction,
-						Vector3.yAxis
-					)
-
-				currentRotation =
-					SmoothRotation(
-						currentRotation,
-						targetRotation,
-						dt
-					)
-			end
-
-			--================================================
-			-- JUMP EVENT
-			--================================================
-
-			local currentIndex = 1
-
-			for i = 2,#timeline do
-
-				if
-					(timeline[i].RelativeTimestamp or 0)
-					<= elapsed
-				then
-
-					currentIndex = i
-
-				else
-					break
-				end
-			end
-
-			if
-				currentIndex > lastJumpIndex
-				and timeline[currentIndex].Jump
-			then
-
-				Humanoid.Jump = true
-
-				Humanoid:ChangeState(
-					Enum.HumanoidStateType.Jumping
-				)
-
-				lastJumpIndex =
-					currentIndex
-			end
-
-			--================================================
-			-- APPLY POSITION
-			--================================================
-
-			local finalPosition =
-				targetPosition
-
-			if progress >= 0.999 then
-
-				finalPosition =
-					timeline[#timeline].Position
-
-				currentRotation =
-					timeline[#timeline].CFrame
-					-
-					timeline[#timeline].CFrame.Position
-			end
-
-			local finalCFrame =
-				CFrame.new(finalPosition)
-				*currentRotation
-
-			-- Stop Humanoid from competing
-			-- with recorded position.
-
-			Humanoid:Move(
-				Vector3.zero,
-				true
+			ProcessJumpEvents(
+				lastTime,
+				newTime
 			)
 
-			RootPart.CFrame =
-				finalCFrame
+			lastTime =
+				newTime
 
-			RootPart.AssemblyLinearVelocity =
-				Vector3.zero
+			elapsed =
+				newTime
 
-			RootPart.AssemblyAngularVelocity =
-				Vector3.zero
+			State.CurrentElapsed =
+				elapsed
 
-			lastPosition =
-				finalPosition
+			--================================================
+			-- TARGET
+			--================================================
+
+			local data =
+				GetPlaybackData(
+					elapsed
+				)
+
+			if data then
+
+				State.CurrentNodeIndex =
+					data.NodeIndex or 1
+
+				--================================================
+				-- SPEED
+				--================================================
+
+				Humanoid.WalkSpeed =
+					math.max(
+						data.WalkSpeed,
+						0
+					)
+
+				--================================================
+				-- MOVEMENT
+				--================================================
+
+				local direction =
+					data.MoveDirection
+					or Vector3.zero
+
+				if direction.Magnitude > 1 then
+					direction =
+						direction.Unit
+				end
+
+				if direction.Magnitude > 0.025 then
+
+					Humanoid:Move(
+						direction,
+						false
+					)
+
+				else
+
+					Humanoid:Move(
+						Vector3.zero,
+						true
+					)
+				end
+
+				--================================================
+				-- ROTATION
+				--================================================
+
+				local look =
+					data.LookVector
+
+				if
+					look
+					and
+					look.Magnitude > 0.01
+				then
+
+					local flat =
+						Vector3.new(
+							look.X,
+							0,
+							look.Z
+						)
+
+					if flat.Magnitude > 0.01 then
+
+						Humanoid.AutoRotate =
+							false
+
+						local current =
+							RootPart.CFrame
+
+						local desired =
+							CFrame.lookAt(
+								current.Position,
+								current.Position
+								+
+								flat.Unit
+							)
+
+						RootPart.CFrame =
+							current:Lerp(
+								desired,
+								math.clamp(
+									safeDt * 10,
+									0,
+									1
+								)
+							)
+					end
+				end
+
+				--================================================
+				-- DRIFT
+				--================================================
+
+				local offset =
+					data.Position
+					-
+					RootPart.Position
+
+				local horizontalDifference =
+					Vector3.new(
+						offset.X,
+						0,
+						offset.Z
+					)
+
+				local horizontalDistance =
+					horizontalDifference.Magnitude
+
+				--================================================
+				-- HARD CORRECTION
+				--================================================
+
+				if
+					horizontalDistance
+					>=
+					CFG.HardCorrectionDistance
+				then
+
+					if
+						os.clock()
+						-
+						State.LastCorrection
+						>=
+						CFG.CorrectionCooldown
+					then
+
+						local current =
+							RootPart.Position
+
+						local target =
+							data.Position
+
+						local corrected =
+							Vector3.new(
+								target.X,
+								current.Y,
+								target.Z
+							)
+
+						local oldCFrame =
+							RootPart.CFrame
+
+						local velocity =
+							RootPart.AssemblyLinearVelocity
+
+						RootPart.CFrame =
+							CFrame.new(
+								corrected
+							)
+							*
+							CFrame.Angles(
+								0,
+								select(
+									2,
+									oldCFrame:ToEulerAnglesYXZ()
+								),
+								0
+							)
+
+						RootPart.AssemblyLinearVelocity =
+							velocity
+
+						State.LastCorrection =
+							os.clock()
+					end
+
+				--================================================
+				-- SOFT CORRECTION
+				--================================================
+
+				elseif
+					horizontalDistance
+					>=
+					CFG.MovementTolerance
+				then
+
+					if
+						os.clock()
+						-
+						State.LastCorrection
+						>=
+						CFG.CorrectionCooldown
+					then
+
+						local current =
+							RootPart.Position
+
+						local target =
+							data.Position
+
+						local difference =
+							Vector3.new(
+								target.X-current.X,
+								0,
+								target.Z-current.Z
+							)
+
+						local corrected =
+							current
+							+
+							difference
+							*
+							0.35
+
+						local velocity =
+							RootPart.AssemblyLinearVelocity
+
+						local rotationOnly =
+							RootPart.CFrame
+							- RootPart.Position
+
+						RootPart.CFrame =
+							CFrame.new(
+								corrected
+							)
+							*
+							rotationOnly
+
+						RootPart.AssemblyLinearVelocity =
+							velocity
+
+						State.LastCorrection =
+							os.clock()
+					end
+				end
+			end
 
 			--================================================
 			-- FINISH
 			--================================================
 
-			if progress >= 1 then
+			if
+				elapsed >= duration
+				and
+				not State.FinishHandled
+			then
 
-				RootPart.CFrame =
-					timeline[#timeline].CFrame
+				State.FinishHandled =
+					true
 
-				RootPart.AssemblyLinearVelocity =
-					Vector3.zero
+				pcall(function()
+					RunService:UnbindFromRenderStep(
+						PLAYBACK_BIND
+					)
+				end)
 
-				RootPart.AssemblyAngularVelocity =
-					Vector3.zero
+				State.PlaybackConnectionActive =
+					false
+
+				Humanoid:Move(
+					Vector3.zero,
+					true
+				)
+
+				Humanoid.AutoRotate =
+					true
+
+				--================================================
+				-- AUTO WALK LOOP
+				--================================================
 
 				if State.AutoWalk then
 
-					Humanoid.AutoRotate = true
+					task.spawn(
+						function()
 
-					SetStatus(
-						"WALKING TO START"
-					)
-
-					local returnStart =
-						os.clock()
-
-					Humanoid:MoveTo(
-						startPosition
-					)
-
-					task.spawn(function()
-
-						while
-							State.Playing
-							and State.PlaybackToken == token
-						do
-
-							if State.Paused then
-
-								task.wait()
-								continue
+							if
+								not State.Playing
+								or
+								State.PlaybackToken
+								~=
+								token
+							then
+								return
 							end
 
-							if not CharacterAlive() then
-								break
-							end
-
-							local distance =
-								(
-									RootPart.Position
-									-startPosition
-								).Magnitude
-
-							if distance <= 1.5 then
-
-								Humanoid.AutoRotate =
-									false
-
-								startTime =
-									os.clock()
-
-								pausedDuration = 0
-
-								lastJumpIndex = 0
-
-								lastPosition =
-									RootPart.Position
-
-								currentRotation =
-									RootPart.CFrame
-									-RootPart.CFrame.Position
-
-								SetStatus(
-									"AUTO WALK"
+							local reached =
+								ReturnToStart(
+									State.Timeline[1].Position,
+									token
 								)
 
-								break
+							if not reached then
+
+								if
+									State.Playing
+									and
+									State.PlaybackToken
+									==
+									token
+								then
+
+									StopPlayback(
+										false
+									)
+								end
+
+								return
 							end
 
 							if
-								os.clock()-returnStart
-								> CFG.StartTimeout
+								not State.Playing
+								or
+								not State.AutoWalk
+								or
+								State.PlaybackToken
+								~=
+								token
 							then
-
-								StopPlayback(false)
-								break
+								return
 							end
 
-							RunService.Heartbeat:Wait()
+							State.FinishHandled =
+								false
+
+							StartPlaybackRun(
+								token
+							)
 						end
-					end)
+					)
 
 				else
 
 					StopPlayback(false)
+
 				end
 			end
 		end
 	)
+
+	return true
+end
+
+--============================================================
+-- EXECUTE PLAYBACK
+--============================================================
+
+local function ExecutePlayback()
+
+	if State.Recording then
+
+		SetStatus(
+			"STOP RECORD FIRST"
+		)
+
+		return
+	end
+
+	if State.Playing then
+		return
+	end
+
+	if not CharacterAlive() then
+
+		SetStatus(
+			"NO CHARACTER"
+		)
+
+		return
+	end
+
+	if #State.Timeline < 2 then
+
+		SetStatus(
+			"NO ROUTE"
+		)
+
+		return
+	end
+
+	NormalizeTimeline(
+		State.Timeline
+	)
+
+	NormalizeJumpEvents(
+		State.JumpEvents
+	)
+
+	local duration =
+		GetTimelineDuration()
+
+	if duration <= 0 then
+
+		SetStatus(
+			"INVALID ROUTE"
+		)
+
+		return
+	end
+
+	--========================================================
+	-- SAVE ORIGINAL SPEED
+	--========================================================
+
+	State.OriginalWalkSpeed =
+		Humanoid.WalkSpeed
+
+	State.PlaybackWalkSpeed =
+		State.Timeline[1].WalkSpeed
+		or
+		State.OriginalWalkSpeed
+
+	--========================================================
+	-- TOKEN
+	--========================================================
+
+	State.PlaybackToken += 1
+
+	local token =
+		State.PlaybackToken
+
+	State.Playing =
+		true
+
+	State.Paused =
+		false
+
+	State.CurrentElapsed =
+		0
+
+	State.FinishHandled =
+		false
+
+	State.LastCorrection =
+		0
+
+	State.PlaybackJumpIndex =
+		1
+
+	--========================================================
+	-- WALK START
+	--========================================================
+
+	SetStatus(
+		"WALKING TO START"
+	)
+
+	local reached =
+		WalkToStart(
+			State.Timeline[1].Position,
+			token
+		)
+
+	if
+		not reached
+		or
+		not State.Playing
+		or
+		State.PlaybackToken ~= token
+	then
+
+		if State.Playing then
+			StopPlayback(false)
+		end
+
+		return
+	end
+
+	--========================================================
+	-- START
+	--========================================================
+
+	local started =
+		StartPlaybackRun(
+			token
+		)
+
+	if not started then
+
+		if State.Playing then
+			StopPlayback(false)
+		end
+
+		return
+	end
 end
 
 --============================================================
@@ -1519,9 +1919,10 @@ local ScreenGui =
 	Instance.new("ScreenGui")
 
 ScreenGui.Name =
-	"AldoKnightXorzV430Gui"
+	"AldoKnightXorzV453Gui"
 
-ScreenGui.ResetOnSpawn = false
+ScreenGui.ResetOnSpawn =
+	false
 
 ScreenGui.ZIndexBehavior =
 	Enum.ZIndexBehavior.Sibling
@@ -1536,10 +1937,14 @@ ScreenGui.Parent =
 local OpenButton =
 	Instance.new("TextButton")
 
-OpenButton.Name = "OpenMenu"
+OpenButton.Name =
+	"OpenMenu"
 
 OpenButton.Size =
-	UDim2.fromOffset(58,58)
+	UDim2.fromOffset(
+		58,
+		58
+	)
 
 OpenButton.Position =
 	UDim2.new(
@@ -1549,12 +1954,14 @@ OpenButton.Position =
 		-29
 	)
 
-OpenButton.Text = "AK"
+OpenButton.Text =
+	"AK"
 
 OpenButton.Font =
 	Enum.Font.GothamBlack
 
-OpenButton.TextSize = 15
+OpenButton.TextSize =
+	15
 
 OpenButton.TextColor3 =
 	Color3.new(1,1,1)
@@ -1562,7 +1969,11 @@ OpenButton.TextColor3 =
 OpenButton.BackgroundColor3 =
 	CFG.PanelColor
 
-OpenButton.AutoButtonColor = false
+OpenButton.AutoButtonColor =
+	false
+
+OpenButton.Active =
+	true
 
 OpenButton.Parent =
 	ScreenGui
@@ -1571,7 +1982,10 @@ local OpenCorner =
 	Instance.new("UICorner")
 
 OpenCorner.CornerRadius =
-	UDim.new(0,14)
+	UDim.new(
+		0,
+		14
+	)
 
 OpenCorner.Parent =
 	OpenButton
@@ -1579,7 +1993,8 @@ OpenCorner.Parent =
 local OpenStroke =
 	Instance.new("UIStroke")
 
-OpenStroke.Thickness = 2
+OpenStroke.Thickness =
+	2
 
 OpenStroke.Color =
 	CFG.AccentA
@@ -1623,22 +2038,30 @@ MainFrame.Name =
 	"MainFrame"
 
 MainFrame.Size =
-	UDim2.fromOffset(550,325)
+	UDim2.fromOffset(
+		CFG.MainWidth,
+		CFG.MainHeight
+	)
 
 MainFrame.Position =
 	UDim2.new(
 		0.5,
-		-275,
+		-CFG.MainWidth/2,
 		0.5,
-		-162
+		-CFG.MainHeight/2
 	)
 
 MainFrame.BackgroundColor3 =
 	CFG.PanelColor
 
-MainFrame.BorderSizePixel = 0
+MainFrame.BorderSizePixel =
+	0
 
-MainFrame.Active = true
+MainFrame.Active =
+	true
+
+MainFrame.Visible =
+	true
 
 MainFrame.Parent =
 	ScreenGui
@@ -1647,7 +2070,10 @@ local MainCorner =
 	Instance.new("UICorner")
 
 MainCorner.CornerRadius =
-	UDim.new(0,18)
+	UDim.new(
+		0,
+		18
+	)
 
 MainCorner.Parent =
 	MainFrame
@@ -1655,7 +2081,8 @@ MainCorner.Parent =
 local MainStroke =
 	Instance.new("UIStroke")
 
-MainStroke.Thickness = 2
+MainStroke.Thickness =
+	2
 
 MainStroke.Color =
 	CFG.AccentB
@@ -1666,58 +2093,42 @@ MainStroke.Parent =
 local MainGradient =
 	Instance.new("UIGradient")
 
-MainGradient.Rotation = 35
+MainGradient.Rotation =
+	35
 
 MainGradient.Color =
 	ColorSequence.new({
 
 		ColorSequenceKeypoint.new(
 			0,
-			Color3.fromRGB(10,20,35)
+			Color3.fromRGB(
+				10,
+				20,
+				35
+			)
 		),
 
 		ColorSequenceKeypoint.new(
 			0.45,
-			Color3.fromRGB(24,10,40)
+			Color3.fromRGB(
+				24,
+				10,
+				40
+			)
 		),
 
 		ColorSequenceKeypoint.new(
 			1,
-			Color3.fromRGB(8,25,32)
+			Color3.fromRGB(
+				8,
+				25,
+				32
+			)
 		)
 	})
 
 MainGradient.Parent =
 	MainFrame
-
---============================================================
--- GRADIENT ANIMATION
---============================================================
-
-task.spawn(function()
-
-	while ScreenGui.Parent do
-
-		local tween =
-			TweenService:Create(
-				MainGradient,
-				TweenInfo.new(
-					5,
-					Enum.EasingStyle.Linear
-				),
-				{
-					Rotation =
-						MainGradient.Rotation+360
-				}
-			)
-
-		tween:Play()
-		tween.Completed:Wait()
-
-		MainGradient.Rotation =
-			MainGradient.Rotation%360
-	end
-end)
 
 --============================================================
 -- TITLE
@@ -1727,12 +2138,21 @@ local Title =
 	Instance.new("TextLabel")
 
 Title.Size =
-	UDim2.new(1,-30,0,38)
+	UDim2.new(
+		1,
+		-30,
+		0,
+		38
+	)
 
 Title.Position =
-	UDim2.fromOffset(15,8)
+	UDim2.fromOffset(
+		15,
+		8
+	)
 
-Title.BackgroundTransparency = 1
+Title.BackgroundTransparency =
+	1
 
 Title.Text =
 	"ALDO KNIGHTXORZ"
@@ -1740,13 +2160,21 @@ Title.Text =
 Title.Font =
 	Enum.Font.GothamBlack
 
-Title.TextSize = 17
+Title.TextSize =
+	17
 
 Title.TextXAlignment =
 	Enum.TextXAlignment.Left
 
 Title.TextColor3 =
-	Color3.new(1,1,1)
+	Color3.new(
+		1,
+		1,
+		1
+	)
+
+Title.Active =
+	true
 
 Title.Parent =
 	MainFrame
@@ -1764,7 +2192,11 @@ TitleGradient.Color =
 
 		ColorSequenceKeypoint.new(
 			0.5,
-			Color3.new(1,1,1)
+			Color3.new(
+				1,
+				1,
+				1
+			)
 		),
 
 		ColorSequenceKeypoint.new(
@@ -1784,20 +2216,30 @@ StatusLabel =
 	Instance.new("TextLabel")
 
 StatusLabel.Size =
-	UDim2.new(1,-30,0,25)
+	UDim2.new(
+		1,
+		-30,
+		0,
+		25
+	)
 
 StatusLabel.Position =
-	UDim2.fromOffset(15,43)
+	UDim2.fromOffset(
+		15,
+		43
+	)
 
-StatusLabel.BackgroundTransparency = 1
+StatusLabel.BackgroundTransparency =
+	1
 
 StatusLabel.Text =
-	"STATUS  •  IDLE  •  FILE 1"
+	"STATUS • IDLE • FILE 1"
 
 StatusLabel.Font =
 	Enum.Font.GothamBold
 
-StatusLabel.TextSize = 11
+StatusLabel.TextSize =
+	11
 
 StatusLabel.TextXAlignment =
 	Enum.TextXAlignment.Left
@@ -1815,17 +2257,34 @@ StatusLabel.Parent =
 local Container =
 	Instance.new("ScrollingFrame")
 
+Container.Name =
+	"ButtonContainer"
+
 Container.Size =
-	UDim2.new(1,-30,1,-82)
+	UDim2.new(
+		1,
+		-30,
+		1,
+		-82
+	)
 
 Container.Position =
-	UDim2.fromOffset(15,73)
+	UDim2.fromOffset(
+		15,
+		73
+	)
 
-Container.BackgroundTransparency = 1
+Container.BackgroundTransparency =
+	1
 
-Container.BorderSizePixel = 0
+Container.BorderSizePixel =
+	0
 
-Container.ScrollBarThickness = 3
+Container.ScrollBarThickness =
+	3
+
+Container.ScrollBarImageColor3 =
+	CFG.AccentA
 
 Container.AutomaticCanvasSize =
 	Enum.AutomaticSize.Y
@@ -1840,10 +2299,16 @@ local Grid =
 	Instance.new("UIGridLayout")
 
 Grid.CellSize =
-	UDim2.fromOffset(120,39)
+	UDim2.fromOffset(
+		120,
+		39
+	)
 
 Grid.CellPadding =
-	UDim2.fromOffset(8,8)
+	UDim2.fromOffset(
+		8,
+		8
+	)
 
 Grid.SortOrder =
 	Enum.SortOrder.LayoutOrder
@@ -1852,7 +2317,7 @@ Grid.Parent =
 	Container
 
 --============================================================
--- BUTTON
+-- BUTTON CREATOR
 --============================================================
 
 local function CreateButton(
@@ -1864,8 +2329,14 @@ local function CreateButton(
 	local button =
 		Instance.new("TextButton")
 
+	button.Name =
+		"Button_" .. tostring(order)
+
 	button.Size =
-		UDim2.fromOffset(120,39)
+		UDim2.fromOffset(
+			120,
+			39
+		)
 
 	button.LayoutOrder =
 		order
@@ -1886,9 +2357,14 @@ local function CreateButton(
 	button.Font =
 		Enum.Font.GothamBold
 
-	button.TextSize = 10
+	button.TextSize =
+		10
 
-	button.AutoButtonColor = false
+	button.AutoButtonColor =
+		false
+
+	button.Active =
+		true
 
 	button.Parent =
 		Container
@@ -1897,7 +2373,10 @@ local function CreateButton(
 		Instance.new("UICorner")
 
 	corner.CornerRadius =
-		UDim.new(0,9)
+		UDim.new(
+			0,
+			9
+		)
 
 	corner.Parent =
 		button
@@ -1905,7 +2384,8 @@ local function CreateButton(
 	local stroke =
 		Instance.new("UIStroke")
 
-	stroke.Thickness = 1
+	stroke.Thickness =
+		1
 
 	stroke.Color =
 		Color3.fromRGB(
@@ -1917,65 +2397,53 @@ local function CreateButton(
 	stroke.Parent =
 		button
 
-	button.MouseEnter:Connect(function()
+	button.Activated:Connect(
+		function()
 
-		TweenService:Create(
-			button,
-			TweenInfo.new(0.12),
-			{
-				BackgroundColor3 =
-					Color3.fromRGB(
-						45,
-						30,
-						65
-					)
-			}
-		):Play()
-	end)
+			--================================================
+			-- BUTTON FEEDBACK
+			--================================================
 
-	button.MouseLeave:Connect(function()
+			button.BackgroundColor3 =
+				CFG.AccentB
 
-		TweenService:Create(
-			button,
-			TweenInfo.new(0.12),
-			{
-				BackgroundColor3 =
-					CFG.ButtonColor
-			}
-		):Play()
-	end)
+			task.delay(
+				0.1,
+				function()
 
-	button.Activated:Connect(function()
+					if
+						button
+						and
+						button.Parent
+					then
 
-		TweenService:Create(
-			button,
-			TweenInfo.new(0.08),
-			{
-				BackgroundColor3 =
-					CFG.AccentB
-			}
-		):Play()
+						button.BackgroundColor3 =
+							CFG.ButtonColor
 
-		task.delay(
-			0.1,
-			function()
-
-				if button.Parent then
-
-					TweenService:Create(
-						button,
-						TweenInfo.new(0.12),
-						{
-							BackgroundColor3 =
-								CFG.ButtonColor
-						}
-					):Play()
+					end
 				end
-			end
-		)
+			)
 
-		callback()
-	end)
+			--================================================
+			-- CALLBACK
+			--================================================
+
+			local success,err =
+				pcall(callback)
+
+			if not success then
+
+				warn(
+					"[KNIGHTXORZ]",
+					err
+				)
+
+				SetStatus(
+					"ERROR"
+				)
+			end
+		end
+	)
 
 	return button
 end
@@ -1987,35 +2455,88 @@ end
 CreateButton(
 	"● RECORD",
 	1,
+
 	function()
+
+		--====================================================
+		-- STOP RECORD
+		--====================================================
 
 		if State.Recording then
 
-			State.Recording = false
+			State.Recording =
+				false
+
+			AddRecordNode(true)
 
 			NormalizeTimeline(
 				State.Timeline
 			)
 
-			SetStatus("IDLE")
+			NormalizeJumpEvents(
+				State.JumpEvents
+			)
 
-		else
+			RedrawRoute()
 
-			StopPlayback(true)
+			SetStatus(
+				"RECORDED "
+				..
+				#State.Timeline
+				..
+				" NODES / "
+				..
+				#State.JumpEvents
+				..
+				" JUMPS"
+			)
 
-			State.Timeline = {}
-
-			ClearVisuals()
-
-			State.RecordStart =
-				os.clock()
-
-			State.LastJump = false
-
-			State.Recording = true
-
-			SetStatus("RECORDING")
+			return
 		end
+
+		--====================================================
+		-- START NEW RECORD
+		--====================================================
+
+		StopPlayback(true)
+
+		State.Timeline =
+			{}
+
+		State.JumpEvents =
+			{}
+
+		State.LastJumpEventIndex =
+			1
+
+		ClearVisuals()
+
+		if not CharacterAlive() then
+
+			SetStatus(
+				"NO CHARACTER"
+			)
+
+			return
+		end
+
+		State.RecordStart =
+			os.clock()
+
+		State.LastRecordTime =
+			0
+
+		State.LastPosition =
+			nil
+
+		State.Recording =
+			true
+
+		SetStatus(
+			"RECORDING"
+		)
+
+		AddRecordNode(true)
 	end
 )
 
@@ -2026,25 +2547,33 @@ CreateButton(
 CreateButton(
 	"▶ PLAY",
 	2,
+
 	function()
 
 		if State.Recording then
+
+			SetStatus(
+				"STOP RECORD FIRST"
+			)
+
 			return
 		end
 
-		State.AutoWalk = false
+		State.AutoWalk =
+			false
 
 		ExecutePlayback()
 	end
 )
 
 --============================================================
--- PAUSE
+-- PAUSE / RESUME
 --============================================================
 
 CreateButton(
 	"Ⅱ PAUSE / RESUME",
 	3,
+
 	function()
 
 		if not State.Playing then
@@ -2056,7 +2585,14 @@ CreateButton(
 
 		if State.Paused then
 
-			SetStatus("PAUSED")
+			Humanoid:Move(
+				Vector3.zero,
+				true
+			)
+
+			SetStatus(
+				"PAUSED"
+			)
 
 		else
 
@@ -2065,6 +2601,7 @@ CreateButton(
 				and "AUTO WALK"
 				or "PLAYING"
 			)
+
 		end
 	end
 )
@@ -2076,24 +2613,37 @@ CreateButton(
 CreateButton(
 	"↻ AUTO WALK",
 	4,
+
 	function()
 
 		if State.Recording then
+
+			SetStatus(
+				"STOP RECORD FIRST"
+			)
+
+			return
+		end
+
+		if State.AutoWalk then
+
+			State.AutoWalk =
+				false
+
+			StopPlayback(true)
+
 			return
 		end
 
 		State.AutoWalk =
-			not State.AutoWalk
+			true
 
-		if State.AutoWalk then
-
-			if not State.Playing then
-				ExecutePlayback()
-			end
-
+		if not State.Playing then
+			ExecutePlayback()
 		else
-
-			StopPlayback(true)
+			SetStatus(
+				"AUTO WALK"
+			)
 		end
 	end
 )
@@ -2105,8 +2655,8 @@ CreateButton(
 CreateButton(
 	"■ STOP",
 	5,
-	function()
 
+	function()
 		StopPlayback(true)
 	end
 )
@@ -2118,13 +2668,21 @@ CreateButton(
 for i = 1,5 do
 
 	CreateButton(
-		"FILE "..i,
-		5+i,
+		"FILE " .. i,
+		5 + i,
+
 		function()
 
-			State.SelectedFile = i
+			if State.Playing then
+				StopPlayback(true)
+			end
 
-			SetStatus("IDLE")
+			State.SelectedFile =
+				i
+
+			SetStatus(
+				"IDLE"
+			)
 		end
 	)
 end
@@ -2136,14 +2694,24 @@ end
 CreateButton(
 	"↓ SAVE FILE",
 	11,
+
 	function()
 
 		if #State.Timeline == 0 then
+
+			SetStatus(
+				"NO DATA"
+			)
+
 			return
 		end
 
 		NormalizeTimeline(
 			State.Timeline
+		)
+
+		NormalizeJumpEvents(
+			State.JumpEvents
 		)
 
 		State.SavedFiles[
@@ -2153,12 +2721,21 @@ CreateButton(
 			Timeline =
 				CloneTimeline(
 					State.Timeline
-				)
+				),
+
+			JumpEvents =
+				CloneJumpEvents(
+					State.JumpEvents
+				),
+
+			SavedAt =
+				os.time()
 		}
 
 		SetStatus(
 			"SAVED FILE "
-			..State.SelectedFile
+			..
+			State.SelectedFile
 		)
 	end
 )
@@ -2170,6 +2747,7 @@ CreateButton(
 CreateButton(
 	"↑ LOAD FILE",
 	12,
+
 	function()
 
 		local data =
@@ -2178,7 +2756,11 @@ CreateButton(
 			]
 
 		if not data then
-			SetStatus("FILE EMPTY")
+
+			SetStatus(
+				"FILE EMPTY"
+			)
+
 			return
 		end
 
@@ -2189,15 +2771,25 @@ CreateButton(
 				data.Timeline
 			)
 
+		State.JumpEvents =
+			CloneJumpEvents(
+				data.JumpEvents
+			)
+
 		NormalizeTimeline(
 			State.Timeline
+		)
+
+		NormalizeJumpEvents(
+			State.JumpEvents
 		)
 
 		RedrawRoute()
 
 		SetStatus(
 			"LOADED FILE "
-			..State.SelectedFile
+			..
+			State.SelectedFile
 		)
 	end
 )
@@ -2209,25 +2801,33 @@ CreateButton(
 CreateButton(
 	"× CLEAR",
 	13,
+
 	function()
 
 		StopPlayback(true)
 
-		State.Timeline = {}
+		State.Timeline =
+			{}
+
+		State.JumpEvents =
+			{}
 
 		ClearVisuals()
 
-		SetStatus("CLEARED")
+		SetStatus(
+			"CLEARED"
+		)
 	end
 )
 
 --============================================================
--- LINE VISIBLE
+-- LINE
 --============================================================
 
 CreateButton(
 	"◈ LINE VISIBLE",
 	14,
+
 	function()
 
 		State.LineVisible =
@@ -2237,12 +2837,17 @@ CreateButton(
 			State.VisualNodes
 		) do
 
-			if part and part.Parent then
+			if
+				part
+				and
+				part.Parent
+			then
 
 				part.Transparency =
 					State.LineVisible
 					and 0
 					or 1
+
 			end
 		end
 
@@ -2255,112 +2860,318 @@ CreateButton(
 )
 
 --============================================================
--- DRAG MAIN FRAME
+-- DRAG GUI
 --============================================================
 
 local dragging = false
 local dragStart
 local startPosition
 
-Title.InputBegan:Connect(function(input)
+Title.InputBegan:Connect(
+	function(input)
 
-	if
-		input.UserInputType ==
+		if
+			input.UserInputType
+			==
 			Enum.UserInputType.MouseButton1
-		or input.UserInputType ==
+			or
+			input.UserInputType
+			==
 			Enum.UserInputType.Touch
-	then
+		then
 
-		dragging = true
+			dragging =
+				true
 
-		dragStart =
-			input.Position
+			dragStart =
+				input.Position
 
-		startPosition =
-			MainFrame.Position
+			startPosition =
+				MainFrame.Position
+
+		end
 	end
-end)
+)
 
-UserInputService.InputChanged:Connect(function(input)
+UserInputService.InputChanged:Connect(
+	function(input)
 
-	if not dragging then
-		return
-	end
+		if not dragging then
+			return
+		end
 
-	if
-		input.UserInputType ==
+		if
+			input.UserInputType
+			==
 			Enum.UserInputType.MouseMovement
-		or input.UserInputType ==
+			or
+			input.UserInputType
+			==
 			Enum.UserInputType.Touch
-	then
+		then
 
-		local delta =
-			input.Position-dragStart
+			local delta =
+				input.Position
+				-
+				dragStart
 
-		MainFrame.Position =
-			UDim2.new(
-				startPosition.X.Scale,
-				startPosition.X.Offset+delta.X,
-				startPosition.Y.Scale,
-				startPosition.Y.Offset+delta.Y
-			)
+			MainFrame.Position =
+				UDim2.new(
+					startPosition.X.Scale,
+					startPosition.X.Offset
+					+
+					delta.X,
+
+					startPosition.Y.Scale,
+					startPosition.Y.Offset
+					+
+					delta.Y
+				)
+		end
 	end
-end)
+)
 
-UserInputService.InputEnded:Connect(function(input)
+UserInputService.InputEnded:Connect(
+	function(input)
 
-	if
-		input.UserInputType ==
+		if
+			input.UserInputType
+			==
 			Enum.UserInputType.MouseButton1
-		or input.UserInputType ==
+			or
+			input.UserInputType
+			==
 			Enum.UserInputType.Touch
-	then
+		then
 
-		dragging = false
+			dragging =
+				false
+
+		end
 	end
-end)
+)
 
 --============================================================
 -- OPEN / CLOSE
 --============================================================
 
-OpenButton.Activated:Connect(function()
+OpenButton.Activated:Connect(
+	function()
 
-	MainFrame.Visible =
-		not MainFrame.Visible
-end)
+		MainFrame.Visible =
+			not MainFrame.Visible
+
+	end
+)
 
 --============================================================
--- OPEN BUTTON GRADIENT
+-- GRADIENT ANIMATION
 --============================================================
 
-task.spawn(function()
+task.spawn(
+	function()
 
-	while ScreenGui.Parent do
+		while
+			ScreenGui
+			and
+			ScreenGui.Parent
+		do
 
-		local tween =
-			TweenService:Create(
-				OpenGradient,
-				TweenInfo.new(
-					3,
-					Enum.EasingStyle.Linear
-				),
-				{
-					Rotation =
-						OpenGradient.Rotation+360
-				}
+			local targetRotation =
+				MainGradient.Rotation
+				+
+				360
+
+			local tween =
+				TweenService:Create(
+					MainGradient,
+
+					TweenInfo.new(
+						5,
+						Enum.EasingStyle.Linear
+					),
+
+					{
+						Rotation =
+							targetRotation
+					}
+				)
+
+			tween:Play()
+			tween.Completed:Wait()
+
+			if
+				MainGradient
+				and
+				MainGradient.Parent
+			then
+
+				MainGradient.Rotation =
+					MainGradient.Rotation
+					% 360
+
+			else
+				break
+			end
+		end
+	end
+)
+
+task.spawn(
+	function()
+
+		while
+			ScreenGui
+			and
+			ScreenGui.Parent
+		do
+
+			local targetRotation =
+				OpenGradient.Rotation
+				+
+				360
+
+			local tween =
+				TweenService:Create(
+					OpenGradient,
+
+					TweenInfo.new(
+						3,
+						Enum.EasingStyle.Linear
+					),
+
+					{
+						Rotation =
+							targetRotation
+					}
+				)
+
+			tween:Play()
+			tween.Completed:Wait()
+
+			if
+				OpenGradient
+				and
+				OpenGradient.Parent
+			then
+
+				OpenGradient.Rotation =
+					OpenGradient.Rotation
+					% 360
+
+			else
+				break
+			end
+		end
+	end
+)
+
+--============================================================
+-- CHARACTER RESPAWN
+--============================================================
+
+Player.CharacterAdded:Connect(
+	function(char)
+
+		--====================================================
+		-- INVALIDATE OLD PLAYBACK
+		--====================================================
+
+		State.PlaybackToken += 1
+
+		State.Playing =
+			false
+
+		State.Paused =
+			false
+
+		State.Recording =
+			false
+
+		State.AutoWalk =
+			false
+
+		State.FinishHandled =
+			false
+
+		State.PlaybackConnectionActive =
+			false
+
+		pcall(function()
+			RunService:UnbindFromRenderStep(
+				PLAYBACK_BIND
+			)
+		end)
+
+		SetupCharacter(char)
+
+		if Humanoid then
+
+			Humanoid.AutoRotate =
+				true
+
+		end
+
+		SetStatus(
+			"IDLE"
+		)
+	end
+)
+
+--============================================================
+-- GUI CLEANUP
+--============================================================
+
+ScreenGui.AncestryChanged:Connect(
+	function(_,parent)
+
+		if parent then
+			return
+		end
+
+		State.PlaybackToken += 1
+
+		State.Recording =
+			false
+
+		State.Playing =
+			false
+
+		pcall(function()
+
+			RunService:UnbindFromRenderStep(
+				RECORD_BIND
 			)
 
-		tween:Play()
-		tween.Completed:Wait()
+			RunService:UnbindFromRenderStep(
+				PLAYBACK_BIND
+			)
 
-		OpenGradient.Rotation =
-			OpenGradient.Rotation%360
+		end)
+
+		if RecordHeartbeatConnection then
+
+			pcall(function()
+				RecordHeartbeatConnection:Disconnect()
+			end)
+
+			RecordHeartbeatConnection =
+				nil
+		end
+
+		DisconnectCharacterConnections()
+
 	end
-end)
+)
 
 --============================================================
 -- FINAL
 --============================================================
 
-SetStatus("IDLE")
+SetStatus(
+	"IDLE"
+)
+
+print(
+	"KNIGHTXORZ V4.53 READY"
+)
