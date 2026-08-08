@@ -12,7 +12,7 @@ local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 local Character, RootPart, Humanoid
 local stopPlayback
 
--- Cleanup Universal untuk memastikan tidak ada duplikasi skrip lama
+-- Cleanup Universal
 if _G.HeavelyneArt_Cleanup then pcall(_G.HeavelyneArt_Cleanup) end
 
 local currentConnections = {}
@@ -137,7 +137,7 @@ ScreenGui.ResetOnSpawn = false
 ScreenGui.IgnoreGuiInset = true
 ScreenGui.Parent = PlayerGui
 
--- Floating Open/Close Menu Button (Statis Klasik)
+-- Floating Open/Close Menu Button (Tanpa Animasi / Statis)
 local OpenMenu = Instance.new("ImageButton")
 OpenMenu.Name = "OpenMenuButton"
 OpenMenu.Size = UDim2.new(0, 50, 0, 50)
@@ -247,7 +247,7 @@ Divider.Parent = MainFrame
 -- [ 3. SIDEBAR MENU PANEL ]
 local MenuPanel = Instance.new("Frame")
 MenuPanel.Name = "MenuPanel"
-MenuPanel.Size = UDim2.new(0, 110, 1, -51)
+MenuPanel.Size = UDim2.new(0, 120, 1, -51)
 MenuPanel.Position = UDim2.new(0, 0, 0, 51)
 MenuPanel.BackgroundTransparency = 1
 MenuPanel.Parent = MainFrame
@@ -261,40 +261,17 @@ MenuTitle.Font = Enum.Font.GothamBold
 MenuTitle.TextSize = 13
 MenuTitle.Parent = MenuPanel
 
-local DotsLayout = Instance.new("UIListLayout")
-DotsLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-DotsLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-DotsLayout.SortOrder = Enum.SortOrder.LayoutIndex
-DotsLayout.Padding = UDim.new(0, 8)
-DotsLayout.Parent = MenuPanel
-
-for i = 1, 4 do
-	local DotButton = Instance.new("TextButton")
-	DotButton.Name = "Option_" .. i
-	DotButton.Size = UDim2.new(0, 90, 0, 32)
-	DotButton.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
-	DotButton.Text = "•••"
-	DotButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-	DotButton.Font = Enum.Font.GothamBold
-	DotButton.TextSize = 14
-	DotButton.Parent = MenuPanel
-	
-	local Corner = Instance.new("UICorner")
-	Corner.CornerRadius = UDim.new(0, 6)
-	Corner.Parent = DotButton
-end
-
--- [ 4. CONTENT CONTAINER (MAIN RP / RECORDER INTERFACE) ]
+-- [ 4. CONTENT CONTAINER (MAIN RP INTERFACE) ]
 local ContentArea = Instance.new("Frame")
 ContentArea.Name = "MainRPContent"
-ContentArea.Size = UDim2.new(1, -115, 1, -55)
-ContentArea.Position = UDim2.new(0, 115, 0, 52)
+ContentArea.Size = UDim2.new(1, -125, 1, -55)
+ContentArea.Position = UDim2.new(0, 125, 0, 52)
 ContentArea.BackgroundTransparency = 1
 ContentArea.Parent = MainFrame
 
 local StatusLabel = Instance.new("TextLabel")
 StatusLabel.Size = UDim2.new(1, -10, 0, 25)
-StatusLabel.Position = UDim2.new(0, 10, 0, 0)
+StatusLabel.Position = UDim2.new(0, 5, 0, 0)
 StatusLabel.Text = "Status: IDLE | File: 1"
 StatusLabel.TextColor3 = CFG.LineColor
 StatusLabel.Font = Enum.Font.GothamBold
@@ -304,16 +281,18 @@ StatusLabel.BackgroundTransparency = 1
 StatusLabel.Parent = ContentArea
 
 local ScrollingContainer = Instance.new("ScrollingFrame")
+ScrollingContainer.Name = "ScrollingContainer"
 ScrollingContainer.Size = UDim2.new(1, -10, 1, -30)
-ScrollingContainer.Position = UDim2.new(0, 5, 0, 25)
+ScrollingContainer.Position = UDim2.new(0, 0, 0, 25)
 ScrollingContainer.BackgroundTransparency = 1
-ScrollingContainer.CanvasSize = UDim2.new(0, 0, 0, 620)
-ScrollingContainer.ScrollBarThickness = 3
+ScrollingContainer.CanvasSize = UDim2.new(0, 0, 0, 550)
+ScrollingContainer.ScrollBarThickness = 4
 ScrollingContainer.Parent = ContentArea
 
 local UIList = Instance.new("UIListLayout")
 UIList.Parent = ScrollingContainer
 UIList.HorizontalAlignment = Enum.HorizontalAlignment.Left
+UIList.SortOrder = Enum.SortOrder.LayoutOrder
 UIList.Padding = UDim.new(0, 6)
 
 local function updateStatus(text)
@@ -322,7 +301,7 @@ end
 
 local function createBtn(text, order, callback)
 	local btn = Instance.new("TextButton")
-	btn.Size = UDim2.new(0, 455, 0, 30)
+	btn.Size = UDim2.new(0, 445, 0, 30)
 	btn.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
 	btn.Text = text
 	btn.TextColor3 = Color3.fromRGB(230, 230, 230)
