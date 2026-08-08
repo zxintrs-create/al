@@ -1,137 +1,430 @@
--- [[ DELTA MOBILE PRECISION CONTROL SYSTEM (STABLE VERSION) ]] --  
--- Developed by Delta maker script for Aldo Tzy  
--- Features: Virtual D-Pad, Hold Movement, W-Lock System, R6/R15 Support
+local Players=game:GetService("Players")
+local RunService=game:GetService("RunService")
+local UserInputService=game:GetService("UserInputService")
+local ContextActionService=game:GetService("ContextActionService")
 
-local Players = game:GetService("Players")  
-local RunService = game:GetService("RunService")  
-local UserInputService = game:GetService("UserInputService")
+local player=Players.LocalPlayer
+local playerGui=player:WaitForChild("PlayerGui")
 
-local player = Players.LocalPlayer  
-local playerGui = player:WaitForChild("PlayerGui")
+local oldGui=playerGui:FindFirstChild("DeltaMobileControls")
+if oldGui then oldGui:Destroy() end
 
--- Hapus GUI lama jika script dijalankan ulang agar tidak menumpuk
-if playerGui:FindFirstChild("DeltaMobileControls") then  
-	playerGui.DeltaMobileControls:Destroy()  
+local oldConnections=playerGui:FindFirstChild("DeltaMobileConnections")
+if oldConnections then oldConnections:Destroy() end
+
+local character=player.Character or player.CharacterAdded:Wait()
+local humanoid=character:WaitForChild("Humanoid")
+
+local connections={}
+local function connect(signal,fn)
+	local c=signal:Connect(fn)
+	table.insert(connections,c)
+	return c
 end
 
-local character = player.Character or player.CharacterAdded:Wait()  
-local humanoid = character:WaitForChild("Humanoid")
-
--- // STATE MANAGEMENT // --  
-local moveState = {  
-	Forward = false,  
-	Backward = false,  
-	Left = false,  
-	Right = false,  
-	WLock = false  
+local moveState={
+	Forward=false,
+	Backward=false,
+	Left=false,
+	Right=false,
+	UpLeft=false,
+	UpRight=false,
+	DownLeft=false,
+	DownRight=false,
+	WLock=false
 }
 
--- // UI CONSTRUCTION // --  
-local screenGui = Instance.new("ScreenGui")  
-screenGui.Name = "DeltaMobileControls"  
-screenGui.ResetOnSpawn = false  
-screenGui.Parent = playerGui
+local activeInputs={}
+local BLOCK_ACTION="KNIGHTXORZ_BLOCK_DEFAULT_MOVEMENT"
 
-local mainFrame = Instance.new("Frame")  
-mainFrame.Name = "ControlsFrame"  
-mainFrame.Size = UDim2.new(0, 260, 0, 260)  
-mainFrame.Position = UDim2.new(0, 40, 1, -300)  
-mainFrame.BackgroundTransparency = 1  
-mainFrame.Parent = screenGui
+pcall(function()
+	ContextActionService:UnbindAction(BLOCK_ACTION)
+end)
 
-local function createButton(name, pos, size, text)  
-	local btn = Instance.new("TextButton")  
-	btn.Name = name  
-	btn.Position = pos  
-	btn.Size = size  
-	btn.Text = text  
-	btn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)  
-	btn.TextColor3 = Color3.fromRGB(255, 255, 255)  
-	btn.Font = Enum.Font.GothamBold  
-	btn.TextSize = 26  
-	btn.AutoButtonColor = false  
-	  
-	local corner = Instance.new("UICorner")  
-	corner.CornerRadius = UDim.new(0, 12)  
-	corner.Parent = btn  
-	  
-	btn.Parent = mainFrame  
-	return btn  
+if UserInputService.TouchEnabled then
+	ContextActionService:BindActionAtPriority(
+		BLOCK_ACTION,
+		function()
+			return Enum.ContextActionResult.Sink
+		end,
+		false,
+		Enum.ContextActionPriority.High.Value,
+		Enum.PlayerActions.CharacterForward,
+		Enum.PlayerActions.CharacterBackward,
+		Enum.PlayerActions.CharacterLeft,
+		Enum.PlayerActions.CharacterRight
+	)
 end
 
--- Creating D-Pad Buttons  
-local btnUp = createButton("Up", UDim2.new(0.35, 0, 0, 0), UDim2.new(0.3, 0, 0.3, 0), "▲")  
-local btnDown = createButton("Down", UDim2.new(0.35, 0, 0.7, 0), UDim2.new(0.3, 0, 0.3, 0), "▼")  
-local btnLeft = createButton("Left", UDim2.new(0, 0, 0.35, 0), UDim2.new(0.3, 0, 0.3, 0), "◀")  
-local btnRight = createButton("Right", UDim2.new(0.7, 0, 0.35, 0), UDim2.new(0.3, 0, 0.3, 0), "▶")
+local function disableDefaultAnalog()
+	local touchGui=playerGui:FindFirstChild("TouchGui")
+	if not touchGui then return end
 
--- Creating W Lock Button  
-local btnWLock = createButton("WLock", UDim2.new(0.7, 0, 0, 0), UDim2.new(0.3, 0, 0.2, 0), "W: OFF")  
-btnWLock.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
-
--- // INPUT LOGIC // --  
-local function setMove(dir, state)  
-	moveState[dir] = state  
+	for _,obj in ipairs(touchGui:GetDescendants()) do
+		if obj:IsA("GuiObject") and (
+			obj.Name=="DynamicThumbstickFrame" or
+			obj.Name=="ThumbstickFrame" or
+			obj.Name=="Thumbstick"
+		) then
+			obj.Visible=false
+			obj.Active=false
+			obj.Selectable=false
+		end
+	end
 end
 
-btnUp.MouseButton1Down:Connect(function() setMove("Forward", true) end)  
-btnUp.MouseButton1Up:Connect(function() setMove("Forward", false) end)  
-btnUp.MouseLeave:Connect(function() setMove("Forward", false) end)
+local function refreshTouchGui()
+	disableDefaultAnalog()
+	task.delay(.05,disableDefaultAnalog)
+	task.delay(.15,disableDefaultAnalog)
+	task.delay(.3,disableDefaultAnalog)
+	task.delay(.6,disableDefaultAnalog)
+end
 
-btnDown.MouseButton1Down:Connect(function() setMove("Backward", true) end)  
-btnDown.MouseButton1Up:Connect(function() setMove("Backward", false) end)  
-btnDown.MouseLeave:Connect(function() setMove("Backward", false) end)
+refreshTouchGui()
 
-btnLeft.MouseButton1Down:Connect(function() setMove("Left", true) end)  
-btnLeft.MouseButton1Up:Connect(function() setMove("Left", false) end)  
-btnLeft.MouseLeave:Connect(function() setMove("Left", false) end)
-
-btnRight.MouseButton1Down:Connect(function() setMove("Right", true) end)  
-btnRight.MouseButton1Up:Connect(function() setMove("Right", false) end)  
-btnRight.MouseLeave:Connect(function() setMove("Right", false) end)
-
-btnWLock.MouseButton1Click:Connect(function()  
-	moveState.WLock = not moveState.WLock  
-	if moveState.WLock then  
-		btnWLock.Text = "W: ON"  
-		btnWLock.BackgroundColor3 = Color3.fromRGB(0, 150, 0)  
-	else  
-		btnWLock.Text = "W: OFF"  
-		btnWLock.BackgroundColor3 = Color3.fromRGB(150, 0, 0)  
-	end  
+connect(playerGui.ChildAdded,function(child)
+	if child.Name=="TouchGui" then
+		task.defer(refreshTouchGui)
+	end
 end)
 
--- // MOVEMENT ENGINE // --  
-RunService.RenderStepped:Connect(function()  
-	if not character or not character:FindFirstChild("HumanoidRootPart") or not humanoid then return end  
-	  
-	local camera = workspace.CurrentCamera  
-	local moveVec = Vector3.new(0, 0, 0)  
-	  
-	if moveState.Forward or moveState.WLock then  
-		moveVec = moveVec + (camera.CFrame.LookVector * Vector3.new(1, 0, 1))  
-	end  
-	  
-	if moveState.Backward then  
-		moveVec = moveVec - (camera.CFrame.LookVector * Vector3.new(1, 0, 1))  
-	end  
-	  
-	if moveState.Left then  
-		moveVec = moveVec - (camera.CFrame.RightVector * Vector3.new(1, 0, 1))  
-	end  
-	  
-	if moveState.Right then  
-		moveVec = moveVec + (camera.CFrame.RightVector * Vector3.new(1, 0, 1))  
-	end  
-	  
-	if moveVec.Magnitude > 0 then  
-		moveVec = moveVec.Unit  
-	end  
-	  
-	humanoid:Move(moveVec, false)  
+local screenGui=Instance.new("ScreenGui")
+screenGui.Name="DeltaMobileControls"
+screenGui.ResetOnSpawn=false
+screenGui.IgnoreGuiInset=true
+screenGui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
+screenGui.DisplayOrder=100
+screenGui.Parent=playerGui
+
+local mainFrame=Instance.new("Frame")
+mainFrame.Name="ControlsFrame"
+mainFrame.Size=UDim2.new(0,260,0,260)
+mainFrame.Position=UDim2.new(0,24,1,-290)
+mainFrame.BackgroundTransparency=1
+mainFrame.BorderSizePixel=0
+mainFrame.Parent=screenGui
+
+local function createButton(name,pos,size,text)
+	local btn=Instance.new("TextButton")
+	btn.Name=name
+	btn.Position=pos
+	btn.Size=size
+	btn.Text=text
+	btn.BackgroundColor3=Color3.fromRGB(30,30,30)
+	btn.TextColor3=Color3.new(1,1,1)
+	btn.Font=Enum.Font.GothamBold
+	btn.TextSize=24
+	btn.AutoButtonColor=false
+	btn.Active=true
+	btn.Selectable=false
+	btn.BorderSizePixel=0
+	btn.ZIndex=10
+
+	local corner=Instance.new("UICorner")
+	corner.CornerRadius=UDim.new(0,12)
+	corner.Parent=btn
+
+	btn.Parent=mainFrame
+	return btn
+end
+
+local btnUp=createButton("Up",UDim2.new(.35,0,0,0),UDim2.new(.3,0,.3,0),"▲")
+local btnDown=createButton("Down",UDim2.new(.35,0,.7,0),UDim2.new(.3,0,.3,0),"▼")
+local btnLeft=createButton("Left",UDim2.new(0,0,.35,0),UDim2.new(.3,0,.3,0),"◀")
+local btnRight=createButton("Right",UDim2.new(.7,0,.35,0),UDim2.new(.3,0,.3,0),"▶")
+
+local btnUL=createButton("UpLeft",UDim2.new(.08,0,.08,0),UDim2.new(.22,0,.22,0),"↖")
+local btnUR=createButton("UpRight",UDim2.new(.70,0,.08,0),UDim2.new(.22,0,.22,0),"↗")
+local btnDL=createButton("DownLeft",UDim2.new(.08,0,.70,0),UDim2.new(.22,0,.22,0),"↙")
+local btnDR=createButton("DownRight",UDim2.new(.70,0,.70,0),UDim2.new(.22,0,.22,0),"↘")
+
+local btnWLock=Instance.new("TextButton")
+btnWLock.Name="WLock"
+btnWLock.Position=UDim2.new(.35,0,.35,0)
+btnWLock.Size=UDim2.new(.3,0,.3,0)
+btnWLock.Text="W"
+btnWLock.BackgroundColor3=Color3.fromRGB(150,0,0)
+btnWLock.TextColor3=Color3.new(1,1,1)
+btnWLock.Font=Enum.Font.GothamBold
+btnWLock.TextSize=24
+btnWLock.AutoButtonColor=false
+btnWLock.Active=true
+btnWLock.Selectable=false
+btnWLock.BorderSizePixel=0
+btnWLock.ZIndex=11
+
+local centerCorner=Instance.new("UICorner")
+centerCorner.CornerRadius=UDim.new(1,0)
+centerCorner.Parent=btnWLock
+btnWLock.Parent=mainFrame
+
+local function updateWLock()
+	btnWLock.BackgroundColor3=moveState.WLock
+		and Color3.fromRGB(0,150,0)
+		or Color3.fromRGB(150,0,0)
+end
+
+local function isPressInput(input)
+	local t=input.UserInputType
+	return t==Enum.UserInputType.Touch
+		or t==Enum.UserInputType.MouseButton1
+end
+
+local function clearInput(input)
+	for name,active in pairs(activeInputs) do
+		if active==input then
+			activeInputs[name]=nil
+			moveState[name]=false
+		end
+	end
+end
+
+local function bind(btn,name)
+	connect(btn.InputBegan,function(input)
+		if not isPressInput(input) then return end
+		activeInputs[name]=input
+		moveState[name]=true
+	end)
+
+	connect(btn.InputEnded,function(input)
+		if activeInputs[name]==input then
+			activeInputs[name]=nil
+			moveState[name]=false
+		end
+	end)
+end
+
+bind(btnUp,"Forward")
+bind(btnDown,"Backward")
+bind(btnLeft,"Left")
+bind(btnRight,"Right")
+bind(btnUL,"UpLeft")
+bind(btnUR,"UpRight")
+bind(btnDL,"DownLeft")
+bind(btnDR,"DownRight")
+
+connect(UserInputService.InputEnded,clearInput)
+
+local wDebounce=false
+
+connect(btnWLock.InputBegan,function(input)
+	if not isPressInput(input) or wDebounce then return end
+
+	wDebounce=true
+	moveState.WLock=not moveState.WLock
+	updateWLock()
+
+	task.delay(.12,function()
+		wDebounce=false
+	end)
 end)
 
-player.CharacterAdded:Connect(function(newChar)  
-	character = newChar  
-	humanoid = newChar:WaitForChild("Humanoid")  
+updateWLock()
+
+local function getCameraDirections()
+	local camera=workspace.CurrentCamera
+
+	if not camera then
+		return Vector3.new(0,0,-1),Vector3.new(1,0,0)
+	end
+
+	local look=Vector3.new(
+		camera.CFrame.LookVector.X,
+		0,
+		camera.CFrame.LookVector.Z
+	)
+
+	local right=Vector3.new(
+		camera.CFrame.RightVector.X,
+		0,
+		camera.CFrame.RightVector.Z
+	)
+
+	if look.Magnitude>.001 then
+		look=look.Unit
+	else
+		look=Vector3.new(0,0,-1)
+	end
+
+	if right.Magnitude>.001 then
+		right=right.Unit
+	else
+		right=Vector3.new(1,0,0)
+	end
+
+	return look,right
+end
+
+local diagonalOrder={
+	{"UpLeft","UpRight","DownLeft","DownRight"}
+}
+
+local function getMoveVector()
+	local look,right=getCameraDirections()
+
+	local diagonal=nil
+
+	for _,name in ipairs(diagonalOrder[1]) do
+		if moveState[name] then
+			diagonal=name
+			break
+		end
+	end
+
+	if diagonal=="UpLeft" then
+		return (look-right).Unit
+	elseif diagonal=="UpRight" then
+		return (look+right).Unit
+	elseif diagonal=="DownLeft" then
+		return (-look-right).Unit
+	elseif diagonal=="DownRight" then
+		return (-look+right).Unit
+	end
+
+	local move=Vector3.zero
+
+	if moveState.Forward then
+		move+=look
+	end
+
+	if moveState.Backward then
+		move-=look
+	end
+
+	if moveState.Left then
+		move-=right
+	end
+
+	if moveState.Right then
+		move+=right
+	end
+
+	if moveState.WLock then
+		move+=look
+
+		if moveState.Backward then
+			move-=look
+		end
+	end
+
+	if move.Magnitude>.001 then
+		return move.Unit
+	end
+
+	return Vector3.zero
+end
+
+connect(RunService.RenderStepped,function()
+	if not character or not humanoid or humanoid.Health<=0 then
+		return
+	end
+
+	humanoid:Move(getMoveVector(),false)
 end)
+
+connect(player.CharacterAdded,function(newCharacter)
+	character=newCharacter
+	humanoid=newCharacter:WaitForChild("Humanoid")
+
+	for name in pairs(moveState) do
+		moveState[name]=false
+	end
+
+	for name in pairs(activeInputs) do
+		activeInputs[name]=nil
+	end
+
+	updateWLock()
+	refreshTouchGui()
+end)
+
+local Players=game:GetService("Players")
+local player=Players.LocalPlayer
+local pg=player:WaitForChild("PlayerGui")
+local old=pg:FindFirstChild("DeltaMobileErgo")
+if old then old:Destroy() end
+
+local hum=(player.Character or player.CharacterAdded:Wait()):WaitForChild("Humanoid")
+local x,y,size,step=.70,.70,.30,.05
+
+local gui=Instance.new("ScreenGui")
+gui.Name="DeltaMobileErgo";gui.ResetOnSpawn=false;gui.IgnoreGuiInset=true
+gui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling;gui.DisplayOrder=102;gui.Parent=pg
+
+local function btn(p,n,pos,sz,txt,bg,z)
+	local b=Instance.new("TextButton")
+	b.Name=n;b.Position=pos;b.Size=sz;b.Text=txt
+	b.BackgroundColor3=bg or Color3.fromRGB(35,35,35)
+	b.TextColor3=Color3.new(1,1,1);b.Font=Enum.Font.GothamBold;b.TextSize=20
+	b.AutoButtonColor=false;b.Active=true;b.Selectable=false;b.BorderSizePixel=0;b.ZIndex=z or 10
+	local c=Instance.new("UICorner");c.CornerRadius=UDim.new(0,10);c.Parent=b
+	b.Parent=p;return b
+end
+
+local jump=btn(gui,"Jump",UDim2.new(x,0,y,0),UDim2.new(size,0,size,0),"JUMP",Color3.fromRGB(50,50,80),20)
+local menu=btn(gui,"OpenMenu",UDim2.new(1,-60,1,-60),UDim2.new(0,48,0,48),"⚙",Color3.fromRGB(30,30,30),50)
+local mc=Instance.new("UICorner");mc.CornerRadius=UDim.new(1,0);mc.Parent=menu
+
+local set=Instance.new("Frame")
+set.Name="SettingsFrame";set.Size=UDim2.new(0,260,0,300);set.Position=UDim2.new(.5,-130,.5,-150)
+set.BackgroundColor3=Color3.fromRGB(25,25,25);set.BorderSizePixel=0;set.Visible=false;set.ZIndex=40;set.Parent=gui
+local sc=Instance.new("UICorner");sc.CornerRadius=UDim.new(0,14);sc.Parent=set
+
+local title=Instance.new("TextLabel")
+title.Size=UDim2.new(1,0,0,40);title.BackgroundTransparency=1;title.Text="JUMP SETTINGS"
+title.TextColor3=Color3.new(1,1,1);title.Font=Enum.Font.GothamBold;title.TextSize=20;title.ZIndex=41;title.Parent=set
+
+local up=btn(set,"MoveUp",UDim2.new(.5,-30,0,48),UDim2.new(0,60,0,42),"↑",nil,41)
+local left=btn(set,"MoveLeft",UDim2.new(.18,0,0,95),UDim2.new(0,60,0,42),"←",nil,41)
+local right=btn(set,"MoveRight",UDim2.new(.82,-60,0,95),UDim2.new(0,60,0,42),"→",nil,41)
+local down=btn(set,"MoveDown",UDim2.new(.5,-30,0,142),UDim2.new(0,60,0,42),"↓",nil,41)
+local plus=btn(set,"SizePlus",UDim2.new(.15,0,0,195),UDim2.new(0,85,0,42),"SIZE +",nil,41)
+local minus=btn(set,"SizeMinus",UDim2.new(.52,0,0,195),UDim2.new(0,85,0,42),"SIZE -",nil,41)
+local close=btn(set,"Close",UDim2.new(.5,-90,1,-48),UDim2.new(0,180,0,36),"CLOSE",Color3.fromRGB(150,0,0),41)
+
+local function update()
+	size=math.clamp(size,.15,.45)
+	x=math.clamp(x,0,1-size)
+	y=math.clamp(y,0,1-size)
+	jump.Position=UDim2.new(x,0,y,0)
+	jump.Size=UDim2.new(size,0,size,0)
+	jump.TextSize=math.clamp(math.floor(70*size),16,40)
+end
+
+jump.Activated:Connect(function()
+	if hum and hum.Parent and hum.Health>0 then hum.Jump=true end
+end)
+
+local function move(dx,dy)
+	x=x+dx;y=y+dy;update()
+end
+
+up.Activated:Connect(function()move(0,-step)end)
+down.Activated:Connect(function()move(0,step)end)
+left.Activated:Connect(function()move(-step,0)end)
+right.Activated:Connect(function()move(step,0)end)
+
+plus.Activated:Connect(function()
+	size=size+.05
+	update()
+end)
+
+minus.Activated:Connect(function()
+	size=size-.05
+	update()
+end)
+
+menu.Activated:Connect(function()
+	set.Visible=not set.Visible
+end)
+
+close.Activated:Connect(function()
+	set.Visible=false
+end)
+
+player.CharacterAdded:Connect(function(c)
+	hum=c:WaitForChild("Humanoid")
+end)
+
+update()
