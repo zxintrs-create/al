@@ -222,77 +222,7 @@ end)
 
 updateWLock()
 
-local function getCameraDirections()
-	local camera=workspace.CurrentCamera
 
-	if not camera then
-		return Vector3.new(0,0,-1),Vector3.new(1,0,0)
-	end
-
-	local look=Vector3.new(
-		camera.CFrame.LookVector.X,
-		0,
-		camera.CFrame.LookVector.Z
-	)
-
-	local right=Vector3.new(
-		camera.CFrame.RightVector.X,
-		0,
-		camera.CFrame.RightVector.Z
-	)
-
-	if look.Magnitude>.001 then
-		look=look.Unit
-	else
-		look=Vector3.new(0,0,-1)
-	end
-
-	if right.Magnitude>.001 then
-		right=right.Unit
-	else
-		right=Vector3.new(1,0,0)
-	end
-
-	return look,right
-end
-
-local diagonalOrder={
-	{"UpLeft","UpRight","DownLeft","DownRight"}
-}
-
-local function getMoveVector()
-	local look,right=getCameraDirections()
-
-	local diagonal=nil
-
-	for _,name in ipairs(diagonalOrder[1]) do
-		if moveState[name] then
-			diagonal=name
-			break
-		end
-	end
-
-	if diagonal=="UpLeft" then
-		return (look-right).Unit
-	elseif diagonal=="UpRight" then
-		return (look+right).Unit
-	elseif diagonal=="DownLeft" then
-		return (-look-right).Unit
-	elseif diagonal=="DownRight" then
-		return (-look+right).Unit
-	end
-
-	local move=Vector3.zero
-
-	if moveState.Forward then
-		move+=look
-	end
-
-	if moveState.Backward then
-		move-=look
-	end
-
-	if moveState.Left then
 		move-=right
 	end
 
@@ -338,53 +268,108 @@ connect(player.CharacterAdded,function(newCharacter)
 	updateWLock()
 	refreshTouchGui()
 end)
+
+-- [[ jump setting]] --
+
 local Players=game:GetService("Players")
+local UserInputService=game:GetService("UserInputService")
+local RunService=game:GetService("RunService")
+
 local player=Players.LocalPlayer
 local pg=player:WaitForChild("PlayerGui")
 
 local old=pg:FindFirstChild("DeltaMobileErgo")
 if old then old:Destroy() end
 
-local x,y,size,step=.70,.70,.30,.05
+local x,y,size,step=.70,.70,.30,.012
+
 local gui=Instance.new("ScreenGui")
-gui.Name="DeltaMobileErgo";gui.ResetOnSpawn=false;gui.IgnoreGuiInset=true
-gui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling;gui.DisplayOrder=102;gui.Parent=pg
+gui.Name="DeltaMobileErgo"
+gui.ResetOnSpawn=false
+gui.IgnoreGuiInset=true
+gui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
+gui.DisplayOrder=102
+gui.Parent=pg
 
 local function btn(p,n,pos,sz,txt,bg,z)
 	local b=Instance.new("TextButton")
-	b.Name=n;b.Position=pos;b.Size=sz;b.Text=txt
+	b.Name=n
+	b.Position=pos
+	b.Size=sz
+	b.Text=txt
 	b.BackgroundColor3=bg or Color3.fromRGB(35,35,35)
-	b.TextColor3=Color3.new(1,1,1);b.Font=Enum.Font.GothamBold;b.TextSize=20
-	b.AutoButtonColor=false;b.Active=true;b.Selectable=false;b.BorderSizePixel=0;b.ZIndex=z or 10
-	local c=Instance.new("UICorner");c.CornerRadius=UDim.new(0,10);c.Parent=b
-	b.Parent=p;return b
+	b.TextColor3=Color3.new(1,1,1)
+	b.Font=Enum.Font.GothamBold
+	b.TextSize=20
+	b.AutoButtonColor=false
+	b.Active=true
+	b.Selectable=false
+	b.BorderSizePixel=0
+	b.ZIndex=z or 10
+
+	local c=Instance.new("UICorner")
+	c.CornerRadius=UDim.new(0,10)
+	c.Parent=b
+
+	b.Parent=p
+	return b
 end
 
-local menu=btn(gui,"OpenMenu",UDim2.new(1,-60,1,-60),UDim2.new(0,48,0,48),"⚙",Color3.fromRGB(30,30,30),50)
-local mc=Instance.new("UICorner");mc.CornerRadius=UDim.new(1,0);mc.Parent=menu
+local menu=btn(
+	gui,
+	"OpenMenu",
+	UDim2.new(1,-60,1,-60),
+	UDim2.new(0,48,0,48),
+	"⚙",
+	Color3.fromRGB(30,30,30),
+	50
+)
+
+local mc=Instance.new("UICorner")
+mc.CornerRadius=UDim.new(1,0)
+mc.Parent=menu
 
 local set=Instance.new("Frame")
-set.Name="SettingsFrame";set.Size=UDim2.new(0,260,0,300)
+set.Name="SettingsFrame"
+set.Size=UDim2.new(0,260,0,300)
 set.Position=UDim2.new(.5,-130,.5,-150)
 set.BackgroundColor3=Color3.fromRGB(25,25,25)
-set.BorderSizePixel=0;set.Visible=false;set.ZIndex=40;set.Parent=gui
+set.BorderSizePixel=0
+set.Visible=false
+set.ZIndex=40
+set.Parent=gui
 
 local sc=Instance.new("UICorner")
-sc.CornerRadius=UDim.new(0,14);sc.Parent=set
+sc.CornerRadius=UDim.new(0,14)
+sc.Parent=set
 
 local title=Instance.new("TextLabel")
-title.Size=UDim2.new(1,0,0,40);title.BackgroundTransparency=1
-title.Text="JUMP SETTINGS";title.TextColor3=Color3.new(1,1,1)
-title.Font=Enum.Font.GothamBold;title.TextSize=20
-title.ZIndex=41;title.Parent=set
+title.Size=UDim2.new(1,0,0,40)
+title.BackgroundTransparency=1
+title.Text="JUMP SETTINGS"
+title.TextColor3=Color3.new(1,1,1)
+title.Font=Enum.Font.GothamBold
+title.TextSize=20
+title.ZIndex=41
+title.Parent=set
 
 local up=btn(set,"MoveUp",UDim2.new(.5,-30,0,48),UDim2.new(0,60,0,42),"↑",nil,41)
 local left=btn(set,"MoveLeft",UDim2.new(.18,0,0,95),UDim2.new(0,60,0,42),"←",nil,41)
 local right=btn(set,"MoveRight",UDim2.new(.82,-60,0,95),UDim2.new(0,60,0,42),"→",nil,41)
 local down=btn(set,"MoveDown",UDim2.new(.5,-30,0,142),UDim2.new(0,60,0,42),"↓",nil,41)
+
 local plus=btn(set,"SizePlus",UDim2.new(.15,0,0,195),UDim2.new(0,85,0,42),"SIZE +",nil,41)
 local minus=btn(set,"SizeMinus",UDim2.new(.52,0,0,195),UDim2.new(0,85,0,42),"SIZE -",nil,41)
-local close=btn(set,"Close",UDim2.new(.5,-90,1,-48),UDim2.new(0,180,0,36),"CLOSE",Color3.fromRGB(150,0,0),41)
+
+local close=btn(
+	set,
+	"Close",
+	UDim2.new(.5,-90,1,-48),
+	UDim2.new(0,180,0,36),
+	"CLOSE",
+	Color3.fromRGB(150,0,0),
+	41
+)
 
 local jump
 
@@ -392,18 +377,19 @@ local function findJump()
 	local touch=pg:FindFirstChild("TouchGui")
 	if not touch then return nil end
 
-	local tg=touch:FindFirstChild("TouchControlFrame",true)
-	if tg then
-		local j=tg:FindFirstChild("JumpButton",true)
-		if j and j:IsA("GuiObject") then return j end
+	local j=touch:FindFirstChild("JumpButton",true)
+	if j and j:IsA("GuiObject") then
+		return j
 	end
 
-	local j=touch:FindFirstChild("JumpButton",true)
-	if j and j:IsA("GuiObject") then return j end
+	return nil
 end
 
 local function getJump()
-	if jump and jump.Parent then return true end
+	if jump and jump.Parent then
+		return true
+	end
+
 	jump=findJump()
 	return jump~=nil
 end
@@ -415,19 +401,78 @@ local function update()
 	x=math.clamp(x,0,1-size)
 	y=math.clamp(y,0,1-size)
 
+	local camera=workspace.CurrentCamera
+	if not camera then return end
+
+	local px=math.floor(camera.ViewportSize.Y*size)
+
 	jump.AnchorPoint=Vector2.new(0,0)
 	jump.Position=UDim2.new(x,0,y,0)
-	jump.Size=UDim2.new(size,0,size,0)
+	jump.Size=UDim2.new(0,px,0,px)
 end
 
-local function move(dx,dy)
-	x=x+dx;y=y+dy;update()
+local holding={
+	[up]=false,
+	[down]=false,
+	[left]=false,
+	[right]=false
+}
+
+local function isTouch(input)
+	return input.UserInputType==Enum.UserInputType.Touch
+		or input.UserInputType==Enum.UserInputType.MouseButton1
 end
 
-up.Activated:Connect(function()move(0,-step)end)
-down.Activated:Connect(function()move(0,step)end)
-left.Activated:Connect(function()move(-step,0)end)
-right.Activated:Connect(function()move(step,0)end)
+local function holdMove(button,dx,dy)
+	button.InputBegan:Connect(function(input)
+		if not isTouch(input) then return end
+
+		holding[button]=true
+
+		x=x+dx
+		y=y+dy
+		update()
+	end)
+
+	button.InputEnded:Connect(function(input)
+		if not isTouch(input) then return end
+
+		holding[button]=false
+	end)
+end
+
+holdMove(up,0,-step)
+holdMove(down,0,step)
+holdMove(left,-step,0)
+holdMove(right,step,0)
+
+RunService.RenderStepped:Connect(function()
+	local moved=false
+
+	if holding[up] then
+		y=y-step
+		moved=true
+	end
+
+	if holding[down] then
+		y=y+step
+		moved=true
+	end
+
+	if holding[left] then
+		x=x-step
+		moved=true
+	end
+
+	if holding[right] then
+		x=x+step
+		moved=true
+	end
+
+	if moved then
+		update()
+	end
+end)
 
 plus.Activated:Connect(function()
 	size=size+.05
@@ -456,6 +501,15 @@ pg.ChildAdded:Connect(function(c)
 	end
 end)
 
-update()
+task.spawn(function()
+	for i=1,50 do
+		if getJump() then
+			update()
+			break
+		end
+		task.wait(.1)
+	end
+end)
 
 update()
+
