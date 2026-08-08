@@ -171,8 +171,10 @@ local UICorner = Instance.new("UICorner")
 UICorner.CornerRadius = UDim.new(0, 16)
 UICorner.Parent = MainFrame
 
+-- Memperbaiki UIStroke agar warnanya putih dan Gradient terpasang penuh agar animasi terlihat jelas
 local UIStroke = Instance.new("UIStroke")
 UIStroke.Thickness = 2
+UIStroke.Color = Color3.fromRGB(255, 255, 255)
 UIStroke.Parent = MainFrame
 
 local MainStrokeGradient = Instance.new("UIGradient")
