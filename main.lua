@@ -12,7 +12,7 @@ local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 local Character, RootPart, Humanoid
 local stopPlayback
 
--- Cleanup Universal if script runs multiple times
+-- Cleanup Universal untuk memastikan tidak ada duplikasi skrip lama
 if _G.HeavelyneArt_Cleanup then pcall(_G.HeavelyneArt_Cleanup) end
 
 local currentConnections = {}
@@ -27,7 +27,7 @@ _G.HeavelyneArt_Cleanup = function()
 
 	local playerGui = LocalPlayer:WaitForChild("PlayerGui")
 	for _, gui in ipairs(playerGui:GetChildren()) do
-		if gui:IsA("ScreenGui") and gui.Name == "HeavelyneArtGui" then
+		if gui:IsA("ScreenGui") and (gui.Name == "HeavelyneArtGui" or gui.Name:find("Heavelyne")) then
 			gui:Destroy()
 		end
 	end
@@ -137,7 +137,7 @@ ScreenGui.ResetOnSpawn = false
 ScreenGui.IgnoreGuiInset = true
 ScreenGui.Parent = PlayerGui
 
--- Floating Open/Close Menu Button (Tanpa Animasi / Statis Klasik)
+-- Floating Open/Close Menu Button (Statis Klasik)
 local OpenMenu = Instance.new("ImageButton")
 OpenMenu.Name = "OpenMenuButton"
 OpenMenu.Size = UDim2.new(0, 50, 0, 50)
@@ -156,7 +156,7 @@ OpenStroke.Thickness = 2
 OpenStroke.Color = Color3.fromRGB(138, 43, 226)
 OpenStroke.Parent = OpenMenu
 
--- Main Hub Frame (Diatur False agar tertutup saat pertama kali load)
+-- Main Hub Frame (Tertutup secara default)
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "ContainerFrame"
 MainFrame.Size = UDim2.new(0, 600, 0, 360)
@@ -171,7 +171,6 @@ local UICorner = Instance.new("UICorner")
 UICorner.CornerRadius = UDim.new(0, 16)
 UICorner.Parent = MainFrame
 
--- Animated Border Stroke for Main Frame
 local UIStroke = Instance.new("UIStroke")
 UIStroke.Thickness = 2
 UIStroke.Parent = MainFrame
@@ -189,7 +188,7 @@ OpenMenu.MouseButton1Click:Connect(function()
 	MainFrame.Visible = not MainFrame.Visible
 end)
 
--- [ 2. TOP BAR (FPS, TITLE, PING) ]
+-- [ 2. TOP BAR ]
 local TopBar = Instance.new("Frame")
 TopBar.Name = "TopBar"
 TopBar.Size = UDim2.new(1, 0, 0, 50)
@@ -248,7 +247,7 @@ Divider.Parent = MainFrame
 -- [ 3. SIDEBAR MENU PANEL ]
 local MenuPanel = Instance.new("Frame")
 MenuPanel.Name = "MenuPanel"
-MenuPanel.Size = UDim2.new(0, 130, 1, -51)
+MenuPanel.Size = UDim2.new(0, 110, 1, -51)
 MenuPanel.Position = UDim2.new(0, 0, 0, 51)
 MenuPanel.BackgroundTransparency = 1
 MenuPanel.Parent = MainFrame
@@ -272,7 +271,7 @@ DotsLayout.Parent = MenuPanel
 for i = 1, 4 do
 	local DotButton = Instance.new("TextButton")
 	DotButton.Name = "Option_" .. i
-	DotButton.Size = UDim2.new(0, 105, 0, 32)
+	DotButton.Size = UDim2.new(0, 90, 0, 32)
 	DotButton.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
 	DotButton.Text = "•••"
 	DotButton.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -288,8 +287,8 @@ end
 -- [ 4. CONTENT CONTAINER (MAIN RP / RECORDER INTERFACE) ]
 local ContentArea = Instance.new("Frame")
 ContentArea.Name = "MainRPContent"
-ContentArea.Size = UDim2.new(1, -135, 1, -55)
-ContentArea.Position = UDim2.new(0, 130, 0, 52)
+ContentArea.Size = UDim2.new(1, -115, 1, -55)
+ContentArea.Position = UDim2.new(0, 115, 0, 52)
 ContentArea.BackgroundTransparency = 1
 ContentArea.Parent = MainFrame
 
@@ -305,7 +304,7 @@ StatusLabel.BackgroundTransparency = 1
 StatusLabel.Parent = ContentArea
 
 local ScrollingContainer = Instance.new("ScrollingFrame")
-ScrollingContainer.Size = UDim2.new(1, -15, 1, -30)
+ScrollingContainer.Size = UDim2.new(1, -10, 1, -30)
 ScrollingContainer.Position = UDim2.new(0, 5, 0, 25)
 ScrollingContainer.BackgroundTransparency = 1
 ScrollingContainer.CanvasSize = UDim2.new(0, 0, 0, 620)
@@ -314,7 +313,7 @@ ScrollingContainer.Parent = ContentArea
 
 local UIList = Instance.new("UIListLayout")
 UIList.Parent = ScrollingContainer
-UIList.HorizontalAlignment = Enum.HorizontalAlignment.Center
+UIList.HorizontalAlignment = Enum.HorizontalAlignment.Left
 UIList.Padding = UDim.new(0, 6)
 
 local function updateStatus(text)
@@ -323,7 +322,7 @@ end
 
 local function createBtn(text, order, callback)
 	local btn = Instance.new("TextButton")
-	btn.Size = UDim2.new(0, 430, 0, 30)
+	btn.Size = UDim2.new(0, 455, 0, 30)
 	btn.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
 	btn.Text = text
 	btn.TextColor3 = Color3.fromRGB(230, 230, 230)
@@ -529,12 +528,9 @@ end)
 
 -- [ ANIMATION LOOPS (Gradient Flow) ]
 local tweenInfo = TweenInfo.new(3, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, -1, true, 0)
-
--- Animate Title Text Gradient
 local titleTween = TweenService:Create(TitleGradient, tweenInfo, { Offset = Vector2.new(1, 0) })
 titleTween:Play()
 
--- Animate Main Frame Border Gradient Loop
 local frameStrokeTween = TweenService:Create(MainStrokeGradient, tweenInfo, { Offset = Vector2.new(1, 0) })
 frameStrokeTween:Play()
 
