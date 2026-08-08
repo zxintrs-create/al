@@ -16,10 +16,20 @@ local character=player.Character or player.CharacterAdded:Wait()
 local humanoid=character:WaitForChild("Humanoid")
 
 local connections={}
+
 local function connect(signal,fn)
 	local c=signal:Connect(fn)
 	table.insert(connections,c)
 	return c
+end
+
+local function disconnectAll()
+	for _,c in ipairs(connections) do
+		if c and c.Connected then
+			c:Disconnect()
+		end
+	end
+	table.clear(connections)
 end
 
 local moveState={
@@ -56,15 +66,25 @@ if UserInputService.TouchEnabled then
 	)
 end
 
+local function clearMovementState()
+	for name in pairs(moveState) do
+		moveState[name]=false
+	end
+
+	table.clear(activeInputs)
+end
+
 local function disableDefaultAnalog()
 	local touchGui=playerGui:FindFirstChild("TouchGui")
-	if not touchGui then return end
+	if not touchGui then
+		return
+	end
 
 	for _,obj in ipairs(touchGui:GetDescendants()) do
 		if obj:IsA("GuiObject") and (
-			obj.Name=="DynamicThumbstickFrame" or
-			obj.Name=="ThumbstickFrame" or
-			obj.Name=="Thumbstick"
+			obj.Name=="DynamicThumbstickFrame"
+			or obj.Name=="ThumbstickFrame"
+			or obj.Name=="Thumbstick"
 		) then
 			obj.Visible=false
 			obj.Active=false
@@ -75,7 +95,9 @@ end
 
 local function refreshTouchGui()
 	disableDefaultAnalog()
-	task.delay(.05,disableDefaultAnalog)
+
+	task.delay(.03,disableDefaultAnalog)
+	task.delay(.08,disableDefaultAnalog)
 	task.delay(.15,disableDefaultAnalog)
 	task.delay(.3,disableDefaultAnalog)
 	task.delay(.6,disableDefaultAnalog)
@@ -85,6 +107,7 @@ refreshTouchGui()
 
 connect(playerGui.ChildAdded,function(child)
 	if child.Name=="TouchGui" then
+		clearMovementState()
 		task.defer(refreshTouchGui)
 	end
 end)
@@ -103,6 +126,7 @@ mainFrame.Size=UDim2.new(0,260,0,260)
 mainFrame.Position=UDim2.new(0,24,1,-290)
 mainFrame.BackgroundTransparency=1
 mainFrame.BorderSizePixel=0
+mainFrame.Active=false
 mainFrame.Parent=screenGui
 
 local function createButton(name,pos,size,text)
@@ -126,18 +150,65 @@ local function createButton(name,pos,size,text)
 	corner.Parent=btn
 
 	btn.Parent=mainFrame
+
 	return btn
 end
 
-local btnUp=createButton("Up",UDim2.new(.35,0,0,0),UDim2.new(.3,0,.3,0),"▲")
-local btnDown=createButton("Down",UDim2.new(.35,0,.7,0),UDim2.new(.3,0,.3,0),"▼")
-local btnLeft=createButton("Left",UDim2.new(0,0,.35,0),UDim2.new(.3,0,.3,0),"◀")
-local btnRight=createButton("Right",UDim2.new(.7,0,.35,0),UDim2.new(.3,0,.3,0),"▶")
+local btnUp=createButton(
+	"Up",
+	UDim2.new(.35,0,0,0),
+	UDim2.new(.3,0,.3,0),
+	"▲"
+)
 
-local btnUL=createButton("UpLeft",UDim2.new(.08,0,.08,0),UDim2.new(.22,0,.22,0),"↖")
-local btnUR=createButton("UpRight",UDim2.new(.70,0,.08,0),UDim2.new(.22,0,.22,0),"↗")
-local btnDL=createButton("DownLeft",UDim2.new(.08,0,.70,0),UDim2.new(.22,0,.22,0),"↙")
-local btnDR=createButton("DownRight",UDim2.new(.70,0,.70,0),UDim2.new(.22,0,.22,0),"↘")
+local btnDown=createButton(
+	"Down",
+	UDim2.new(.35,0,.7,0),
+	UDim2.new(.3,0,.3,0),
+	"▼"
+)
+
+local btnLeft=createButton(
+	"Left",
+	UDim2.new(0,0,.35,0),
+	UDim2.new(.3,0,.3,0),
+	"◀"
+)
+
+local btnRight=createButton(
+	"Right",
+	UDim2.new(.7,0,.35,0),
+	UDim2.new(.3,0,.3,0),
+	"▶"
+)
+
+local btnUL=createButton(
+	"UpLeft",
+	UDim2.new(.08,0,.08,0),
+	UDim2.new(.22,0,.22,0),
+	"↖"
+)
+
+local btnUR=createButton(
+	"UpRight",
+	UDim2.new(.70,0,.08,0),
+	UDim2.new(.22,0,.22,0),
+	"↗"
+)
+
+local btnDL=createButton(
+	"DownLeft",
+	UDim2.new(.08,0,.70,0),
+	UDim2.new(.22,0,.22,0),
+	"↙"
+)
+
+local btnDR=createButton(
+	"DownRight",
+	UDim2.new(.70,0,.70,0),
+	UDim2.new(.22,0,.22,0),
+	"↘"
+)
 
 local btnWLock=Instance.new("TextButton")
 btnWLock.Name="WLock"
@@ -157,16 +228,20 @@ btnWLock.ZIndex=11
 local centerCorner=Instance.new("UICorner")
 centerCorner.CornerRadius=UDim.new(1,0)
 centerCorner.Parent=btnWLock
+
 btnWLock.Parent=mainFrame
 
 local function updateWLock()
-	btnWLock.BackgroundColor3=moveState.WLock
-		and Color3.fromRGB(0,150,0)
-		or Color3.fromRGB(150,0,0)
+	if moveState.WLock then
+		btnWLock.BackgroundColor3=Color3.fromRGB(0,150,0)
+	else
+		btnWLock.BackgroundColor3=Color3.fromRGB(150,0,0)
+	end
 end
 
 local function isPressInput(input)
 	local t=input.UserInputType
+
 	return t==Enum.UserInputType.Touch
 		or t==Enum.UserInputType.MouseButton1
 end
@@ -182,7 +257,10 @@ end
 
 local function bind(btn,name)
 	connect(btn.InputBegan,function(input)
-		if not isPressInput(input) then return end
+		if not isPressInput(input) then
+			return
+		end
+
 		activeInputs[name]=input
 		moveState[name]=true
 	end)
@@ -205,14 +283,19 @@ bind(btnDL,"DownLeft")
 bind(btnDR,"DownRight")
 
 connect(UserInputService.InputEnded,clearInput)
+connect(UserInputService.TouchEnded,clearInput)
 
 local wDebounce=false
 
-connect(btnWLock.InputBegan,function(input)
-	if not isPressInput(input) or wDebounce then return end
+connect(btnWLock.Activated,function()
+	if wDebounce then
+		return
+	end
 
 	wDebounce=true
+
 	moveState.WLock=not moveState.WLock
+
 	updateWLock()
 
 	task.delay(.12,function()
@@ -222,12 +305,64 @@ end)
 
 updateWLock()
 
+local function getMoveVector()
+	local camera=workspace.CurrentCamera
 
+	if not camera then
+		return Vector3.zero
+	end
+
+	local look=Vector3.new(
+		camera.CFrame.LookVector.X,
+		0,
+		camera.CFrame.LookVector.Z
+	)
+
+	local right=Vector3.new(
+		camera.CFrame.RightVector.X,
+		0,
+		camera.CFrame.RightVector.Z
+	)
+
+	if look.Magnitude<.001 or right.Magnitude<.001 then
+		return Vector3.zero
+	end
+
+	look=look.Unit
+	right=right.Unit
+
+	local move=Vector3.zero
+
+	if moveState.Forward then
+		move+=look
+	end
+
+	if moveState.Backward then
+		move-=look
+	end
+
+	if moveState.Left then
 		move-=right
 	end
 
 	if moveState.Right then
 		move+=right
+	end
+
+	if moveState.UpLeft then
+		move+=look-right
+	end
+
+	if moveState.UpRight then
+		move+=look+right
+	end
+
+	if moveState.DownLeft then
+		move-=look+right
+	end
+
+	if moveState.DownRight then
+		move-=look-right
 	end
 
 	if moveState.WLock then
@@ -246,7 +381,11 @@ updateWLock()
 end
 
 connect(RunService.RenderStepped,function()
-	if not character or not humanoid or humanoid.Health<=0 then
+	if not character or not humanoid then
+		return
+	end
+
+	if humanoid.Health<=0 then
 		return
 	end
 
@@ -254,32 +393,23 @@ connect(RunService.RenderStepped,function()
 end)
 
 connect(player.CharacterAdded,function(newCharacter)
+	clearMovementState()
+
 	character=newCharacter
 	humanoid=newCharacter:WaitForChild("Humanoid")
-
-	for name in pairs(moveState) do
-		moveState[name]=false
-	end
-
-	for name in pairs(activeInputs) do
-		activeInputs[name]=nil
-	end
 
 	updateWLock()
 	refreshTouchGui()
 end)
 
--- [[ jump setting]] --
+-- [[ jump setting ]] --
 
-local Players=game:GetService("Players")
-local UserInputService=game:GetService("UserInputService")
-local RunService=game:GetService("RunService")
-
-local player=Players.LocalPlayer
-local pg=player:WaitForChild("PlayerGui")
+local pg=playerGui
 
 local old=pg:FindFirstChild("DeltaMobileErgo")
-if old then old:Destroy() end
+if old then
+	old:Destroy()
+end
 
 local x,y,size,step=.70,.70,.30,.012
 
@@ -293,6 +423,7 @@ gui.Parent=pg
 
 local function btn(p,n,pos,sz,txt,bg,z)
 	local b=Instance.new("TextButton")
+
 	b.Name=n
 	b.Position=pos
 	b.Size=sz
@@ -312,6 +443,7 @@ local function btn(p,n,pos,sz,txt,bg,z)
 	c.Parent=b
 
 	b.Parent=p
+
 	return b
 end
 
@@ -353,13 +485,65 @@ title.TextSize=20
 title.ZIndex=41
 title.Parent=set
 
-local up=btn(set,"MoveUp",UDim2.new(.5,-30,0,48),UDim2.new(0,60,0,42),"↑",nil,41)
-local left=btn(set,"MoveLeft",UDim2.new(.18,0,0,95),UDim2.new(0,60,0,42),"←",nil,41)
-local right=btn(set,"MoveRight",UDim2.new(.82,-60,0,95),UDim2.new(0,60,0,42),"→",nil,41)
-local down=btn(set,"MoveDown",UDim2.new(.5,-30,0,142),UDim2.new(0,60,0,42),"↓",nil,41)
+local up=btn(
+	set,
+	"MoveUp",
+	UDim2.new(.5,-30,0,48),
+	UDim2.new(0,60,0,42),
+	"↑",
+	nil,
+	41
+)
 
-local plus=btn(set,"SizePlus",UDim2.new(.15,0,0,195),UDim2.new(0,85,0,42),"SIZE +",nil,41)
-local minus=btn(set,"SizeMinus",UDim2.new(.52,0,0,195),UDim2.new(0,85,0,42),"SIZE -",nil,41)
+local left=btn(
+	set,
+	"MoveLeft",
+	UDim2.new(.18,0,0,95),
+	UDim2.new(0,60,0,42),
+	"←",
+	nil,
+	41
+)
+
+local right=btn(
+	set,
+	"MoveRight",
+	UDim2.new(.82,-60,0,95),
+	UDim2.new(0,60,0,42),
+	"→",
+	nil,
+	41
+)
+
+local down=btn(
+	set,
+	"MoveDown",
+	UDim2.new(.5,-30,0,142),
+	UDim2.new(0,60,0,42),
+	"↓",
+	nil,
+	41
+)
+
+local plus=btn(
+	set,
+	"SizePlus",
+	UDim2.new(.15,0,0,195),
+	UDim2.new(0,85,0,42),
+	"SIZE +",
+	nil,
+	41
+)
+
+local minus=btn(
+	set,
+	"SizeMinus",
+	UDim2.new(.52,0,0,195),
+	UDim2.new(0,85,0,42),
+	"SIZE -",
+	nil,
+	41
+)
 
 local close=btn(
 	set,
@@ -375,9 +559,13 @@ local jump
 
 local function findJump()
 	local touch=pg:FindFirstChild("TouchGui")
-	if not touch then return nil end
+
+	if not touch then
+		return nil
+	end
 
 	local j=touch:FindFirstChild("JumpButton",true)
+
 	if j and j:IsA("GuiObject") then
 		return j
 	end
@@ -386,29 +574,54 @@ local function findJump()
 end
 
 local function getJump()
-	if jump and jump.Parent then
+	if jump
+		and jump.Parent
+		and jump:IsDescendantOf(pg)
+		and jump:IsA("GuiObject") then
 		return true
 	end
 
 	jump=findJump()
+
 	return jump~=nil
 end
 
 local function update()
-	if not getJump() then return end
-
-	size=math.clamp(size,.15,.45)
-	x=math.clamp(x,0,1-size)
-	y=math.clamp(y,0,1-size)
+	if not getJump() then
+		return
+	end
 
 	local camera=workspace.CurrentCamera
-	if not camera then return end
 
-	local px=math.floor(camera.ViewportSize.Y*size)
+	if not camera then
+		return
+	end
+
+	local viewport=camera.ViewportSize
+
+	if viewport.X<=0 or viewport.Y<=0 then
+		return
+	end
+
+	size=math.clamp(size,.15,.45)
+
+	local pixelSize=math.max(
+		1,
+		math.floor(viewport.Y*size)
+	)
+
+	local scaleX=pixelSize/viewport.X
+	local scaleY=pixelSize/viewport.Y
+
+	x=math.clamp(x,0,math.max(0,1-scaleX))
+	y=math.clamp(y,0,math.max(0,1-scaleY))
 
 	jump.AnchorPoint=Vector2.new(0,0)
 	jump.Position=UDim2.new(x,0,y,0)
-	jump.Size=UDim2.new(0,px,0,px)
+	jump.Size=UDim2.fromOffset(
+		pixelSize,
+		pixelSize
+	)
 end
 
 local holding={
@@ -418,26 +631,45 @@ local holding={
 	[right]=false
 }
 
+local holdInputs={
+	[up]=nil,
+	[down]=nil,
+	[left]=nil,
+	[right]=nil
+}
+
 local function isTouch(input)
 	return input.UserInputType==Enum.UserInputType.Touch
 		or input.UserInputType==Enum.UserInputType.MouseButton1
 end
 
-local function holdMove(button,dx,dy)
-	button.InputBegan:Connect(function(input)
-		if not isTouch(input) then return end
+local function clearHoldInputs()
+	for button in pairs(holding) do
+		holding[button]=false
+		holdInputs[button]=nil
+	end
+end
 
+local function holdMove(button,dx,dy)
+	connect(button.InputBegan,function(input)
+		if not isTouch(input) then
+			return
+		end
+
+		holdInputs[button]=input
 		holding[button]=true
 
 		x=x+dx
 		y=y+dy
+
 		update()
 	end)
 
-	button.InputEnded:Connect(function(input)
-		if not isTouch(input) then return end
-
-		holding[button]=false
+	connect(button.InputEnded,function(input)
+		if holdInputs[button]==input then
+			holdInputs[button]=nil
+			holding[button]=false
+		end
 	end)
 end
 
@@ -446,7 +678,25 @@ holdMove(down,0,step)
 holdMove(left,-step,0)
 holdMove(right,step,0)
 
-RunService.RenderStepped:Connect(function()
+connect(UserInputService.InputEnded,function(input)
+	for button,active in pairs(holdInputs) do
+		if active==input then
+			holdInputs[button]=nil
+			holding[button]=false
+		end
+	end
+end)
+
+connect(UserInputService.TouchEnded,function(input)
+	for button,active in pairs(holdInputs) do
+		if active==input then
+			holdInputs[button]=nil
+			holding[button]=false
+		end
+	end
+end)
+
+connect(RunService.RenderStepped,function()
 	local moved=false
 
 	if holding[up] then
@@ -474,42 +724,60 @@ RunService.RenderStepped:Connect(function()
 	end
 end)
 
-plus.Activated:Connect(function()
-	size=size+.05
+connect(plus.Activated,function()
+	size=math.clamp(
+		size+.05,
+		.15,
+		.45
+	)
+
 	update()
 end)
 
-minus.Activated:Connect(function()
-	size=size-.05
+connect(minus.Activated,function()
+	size=math.clamp(
+		size-.05,
+		.15,
+		.45
+	)
+
 	update()
 end)
 
-menu.Activated:Connect(function()
+connect(menu.Activated,function()
 	set.Visible=not set.Visible
 	update()
 end)
 
-close.Activated:Connect(function()
+connect(close.Activated,function()
 	set.Visible=false
 end)
 
-pg.ChildAdded:Connect(function(c)
+connect(pg.ChildAdded,function(c)
 	if c.Name=="TouchGui" then
-		task.wait(.1)
-		jump=nil
-		update()
+		clearHoldInputs()
+
+		task.delay(.1,function()
+			jump=nil
+			refreshTouchGui()
+			update()
+		end)
 	end
 end)
 
 task.spawn(function()
-	for i=1,50 do
+	for i=1,80 do
 		if getJump() then
 			update()
 			break
 		end
+
 		task.wait(.1)
 	end
 end)
 
-update()
+connect(workspace:GetPropertyChangedSignal("CurrentCamera"),function()
+	task.defer(update)
+end)
 
+update()
