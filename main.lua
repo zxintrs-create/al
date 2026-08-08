@@ -137,14 +137,14 @@ ScreenGui.ResetOnSpawn = false
 ScreenGui.IgnoreGuiInset = true
 ScreenGui.Parent = PlayerGui
 
--- Floating Open/Close Menu Button (ImageButton styled nicely)
+-- Floating Open/Close Menu Button (Tanpa Animasi / Statis Klasik)
 local OpenMenu = Instance.new("ImageButton")
 OpenMenu.Name = "OpenMenuButton"
 OpenMenu.Size = UDim2.new(0, 50, 0, 50)
 OpenMenu.Position = UDim2.new(0.03, 0, 0.4, 0)
 OpenMenu.AnchorPoint = Vector2.new(0, 0.5)
-OpenMenu.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
-OpenMenu.Image = "rbxassetid://101640388423900" -- Custom asset placeholder provided in prior snippet
+OpenMenu.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+OpenMenu.Image = "rbxassetid://101640388423900"
 OpenMenu.Parent = ScreenGui
 
 local OpenCorner = Instance.new("UICorner")
@@ -153,25 +153,10 @@ OpenCorner.Parent = OpenMenu
 
 local OpenStroke = Instance.new("UIStroke")
 OpenStroke.Thickness = 2
-OpenStroke.Color = Color3.fromRGB(255, 255, 255)
+OpenStroke.Color = Color3.fromRGB(138, 43, 226)
 OpenStroke.Parent = OpenMenu
 
-local OpenGradient = Instance.new("UIGradient")
-OpenGradient.Color = ColorSequence.new({
-	ColorSequenceKeypoint.new(0, Color3.fromRGB(138, 43, 226)),
-	ColorSequenceKeypoint.new(1, Color3.fromRGB(0, 191, 255))
-})
-OpenGradient.Rotation = 45
-OpenGradient.Parent = OpenMenu
-
-task.spawn(function()
-	while OpenMenu and OpenMenu.Parent do
-		OpenGradient.Rotation = (OpenGradient.Rotation + 2) % 360
-		task.wait(0.03)
-	end
-end)
-
--- Main Hub Frame
+-- Main Hub Frame (Diatur False agar tertutup saat pertama kali load)
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "ContainerFrame"
 MainFrame.Size = UDim2.new(0, 600, 0, 360)
@@ -179,19 +164,27 @@ MainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 MainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
 MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
 MainFrame.BackgroundTransparency = 0.1
-MainFrame.Visible = true
+MainFrame.Visible = false
 MainFrame.Parent = ScreenGui
 
 local UICorner = Instance.new("UICorner")
 UICorner.CornerRadius = UDim.new(0, 16)
 UICorner.Parent = MainFrame
 
+-- Animated Border Stroke for Main Frame
 local UIStroke = Instance.new("UIStroke")
-UIStroke.Color = Color3.fromRGB(255, 255, 255)
 UIStroke.Thickness = 2
 UIStroke.Parent = MainFrame
 
--- Toggle MainFrame visibility via OpenMenu button
+local MainStrokeGradient = Instance.new("UIGradient")
+MainStrokeGradient.Color = ColorSequence.new({
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(138, 43, 226)),
+	ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 105, 180)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(0, 191, 255))
+})
+MainStrokeGradient.Offset = Vector2.new(-1, 0)
+MainStrokeGradient.Parent = UIStroke
+
 OpenMenu.MouseButton1Click:Connect(function()
 	MainFrame.Visible = not MainFrame.Visible
 end)
@@ -295,14 +288,14 @@ end
 -- [ 4. CONTENT CONTAINER (MAIN RP / RECORDER INTERFACE) ]
 local ContentArea = Instance.new("Frame")
 ContentArea.Name = "MainRPContent"
-ContentArea.Size = UDim2.new(1, -135, 1, -60)
-ContentArea.Position = UDim2.new(0, 130, 0, 55)
+ContentArea.Size = UDim2.new(1, -135, 1, -55)
+ContentArea.Position = UDim2.new(0, 130, 0, 52)
 ContentArea.BackgroundTransparency = 1
 ContentArea.Parent = MainFrame
 
 local StatusLabel = Instance.new("TextLabel")
 StatusLabel.Size = UDim2.new(1, -10, 0, 25)
-StatusLabel.Position = UDim2.new(0, 5, 0, 0)
+StatusLabel.Position = UDim2.new(0, 10, 0, 0)
 StatusLabel.Text = "Status: IDLE | File: 1"
 StatusLabel.TextColor3 = CFG.LineColor
 StatusLabel.Font = Enum.Font.GothamBold
@@ -312,8 +305,8 @@ StatusLabel.BackgroundTransparency = 1
 StatusLabel.Parent = ContentArea
 
 local ScrollingContainer = Instance.new("ScrollingFrame")
-ScrollingContainer.Size = UDim2.new(1, -5, 1, -30)
-ScrollingContainer.Position = UDim2.new(0, 0, 0, 25)
+ScrollingContainer.Size = UDim2.new(1, -15, 1, -30)
+ScrollingContainer.Position = UDim2.new(0, 5, 0, 25)
 ScrollingContainer.BackgroundTransparency = 1
 ScrollingContainer.CanvasSize = UDim2.new(0, 0, 0, 620)
 ScrollingContainer.ScrollBarThickness = 3
@@ -330,7 +323,7 @@ end
 
 local function createBtn(text, order, callback)
 	local btn = Instance.new("TextButton")
-	btn.Size = UDim2.new(0, 440, 0, 30)
+	btn.Size = UDim2.new(0, 430, 0, 30)
 	btn.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
 	btn.Text = text
 	btn.TextColor3 = Color3.fromRGB(230, 230, 230)
@@ -534,10 +527,16 @@ createBtn("CLEAR ROUTE", 13, function()
 	updateStatus("CLEARED")
 end)
 
--- Start Gradient Animation for Header Text
+-- [ ANIMATION LOOPS (Gradient Flow) ]
 local tweenInfo = TweenInfo.new(3, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, -1, true, 0)
-local gradientTween = TweenService:Create(TitleGradient, tweenInfo, { Offset = Vector2.new(1, 0) })
-gradientTween:Play()
+
+-- Animate Title Text Gradient
+local titleTween = TweenService:Create(TitleGradient, tweenInfo, { Offset = Vector2.new(1, 0) })
+titleTween:Play()
+
+-- Animate Main Frame Border Gradient Loop
+local frameStrokeTween = TweenService:Create(MainStrokeGradient, tweenInfo, { Offset = Vector2.new(1, 0) })
+frameStrokeTween:Play()
 
 -- Real-time FPS & Ping Counter Loop
 local lastUpdate = tick()
