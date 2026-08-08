@@ -338,16 +338,14 @@ connect(player.CharacterAdded,function(newCharacter)
 	updateWLock()
 	refreshTouchGui()
 end)
-
 local Players=game:GetService("Players")
 local player=Players.LocalPlayer
 local pg=player:WaitForChild("PlayerGui")
+
 local old=pg:FindFirstChild("DeltaMobileErgo")
 if old then old:Destroy() end
 
-local hum=(player.Character or player.CharacterAdded:Wait()):WaitForChild("Humanoid")
 local x,y,size,step=.70,.70,.30,.05
-
 local gui=Instance.new("ScreenGui")
 gui.Name="DeltaMobileErgo";gui.ResetOnSpawn=false;gui.IgnoreGuiInset=true
 gui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling;gui.DisplayOrder=102;gui.Parent=pg
@@ -362,18 +360,23 @@ local function btn(p,n,pos,sz,txt,bg,z)
 	b.Parent=p;return b
 end
 
-local jump=btn(gui,"Jump",UDim2.new(x,0,y,0),UDim2.new(size,0,size,0),"JUMP",Color3.fromRGB(50,50,80),20)
 local menu=btn(gui,"OpenMenu",UDim2.new(1,-60,1,-60),UDim2.new(0,48,0,48),"⚙",Color3.fromRGB(30,30,30),50)
 local mc=Instance.new("UICorner");mc.CornerRadius=UDim.new(1,0);mc.Parent=menu
 
 local set=Instance.new("Frame")
-set.Name="SettingsFrame";set.Size=UDim2.new(0,260,0,300);set.Position=UDim2.new(.5,-130,.5,-150)
-set.BackgroundColor3=Color3.fromRGB(25,25,25);set.BorderSizePixel=0;set.Visible=false;set.ZIndex=40;set.Parent=gui
-local sc=Instance.new("UICorner");sc.CornerRadius=UDim.new(0,14);sc.Parent=set
+set.Name="SettingsFrame";set.Size=UDim2.new(0,260,0,300)
+set.Position=UDim2.new(.5,-130,.5,-150)
+set.BackgroundColor3=Color3.fromRGB(25,25,25)
+set.BorderSizePixel=0;set.Visible=false;set.ZIndex=40;set.Parent=gui
+
+local sc=Instance.new("UICorner")
+sc.CornerRadius=UDim.new(0,14);sc.Parent=set
 
 local title=Instance.new("TextLabel")
-title.Size=UDim2.new(1,0,0,40);title.BackgroundTransparency=1;title.Text="JUMP SETTINGS"
-title.TextColor3=Color3.new(1,1,1);title.Font=Enum.Font.GothamBold;title.TextSize=20;title.ZIndex=41;title.Parent=set
+title.Size=UDim2.new(1,0,0,40);title.BackgroundTransparency=1
+title.Text="JUMP SETTINGS";title.TextColor3=Color3.new(1,1,1)
+title.Font=Enum.Font.GothamBold;title.TextSize=20
+title.ZIndex=41;title.Parent=set
 
 local up=btn(set,"MoveUp",UDim2.new(.5,-30,0,48),UDim2.new(0,60,0,42),"↑",nil,41)
 local left=btn(set,"MoveLeft",UDim2.new(.18,0,0,95),UDim2.new(0,60,0,42),"←",nil,41)
@@ -383,18 +386,39 @@ local plus=btn(set,"SizePlus",UDim2.new(.15,0,0,195),UDim2.new(0,85,0,42),"SIZE 
 local minus=btn(set,"SizeMinus",UDim2.new(.52,0,0,195),UDim2.new(0,85,0,42),"SIZE -",nil,41)
 local close=btn(set,"Close",UDim2.new(.5,-90,1,-48),UDim2.new(0,180,0,36),"CLOSE",Color3.fromRGB(150,0,0),41)
 
+local jump
+
+local function findJump()
+	local touch=pg:FindFirstChild("TouchGui")
+	if not touch then return nil end
+
+	local tg=touch:FindFirstChild("TouchControlFrame",true)
+	if tg then
+		local j=tg:FindFirstChild("JumpButton",true)
+		if j and j:IsA("GuiObject") then return j end
+	end
+
+	local j=touch:FindFirstChild("JumpButton",true)
+	if j and j:IsA("GuiObject") then return j end
+end
+
+local function getJump()
+	if jump and jump.Parent then return true end
+	jump=findJump()
+	return jump~=nil
+end
+
 local function update()
+	if not getJump() then return end
+
 	size=math.clamp(size,.15,.45)
 	x=math.clamp(x,0,1-size)
 	y=math.clamp(y,0,1-size)
+
+	jump.AnchorPoint=Vector2.new(0,0)
 	jump.Position=UDim2.new(x,0,y,0)
 	jump.Size=UDim2.new(size,0,size,0)
-	jump.TextSize=math.clamp(math.floor(70*size),16,40)
 end
-
-jump.Activated:Connect(function()
-	if hum and hum.Parent and hum.Health>0 then hum.Jump=true end
-end)
 
 local function move(dx,dy)
 	x=x+dx;y=y+dy;update()
@@ -417,14 +441,21 @@ end)
 
 menu.Activated:Connect(function()
 	set.Visible=not set.Visible
+	update()
 end)
 
 close.Activated:Connect(function()
 	set.Visible=false
 end)
 
-player.CharacterAdded:Connect(function(c)
-	hum=c:WaitForChild("Humanoid")
+pg.ChildAdded:Connect(function(c)
+	if c.Name=="TouchGui" then
+		task.wait(.1)
+		jump=nil
+		update()
+	end
 end)
+
+update()
 
 update()
