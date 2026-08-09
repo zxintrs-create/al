@@ -13,6 +13,14 @@ local connections={}
 local destroyed=false
 local btnWLock=nil
 
+local MAIN_BUTTON_COLOR=Color3.fromRGB(255,255,255)
+local DIAGONAL_BUTTON_COLOR=Color3.fromRGB(190,190,190)
+local PRESSED_COLOR=Color3.fromRGB(70,150,255)
+local WLOCK_OFF_COLOR=Color3.fromRGB(220,70,70)
+local WLOCK_ON_COLOR=Color3.fromRGB(70,200,100)
+local BUTTON_TRANSPARENCY=.15
+local BUTTON_TEXT_COLOR=Color3.fromRGB(20,20,20)
+
 local function connect(signal,callback)
 	local c
 	pcall(function()
@@ -78,10 +86,7 @@ local moveState={
 
 local inputActions={}
 local buttonInputs={}
-
-local BUTTON_COLOR=Color3.fromRGB(255,255,255)
-local BUTTON_TRANSPARENCY=0
-local BUTTON_TEXT_COLOR=Color3.fromRGB(0,0,0)
+local buttonDefaults={}
 
 local function isPressInput(input)
 	if not input then
@@ -92,16 +97,40 @@ local function isPressInput(input)
 		or input.UserInputType==Enum.UserInputType.MouseButton1
 end
 
+local function setButtonVisual(button,pressed)
+	if not button or not button.Parent then
+		return
+	end
+
+	local normalColor=buttonDefaults[button]
+
+	if pressed then
+		button.BackgroundColor3=PRESSED_COLOR
+	elseif normalColor then
+		button.BackgroundColor3=normalColor
+	end
+end
+
 local function updateWLock()
 	if destroyed or not btnWLock or not btnWLock.Parent then
 		return
 	end
 
 	if moveState.WLock then
-		btnWLock.BackgroundColor3=Color3.fromRGB(70,200,100)
+		btnWLock.BackgroundColor3=WLOCK_ON_COLOR
 	else
-		btnWLock.BackgroundColor3=Color3.fromRGB(255,255,255)
+		btnWLock.BackgroundColor3=WLOCK_OFF_COLOR
 	end
+end
+
+local function resetMovementVisuals()
+	for button,color in pairs(buttonDefaults) do
+		if button and button.Parent then
+			button.BackgroundColor3=color
+		end
+	end
+
+	updateWLock()
 end
 
 local function clearMovement()
@@ -121,7 +150,7 @@ local function clearMovement()
 		buttonInputs[name]={}
 	end
 
-	updateWLock()
+	resetMovementVisuals()
 end
 
 local function releaseInput(input)
@@ -154,6 +183,10 @@ local function releaseInput(input)
 	end
 
 	moveState[action]=pressed
+
+	for button,name in pairs({
+		}) do
+	end
 end
 
 local screenGui=Instance.new("ScreenGui")
@@ -172,28 +205,26 @@ mainFrame.BackgroundTransparency=1
 mainFrame.BorderSizePixel=0
 mainFrame.Parent=screenGui
 
-local function createButton(name,position,size,text,zIndex)
+local function createButton(name,position,size,text,zIndex,bgColor)
 	local button=Instance.new("TextButton")
 
 	button.Name=name
 	button.Position=position
 	button.Size=size
 	button.Text=text
-
-	button.BackgroundColor3=BUTTON_COLOR
+	button.BackgroundColor3=bgColor or MAIN_BUTTON_COLOR
 	button.BackgroundTransparency=BUTTON_TRANSPARENCY
-
 	button.TextColor3=BUTTON_TEXT_COLOR
 	button.Font=Enum.Font.GothamBold
 	button.TextSize=28
-
 	button.AutoButtonColor=false
 	button.Active=true
 	button.Selectable=false
 	button.BorderSizePixel=0
 	button.ZIndex=zIndex or 10
-
 	button.Parent=mainFrame
+
+	buttonDefaults[button]=button.BackgroundColor3
 
 	local corner=Instance.new("UICorner")
 	corner.CornerRadius=UDim.new(0,14)
@@ -207,7 +238,8 @@ local btnUp=createButton(
 	UDim2.new(.33,0,0,0),
 	UDim2.new(.34,0,.34,0),
 	"▲",
-	10
+	10,
+	MAIN_BUTTON_COLOR
 )
 
 local btnDown=createButton(
@@ -215,7 +247,8 @@ local btnDown=createButton(
 	UDim2.new(.33,0,.66,0),
 	UDim2.new(.34,0,.34,0),
 	"▼",
-	10
+	10,
+	MAIN_BUTTON_COLOR
 )
 
 local btnLeft=createButton(
@@ -223,7 +256,8 @@ local btnLeft=createButton(
 	UDim2.new(0,0,.33,0),
 	UDim2.new(.34,0,.34,0),
 	"◀",
-	10
+	10,
+	MAIN_BUTTON_COLOR
 )
 
 local btnRight=createButton(
@@ -231,7 +265,8 @@ local btnRight=createButton(
 	UDim2.new(.66,0,.33,0),
 	UDim2.new(.34,0,.34,0),
 	"▶",
-	10
+	10,
+	MAIN_BUTTON_COLOR
 )
 
 local btnUL=createButton(
@@ -239,7 +274,8 @@ local btnUL=createButton(
 	UDim2.new(.03,0,.03,0),
 	UDim2.new(.27,0,.27,0),
 	"↖",
-	11
+	11,
+	DIAGONAL_BUTTON_COLOR
 )
 
 local btnUR=createButton(
@@ -247,7 +283,8 @@ local btnUR=createButton(
 	UDim2.new(.70,0,.03,0),
 	UDim2.new(.27,0,.27,0),
 	"↗",
-	11
+	11,
+	DIAGONAL_BUTTON_COLOR
 )
 
 local btnDL=createButton(
@@ -255,7 +292,8 @@ local btnDL=createButton(
 	UDim2.new(.03,0,.70,0),
 	UDim2.new(.27,0,.27,0),
 	"↙",
-	11
+	11,
+	DIAGONAL_BUTTON_COLOR
 )
 
 local btnDR=createButton(
@@ -263,7 +301,8 @@ local btnDR=createButton(
 	UDim2.new(.70,0,.70,0),
 	UDim2.new(.27,0,.27,0),
 	"↘",
-	11
+	11,
+	DIAGONAL_BUTTON_COLOR
 )
 
 btnWLock=Instance.new("TextButton")
@@ -271,7 +310,7 @@ btnWLock.Name="WLock"
 btnWLock.Position=UDim2.new(.33,0,.33,0)
 btnWLock.Size=UDim2.new(.34,0,.34,0)
 btnWLock.Text="W"
-btnWLock.BackgroundColor3=BUTTON_COLOR
+btnWLock.BackgroundColor3=WLOCK_OFF_COLOR
 btnWLock.BackgroundTransparency=BUTTON_TRANSPARENCY
 btnWLock.TextColor3=BUTTON_TEXT_COLOR
 btnWLock.Font=Enum.Font.GothamBold
@@ -298,8 +337,11 @@ local movementButtons={
 	[btnDR]="DownRight"
 }
 
+local actionButtons={}
+
 for button,name in pairs(movementButtons) do
 	buttonInputs[name]={}
+	actionButtons[name]=button
 
 	connect(button.InputBegan,function(input)
 		if destroyed or not isPressInput(input) then
@@ -313,23 +355,89 @@ for button,name in pairs(movementButtons) do
 		inputActions[input]=name
 		buttonInputs[name][input]=true
 		moveState[name]=true
+
+		setButtonVisual(button,true)
 	end)
 
 	connect(button.InputEnded,function(input)
 		releaseInput(input)
+
+		local inputs=buttonInputs[name]
+		local stillPressed=false
+
+		if inputs then
+			for _ in pairs(inputs) do
+				stillPressed=true
+				break
+			end
+		end
+
+		setButtonVisual(button,stillPressed)
 	end)
 end
 
 connect(UserInputService.InputEnded,function(input)
-	releaseInput(input)
+	local action=inputActions[input]
+
+	if action then
+		releaseInput(input)
+
+		local button=actionButtons[action]
+
+		local inputs=buttonInputs[action]
+		local stillPressed=false
+
+		if inputs then
+			for _ in pairs(inputs) do
+				stillPressed=true
+				break
+			end
+		end
+
+		setButtonVisual(button,stillPressed)
+	end
 end)
 
 connect(UserInputService.TouchEnded,function(input)
-	releaseInput(input)
+	local action=inputActions[input]
+
+	if action then
+		releaseInput(input)
+
+		local button=actionButtons[action]
+
+		local inputs=buttonInputs[action]
+		local stillPressed=false
+
+		if inputs then
+			for _ in pairs(inputs) do
+				stillPressed=true
+				break
+			end
+		end
+
+		setButtonVisual(button,stillPressed)
+	end
 end)
 
 connect(UserInputService.WindowFocusReleased,function()
 	clearMovement()
+end)
+
+connect(btnWLock.InputBegan,function(input)
+	if destroyed or not isPressInput(input) then
+		return
+	end
+
+	setButtonVisual(btnWLock,true)
+end)
+
+connect(btnWLock.InputEnded,function(input)
+	if destroyed then
+		return
+	end
+
+	updateWLock()
 end)
 
 connect(btnWLock.Activated,function()
@@ -476,20 +584,16 @@ local function makeButton(parent,name,position,sizeValue,text,bg,zIndex)
 	button.Position=position
 	button.Size=sizeValue
 	button.Text=text
-
-	button.BackgroundColor3=bg or Color3.fromRGB(255,255,255)
-	button.BackgroundTransparency=0
-
-	button.TextColor3=Color3.fromRGB(0,0,0)
+	button.BackgroundColor3=bg or Color3.fromRGB(245,245,245)
+	button.BackgroundTransparency=.05
+	button.TextColor3=Color3.fromRGB(20,20,20)
 	button.Font=Enum.Font.GothamBold
 	button.TextSize=22
-
 	button.AutoButtonColor=false
 	button.Active=true
 	button.Selectable=false
 	button.BorderSizePixel=0
 	button.ZIndex=zIndex or 41
-
 	button.Parent=parent
 
 	local corner=Instance.new("UICorner")
@@ -505,7 +609,7 @@ local menu=makeButton(
 	UDim2.new(1,-72,1,-72),
 	UDim2.fromOffset(60,60),
 	"⚙",
-	Color3.fromRGB(255,255,255),
+	Color3.fromRGB(245,245,245),
 	100
 )
 
@@ -517,8 +621,8 @@ local settings=Instance.new("Frame")
 settings.Name="SettingsFrame"
 settings.Size=UDim2.fromOffset(300,520)
 settings.Position=UDim2.new(.5,-150,.5,-260)
-settings.BackgroundColor3=Color3.fromRGB(255,255,255)
-settings.BackgroundTransparency=0
+settings.BackgroundColor3=Color3.fromRGB(245,245,245)
+settings.BackgroundTransparency=.05
 settings.BorderSizePixel=0
 settings.Visible=false
 settings.ZIndex=40
@@ -532,8 +636,8 @@ local cameraSection=Instance.new("Frame")
 cameraSection.Name="CameraSensiSetting"
 cameraSection.Size=UDim2.new(1,-20,0,180)
 cameraSection.Position=UDim2.fromOffset(10,10)
-cameraSection.BackgroundColor3=Color3.fromRGB(255,255,255)
-cameraSection.BackgroundTransparency=0
+cameraSection.BackgroundColor3=Color3.fromRGB(225,225,225)
+cameraSection.BackgroundTransparency=.05
 cameraSection.BorderSizePixel=0
 cameraSection.ZIndex=41
 cameraSection.Parent=settings
@@ -545,7 +649,7 @@ cameraCorner.Parent=cameraSection
 local cameraTitle=Instance.new("TextLabel")
 cameraTitle.Size=UDim2.new(1,0,0,40)
 cameraTitle.Text="CAMERA SENSI SETTING"
-cameraTitle.TextColor3=Color3.fromRGB(0,0,0)
+cameraTitle.TextColor3=Color3.fromRGB(20,20,20)
 cameraTitle.Font=Enum.Font.GothamBold
 cameraTitle.TextSize=18
 cameraTitle.BackgroundTransparency=1
@@ -560,7 +664,7 @@ local sensLabel=Instance.new("TextLabel")
 sensLabel.Size=UDim2.new(1,0,0,30)
 sensLabel.Position=UDim2.fromOffset(0,40)
 sensLabel.Text="Multiplier: 1.0x"
-sensLabel.TextColor3=Color3.fromRGB(40,40,40)
+sensLabel.TextColor3=Color3.fromRGB(60,60,60)
 sensLabel.Font=Enum.Font.Gotham
 sensLabel.TextSize=14
 sensLabel.BackgroundTransparency=1
@@ -569,14 +673,13 @@ sensLabel.Parent=cameraSection
 
 local function createSensButton(name,pos,sizeValue,text)
 	local button=Instance.new("TextButton")
-
 	button.Name=name
 	button.Position=pos
 	button.Size=sizeValue
 	button.Text=text
-	button.BackgroundColor3=Color3.fromRGB(255,255,255)
-	button.BackgroundTransparency=0
-	button.TextColor3=Color3.fromRGB(0,0,0)
+	button.BackgroundColor3=Color3.fromRGB(250,250,250)
+	button.BackgroundTransparency=.02
+	button.TextColor3=Color3.fromRGB(20,20,20)
 	button.Font=Enum.Font.GothamBold
 	button.TextSize=18
 	button.AutoButtonColor=false
@@ -659,8 +762,8 @@ local jumpSection=Instance.new("Frame")
 jumpSection.Name="JumpSetting"
 jumpSection.Size=UDim2.new(1,-20,0,250)
 jumpSection.Position=UDim2.fromOffset(10,200)
-jumpSection.BackgroundColor3=Color3.fromRGB(255,255,255)
-jumpSection.BackgroundTransparency=0
+jumpSection.BackgroundColor3=Color3.fromRGB(225,225,225)
+jumpSection.BackgroundTransparency=.05
 jumpSection.BorderSizePixel=0
 jumpSection.ZIndex=41
 jumpSection.Parent=settings
@@ -673,7 +776,7 @@ local title=Instance.new("TextLabel")
 title.Size=UDim2.new(1,0,0,40)
 title.BackgroundTransparency=1
 title.Text="JUMP SETTINGS"
-title.TextColor3=Color3.fromRGB(0,0,0)
+title.TextColor3=Color3.fromRGB(20,20,20)
 title.Font=Enum.Font.GothamBold
 title.TextSize=20
 title.ZIndex=42
@@ -685,7 +788,7 @@ local moveUp=makeButton(
 	UDim2.new(.5,-34,0,48),
 	UDim2.fromOffset(68,46),
 	"↑",
-	Color3.fromRGB(255,255,255),
+	Color3.fromRGB(250,250,250),
 	43
 )
 
@@ -695,7 +798,7 @@ local moveLeft=makeButton(
 	UDim2.new(.10,0,0,95),
 	UDim2.fromOffset(68,46),
 	"←",
-	Color3.fromRGB(255,255,255),
+	Color3.fromRGB(250,250,250),
 	43
 )
 
@@ -705,7 +808,7 @@ local moveRight=makeButton(
 	UDim2.new(.90,-68,0,95),
 	UDim2.fromOffset(68,46),
 	"→",
-	Color3.fromRGB(255,255,255),
+	Color3.fromRGB(250,250,250),
 	43
 )
 
@@ -715,7 +818,7 @@ local moveDown=makeButton(
 	UDim2.new(.5,-34,0,142),
 	UDim2.fromOffset(68,46),
 	"↓",
-	Color3.fromRGB(255,255,255),
+	Color3.fromRGB(250,250,250),
 	43
 )
 
@@ -725,7 +828,7 @@ local sizePlus=makeButton(
 	UDim2.new(.06,0,0,200),
 	UDim2.fromOffset(88,34),
 	"SIZE +",
-	Color3.fromRGB(255,255,255),
+	Color3.fromRGB(250,250,250),
 	43
 )
 
@@ -735,7 +838,7 @@ local sizeMinus=makeButton(
 	UDim2.new(.94,-88,0,200),
 	UDim2.fromOffset(88,34),
 	"SIZE -",
-	Color3.fromRGB(255,255,255),
+	Color3.fromRGB(250,250,250),
 	43
 )
 
@@ -745,7 +848,7 @@ local center=makeButton(
 	UDim2.new(.5,-44,0,200),
 	UDim2.fromOffset(88,34),
 	"CENTER",
-	Color3.fromRGB(255,255,255),
+	Color3.fromRGB(250,250,250),
 	43
 )
 
@@ -772,7 +875,6 @@ local function getJump()
 		and jumpButton.Parent
 		and jumpButton:IsDescendantOf(playerGui)
 		and jumpButton:IsA("GuiObject") then
-
 		return jumpButton
 	end
 
@@ -1038,7 +1140,7 @@ local close=makeButton(
 	UDim2.new(.5,-95,1,-45),
 	UDim2.fromOffset(190,38),
 	"CLOSE",
-	Color3.fromRGB(255,100,100),
+	Color3.fromRGB(230,90,90),
 	43
 )
 
@@ -1104,6 +1206,9 @@ connect(player.CharacterAdded,function(newCharacter)
 		return
 	end
 
+	clearMovement()
+	clearHoldInputs()
+
 	character=newCharacter
 
 	local newHumanoid
@@ -1121,8 +1226,6 @@ connect(player.CharacterAdded,function(newCharacter)
 
 	humanoid=newHumanoid
 
-	clearMovement()
-	clearHoldInputs()
 	updateWLock()
 	refreshJump()
 end)
@@ -1184,6 +1287,12 @@ connect(RunService.RenderStepped,function()
 		lastJumpPixelSize=nil
 
 		updateJump()
+	end
+end)
+
+connect(UserInputService.TouchPan,function()
+	if destroyed then
+		return
 	end
 end)
 
