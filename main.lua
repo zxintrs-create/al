@@ -79,9 +79,9 @@ local moveState={
 local inputActions={}
 local buttonInputs={}
 
-local BUTTON_COLOR=Color3.fromRGB(235,235,235)
-local BUTTON_TRANSPARENCY=.35
-local BUTTON_TEXT_COLOR=Color3.fromRGB(20,20,20)
+local BUTTON_COLOR=Color3.fromRGB(255,255,255)
+local BUTTON_TRANSPARENCY=0
+local BUTTON_TEXT_COLOR=Color3.fromRGB(0,0,0)
 
 local function isPressInput(input)
 	if not input then
@@ -100,7 +100,7 @@ local function updateWLock()
 	if moveState.WLock then
 		btnWLock.BackgroundColor3=Color3.fromRGB(70,200,100)
 	else
-		btnWLock.BackgroundColor3=Color3.fromRGB(235,235,235)
+		btnWLock.BackgroundColor3=Color3.fromRGB(255,255,255)
 	end
 end
 
@@ -477,10 +477,10 @@ local function makeButton(parent,name,position,sizeValue,text,bg,zIndex)
 	button.Size=sizeValue
 	button.Text=text
 
-	button.BackgroundColor3=bg or Color3.fromRGB(235,235,235)
-	button.BackgroundTransparency=.15
+	button.BackgroundColor3=bg or Color3.fromRGB(255,255,255)
+	button.BackgroundTransparency=0
 
-	button.TextColor3=Color3.fromRGB(20,20,20)
+	button.TextColor3=Color3.fromRGB(0,0,0)
 	button.Font=Enum.Font.GothamBold
 	button.TextSize=22
 
@@ -505,7 +505,7 @@ local menu=makeButton(
 	UDim2.new(1,-72,1,-72),
 	UDim2.fromOffset(60,60),
 	"⚙",
-	Color3.fromRGB(235,235,235),
+	Color3.fromRGB(255,255,255),
 	100
 )
 
@@ -517,8 +517,8 @@ local settings=Instance.new("Frame")
 settings.Name="SettingsFrame"
 settings.Size=UDim2.fromOffset(300,520)
 settings.Position=UDim2.new(.5,-150,.5,-260)
-settings.BackgroundColor3=Color3.fromRGB(245,245,245)
-settings.BackgroundTransparency=.05
+settings.BackgroundColor3=Color3.fromRGB(255,255,255)
+settings.BackgroundTransparency=0
 settings.BorderSizePixel=0
 settings.Visible=false
 settings.ZIndex=40
@@ -532,8 +532,8 @@ local cameraSection=Instance.new("Frame")
 cameraSection.Name="CameraSensiSetting"
 cameraSection.Size=UDim2.new(1,-20,0,180)
 cameraSection.Position=UDim2.fromOffset(10,10)
-cameraSection.BackgroundColor3=Color3.fromRGB(225,225,225)
-cameraSection.BackgroundTransparency=.05
+cameraSection.BackgroundColor3=Color3.fromRGB(255,255,255)
+cameraSection.BackgroundTransparency=0
 cameraSection.BorderSizePixel=0
 cameraSection.ZIndex=41
 cameraSection.Parent=settings
@@ -545,7 +545,7 @@ cameraCorner.Parent=cameraSection
 local cameraTitle=Instance.new("TextLabel")
 cameraTitle.Size=UDim2.new(1,0,0,40)
 cameraTitle.Text="CAMERA SENSI SETTING"
-cameraTitle.TextColor3=Color3.fromRGB(20,20,20)
+cameraTitle.TextColor3=Color3.fromRGB(0,0,0)
 cameraTitle.Font=Enum.Font.GothamBold
 cameraTitle.TextSize=18
 cameraTitle.BackgroundTransparency=1
@@ -560,7 +560,7 @@ local sensLabel=Instance.new("TextLabel")
 sensLabel.Size=UDim2.new(1,0,0,30)
 sensLabel.Position=UDim2.fromOffset(0,40)
 sensLabel.Text="Multiplier: 1.0x"
-sensLabel.TextColor3=Color3.fromRGB(60,60,60)
+sensLabel.TextColor3=Color3.fromRGB(40,40,40)
 sensLabel.Font=Enum.Font.Gotham
 sensLabel.TextSize=14
 sensLabel.BackgroundTransparency=1
@@ -574,9 +574,9 @@ local function createSensButton(name,pos,sizeValue,text)
 	button.Position=pos
 	button.Size=sizeValue
 	button.Text=text
-	button.BackgroundColor3=Color3.fromRGB(245,245,245)
-	button.BackgroundTransparency=.05
-	button.TextColor3=Color3.fromRGB(20,20,20)
+	button.BackgroundColor3=Color3.fromRGB(255,255,255)
+	button.BackgroundTransparency=0
+	button.TextColor3=Color3.fromRGB(0,0,0)
 	button.Font=Enum.Font.GothamBold
 	button.TextSize=18
 	button.AutoButtonColor=false
@@ -659,8 +659,8 @@ local jumpSection=Instance.new("Frame")
 jumpSection.Name="JumpSetting"
 jumpSection.Size=UDim2.new(1,-20,0,250)
 jumpSection.Position=UDim2.fromOffset(10,200)
-jumpSection.BackgroundColor3=Color3.fromRGB(225,225,225)
-jumpSection.BackgroundTransparency=.05
+jumpSection.BackgroundColor3=Color3.fromRGB(255,255,255)
+jumpSection.BackgroundTransparency=0
 jumpSection.BorderSizePixel=0
 jumpSection.ZIndex=41
 jumpSection.Parent=settings
@@ -673,7 +673,7 @@ local title=Instance.new("TextLabel")
 title.Size=UDim2.new(1,0,0,40)
 title.BackgroundTransparency=1
 title.Text="JUMP SETTINGS"
-title.TextColor3=Color3.fromRGB(20,20,20)
+title.TextColor3=Color3.fromRGB(0,0,0)
 title.Font=Enum.Font.GothamBold
 title.TextSize=20
 title.ZIndex=42
@@ -685,7 +685,7 @@ local moveUp=makeButton(
 	UDim2.new(.5,-34,0,48),
 	UDim2.fromOffset(68,46),
 	"↑",
-	Color3.fromRGB(245,245,245),
+	Color3.fromRGB(255,255,255),
 	43
 )
 
@@ -695,7 +695,7 @@ local moveLeft=makeButton(
 	UDim2.new(.10,0,0,95),
 	UDim2.fromOffset(68,46),
 	"←",
-	Color3.fromRGB(245,245,245),
+	Color3.fromRGB(255,255,255),
 	43
 )
 
@@ -705,7 +705,7 @@ local moveRight=makeButton(
 	UDim2.new(.90,-68,0,95),
 	UDim2.fromOffset(68,46),
 	"→",
-	Color3.fromRGB(245,245,245),
+	Color3.fromRGB(255,255,255),
 	43
 )
 
@@ -715,7 +715,7 @@ local moveDown=makeButton(
 	UDim2.new(.5,-34,0,142),
 	UDim2.fromOffset(68,46),
 	"↓",
-	Color3.fromRGB(245,245,245),
+	Color3.fromRGB(255,255,255),
 	43
 )
 
@@ -725,7 +725,7 @@ local sizePlus=makeButton(
 	UDim2.new(.06,0,0,200),
 	UDim2.fromOffset(88,34),
 	"SIZE +",
-	Color3.fromRGB(245,245,245),
+	Color3.fromRGB(255,255,255),
 	43
 )
 
@@ -735,7 +735,7 @@ local sizeMinus=makeButton(
 	UDim2.new(.94,-88,0,200),
 	UDim2.fromOffset(88,34),
 	"SIZE -",
-	Color3.fromRGB(245,245,245),
+	Color3.fromRGB(255,255,255),
 	43
 )
 
@@ -745,7 +745,7 @@ local center=makeButton(
 	UDim2.new(.5,-44,0,200),
 	UDim2.fromOffset(88,34),
 	"CENTER",
-	Color3.fromRGB(245,245,245),
+	Color3.fromRGB(255,255,255),
 	43
 )
 
@@ -772,6 +772,7 @@ local function getJump()
 		and jumpButton.Parent
 		and jumpButton:IsDescendantOf(playerGui)
 		and jumpButton:IsA("GuiObject") then
+
 		return jumpButton
 	end
 
@@ -1037,7 +1038,7 @@ local close=makeButton(
 	UDim2.new(.5,-95,1,-45),
 	UDim2.fromOffset(190,38),
 	"CLOSE",
-	Color3.fromRGB(230,90,90),
+	Color3.fromRGB(255,100,100),
 	43
 )
 
