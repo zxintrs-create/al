@@ -1,262 +1,220 @@
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local player = Players.LocalPlayer
+Pemain lokal = game:GetService("Pemain")
+RunService lokal = permainan:GetService("RunService")
+Layanan Tween lokal = game:GetService("Layanan Tween")
+Pemain lokal = Pemain.PemainLokal
 
--- ===== FLAG SCRIPT =====
-if _G.AutoWalkScriptLoaded then return end
+jika _G.AutoWalkScriptLoaded maka kembalikan akhir
 _G.AutoWalkScriptLoaded = true
 
--- ===== DATA GLOBAL =====
-_G.recordData = _G.recordData or {} -- simpan rekaman
-_G.recording = false
+_G.recordData = _G.recordData atau {}
+_G.perekaman = salah
 _G.playing = false
 _G.looping = false
-_G.keyValid = _G.keyValid or false -- key sudah valid?
 
--- ===== KEY SYSTEM =====
-local correctKey = "letmein" -- ganti dengan key yang kamu inginkan
-
-local function showKeyPrompt(callback)
-    local keyGUI = Instance.new("ScreenGui")
-    keyGUI.Name = "KeyPrompt"
-    keyGUI.Parent = player:WaitForChild("PlayerGui")
-
-    local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(0, 300, 0, 150)
-    frame.Position = UDim2.new(0.5, -150, 0.5, -75)
-    frame.BackgroundColor3 = Color3.fromRGB(35,35,35)
-    frame.Parent = keyGUI
-
-    local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1, -20, 0, 50)
-    label.Position = UDim2.new(0, 10, 0, 10)
-    label.Text = "Enter Key:"
-    label.TextColor3 = Color3.fromRGB(255,255,255)
-    label.BackgroundTransparency = 1
-    label.Font = Enum.Font.SourceSansBold
-    label.TextSize = 20
-    label.Parent = frame
-
-    local textBox = Instance.new("TextBox")
-    textBox.Size = UDim2.new(1, -20, 0, 40)
-    textBox.Position = UDim2.new(0, 10, 0, 60)
-    textBox.PlaceholderText = "Key..."
-    textBox.Text = ""
-    textBox.TextColor3 = Color3.fromRGB(0,0,0)
-    textBox.BackgroundColor3 = Color3.fromRGB(255,255,255)
-    textBox.Font = Enum.Font.SourceSans
-    textBox.TextSize = 18
-    textBox.Parent = frame
-
-    local submitBtn = Instance.new("TextButton")
-    submitBtn.Size = UDim2.new(0,100,0,30)
-    submitBtn.Position = UDim2.new(0.5, -50, 1, -40)
-    submitBtn.Text = "Submit"
-    submitBtn.Font = Enum.Font.SourceSansBold
-    submitBtn.TextSize = 18
-    submitBtn.BackgroundColor3 = Color3.fromRGB(80,200,120)
-    submitBtn.TextColor3 = Color3.fromRGB(255,255,255)
-    submitBtn.Parent = frame
-
-    submitBtn.MouseButton1Click:Connect(function()
-        if textBox.Text == correctKey then
-            keyGUI:Destroy()
-            _G.keyValid = true -- tandai key sudah valid
-            callback(true)
-        else
-            textBox.Text = ""
-            label.Text = "Wrong Key!"
-        end
-    end)
-end
-
--- ===== FUNGSI KARAKTER =====
-local character, humanoid, hrp
-local function getChar()
-    character = player.Character or player.CharacterAdded:Wait()
-    humanoid = character:WaitForChild("Humanoid")
-    hrp = character:WaitForChild("HumanoidRootPart")
-end
+karakter lokal, humanoid, hrp
+fungsi lokal getChar()
+    karakter = pemain.Karakter atau pemain.KarakterDitambahkan:Tunggu()
+    humanoid = karakter:TungguAnak("Humanoid")
+    hrp = karakter:TungguAnak("BagianAkarHumanoid")
+akhir
 getChar()
 
-player.CharacterAdded:Connect(function()
+pemain.KarakterDitambahkan:Hubungkan(fungsi())
     getChar()
-    -- hanya minta key lagi jika belum valid
-    if not _G.keyValid then
-        showKeyPrompt(createGUI)
-    else
-        createGUI()
-    end
-end)
+    buatGUI()
+akhir)
 
--- ===== FUNGSI GUI =====
-function createGUI()
-    if _G.AutoWalkGUI then
-        _G.AutoWalkGUI:Destroy()
-    end
+Tema lokal = {
+    MainBG = Color3.fromRGB(15, 15, 15),
+    Aksen = Warna3.dariRGB(138, 43, 226),
+    Sekunder = Warna3.dariRGB(30, 30, 30),
+    Teks = Warna3.dariRGB(255, 255, 255),
+    Font = Enum.Font.GothamBold
+}
+
+fungsi createGUI()
+    jika _G.AutoWalkGUI maka
+        _G.AutoWalkGUI:Hancurkan()
+    akhir
 
     _G.AutoWalkGUI = Instance.new("ScreenGui")
-    _G.AutoWalkGUI.Name = "AutoWalkGUI"
+    _G.AutoWalkGUI.Name = "PremiumAutoWalk"
     _G.AutoWalkGUI.Parent = player:WaitForChild("PlayerGui")
-    _G.AutoWalkGUI.Enabled = true
 
-    local mainFrame = Instance.new("Frame")
-    mainFrame.Size = UDim2.new(0, 220, 0, 200)
-    mainFrame.Position = UDim2.new(0.4, 0, 0.3, 0)
-    mainFrame.BackgroundColor3 = Color3.fromRGB(35,35,35)
+    mainFrame lokal = Instance.new("Frame")
+    mainFrame.Size = UDim2.new(0, 240, 0, 260)
+    mainFrame.Position = UDim2.new(0.5, -120, 0.4, 0)
+    mainFrame.BackgroundColor3 = Theme.MainBG
+    mainFrame.BorderSizePixel = 0
     mainFrame.Active = true
     mainFrame.Draggable = true
     mainFrame.Parent = _G.AutoWalkGUI
 
+    local mainCorner = Instance.new("UICorner")
+    Sudut utama.Radius sudut = UDim.baru(0, 12)
+    Sudut utama.Induk = Bingkai utama
+
+    local mainStroke = Instance.new("UIStroke")
+    Ketebalan Garis Utama = 2
+    mainStroke.Color = Theme.Accent
+    mainStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    mainStroke.Parent = mainFrame
+
     local titleBar = Instance.new("Frame")
-    titleBar.Size = UDim2.new(1,0,0,30)
-    titleBar.BackgroundColor3 = Color3.fromRGB(200,50,50)
+    titleBar.Size = UDim2.new(1, 0, 0, 40)
+    titleBar.BackgroundColor3 = Theme.Secondary
+    titleBar.BorderSizePixel = 0
     titleBar.Parent = mainFrame
 
-    local titleLabel = Instance.new("TextLabel")
-    titleLabel.Size = UDim2.new(1,-60,1,0)
+    local titleCorner = Instance.new("UICorner")
+    titleCorner.CornerRadius = UDim.new(0, 12)
+    Sudut Judul.Induk = Bilah Judul
+
+    local titleGradient = Instance.new("UIGradient")
+    titleGradient.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Theme.Accent),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(80, 0, 150))
+    })
+    titleGradient.Parent = titleBar
+
+    Label judul lokal = Instance.new("Label Teks")
+    Ukuran Label Judul = UDim2.baru(1, -80, 1, 0)
+    titleLabel.Position = UDim2.new(0, 15, 0, 0)
     titleLabel.BackgroundTransparency = 1
-    titleLabel.Text = "I CAN BROKE UR GAME"
-    titleLabel.TextColor3 = Color3.fromRGB(255,255,255)
-    titleLabel.Font = Enum.Font.SourceSansBold
-    titleLabel.TextSize = 16
+    titleLabel.Text = "PREMIUM AUTO-WALK"
+    titleLabel.TextColor3 = Theme.Text
+    titleLabel.Font = Theme.Font
+    Ukuran Teks Label Judul = 14
+    titleLabel.TextXAlignment = Enum.TextXAlignment.Left
     titleLabel.Parent = titleBar
 
-    local minimizeBtn = Instance.new("TextButton")
-    minimizeBtn.Size = UDim2.new(0,30,1,0)
-    minimizeBtn.Position = UDim2.new(1,-60,0,0)
-    minimizeBtn.Text = "_"
-    minimizeBtn.Font = Enum.Font.SourceSansBold
-    minimizeBtn.TextSize = 18
-    minimizeBtn.BackgroundColor3 = Color3.fromRGB(100,100,100)
-    minimizeBtn.TextColor3 = Color3.fromRGB(255,255,255)
-    minimizeBtn.Parent = titleBar
-
     local closeBtn = Instance.new("TextButton")
-    closeBtn.Size = UDim2.new(0,30,1,0)
-    closeBtn.Position = UDim2.new(1,-30,0,0)
+    closeBtn.Size = UDim2.new(0, 30, 0, 30)
+    closeBtn.Position = UDim2.new(1, -35, 0, 5)
+    closeBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
     closeBtn.Text = "X"
-    closeBtn.Font = Enum.Font.SourceSansBold
-    closeBtn.TextSize = 18
-    closeBtn.BackgroundColor3 = Color3.fromRGB(100,100,100)
-    closeBtn.TextColor3 = Color3.fromRGB(255,255,255)
+    closeBtn.TextColor3 = Theme.Text
+    closeBtn.Font = Theme.Font
+    Ukuran Teks Tombol Tutup = 14
     closeBtn.Parent = titleBar
+    
+    local closeCorner = Instance.new("UICorner")
+    closeCorner.CornerRadius = UDim.new(0, 8)
+    closeCorner.Parent = closeBtn
 
-    local status = Instance.new("TextLabel")
-    status.Size = UDim2.new(1,-20,0,20)
-    status.Position = UDim2.new(0,10,0,170)
-    status.BackgroundTransparency = 1
-    status.TextColor3 = Color3.fromRGB(255,255,255)
-    status.Text = "Idle"
-    status.Parent = mainFrame
+    status lokal = Instance.new("TextLabel")
+    status.Size = UDim2.new(1, -20, 0, 20)
+    status.Posisi = UDim2.baru(0, 10, 1, -30)
+    status.TransparansiLatarBelakang = 1
+    status.TeksWarna3 = Warna3.dariRGB(180, 180, 180)
+    status.Text = "Status: Tidak Aktif"
+    status.Font = Enum.Font.Gotham
+    status.TextSize = 12
+    status.Induk = mainFrame
 
-    local buttons = {}
-
-    local function makeButton(text,posY,callback)
+    fungsi lokal makeButton(teks, posY, callback)
         local btn = Instance.new("TextButton")
-        btn.Size = UDim2.new(0,200,0,30)
-        btn.Position = UDim2.new(0,10,0,posY)
-        btn.BackgroundColor3 = Color3.fromRGB(80,120,200)
-        btn.TextColor3 = Color3.fromRGB(1,1,1)
-        btn.Font = Enum.Font.SourceSans
-        btn.TextSize = 16
-        btn.Text = text
+        Ukuran tombol = UDim2.baru(1, -30, 0, 35)
+        btn.Posisi = UDim2.baru(0, 15, 0, posY)
+        btn.BackgroundColor3 = Theme.Secondary
+        btn.TextColor3 = Theme.Text
+        btn.Font = Theme.Font
+        Ukuran Teks tombol = 13
+        tombol.Teks = teks
+        WarnaTombolOtomatis = benar
         btn.Parent = mainFrame
-        btn.MouseButton1Click:Connect(callback)
-        table.insert(buttons,btn)
-        return btn
-    end
 
-    -- ===== FUNGSI REKAMAN =====
-    local conn
-    local function startRecord()
-        _G.recording = true
+        local btnCorner = Instance.new("UICorner")
+        btnCorner.CornerRadius = UDim.new(0, 6)
+        btnCorner.Parent = btn
+
+        local btnStroke = Instance.new("UIStroke")
+        btnStroke.Ketebalan = 1
+        btnStroke.Color = Theme.Accent
+        btnStroke.Transparency = 0.5
+        btnStroke.Parent = btn
+
+        btn.MouseButton1Click:Connect(function()
+            btn.BackgroundColor3 = Theme.Accent
+            tugas.tunggu(0.1)
+            btn.BackgroundColor3 = Theme.Secondary
+            callback()
+        akhir)
+        kembali tombol
+    akhir
+
+    koneksi lokal
+    fungsi lokal startRecord()
+        _G.perekaman = benar
         _G.recordData = {}
-        status.Text = "Recording..."
+        status.Text = "Status: Sedang merekam..."
         local startTick = tick()
         conn = RunService.Heartbeat:Connect(function()
-            if not hrp then return end
-            table.insert(_G.recordData,{cf=hrp.CFrame,jump=humanoid.Jump,t=tick()-startTick})
-        end)
-    end
+            jika tidak hrp maka kembalikan akhir
+            table.insert(_G.recordData, {cf = hrp.CFrame, jump = humanoid.Jump, t = tick() - startTick})
+        akhir)
+    akhir
 
-    local function stopRecord()
-        _G.recording = false
-        if conn then conn:Disconnect() end
-        status.Text = "Recorded "..tostring(#_G.recordData).." steps"
-    end
+    fungsi lokal stopRecord()
+        _G.perekaman = salah
+        jika terhubung maka terhubung:Putuskan sambungan()
+        status.Text = "Status: Direkam " .. tostring(#_G.recordData) .. " langkah"
+    akhir
 
-    local function playRecord()
-        if #_G.recordData==0 or _G.playing then return end
-        _G.playing=true
-        status.Text="Playing..."
-        local startTick=tick()
-        for i,step in ipairs(_G.recordData) do
-            if not _G.playing then break end
-            local waitTime=(startTick+step.t)-tick()
-            if waitTime>0 then task.wait(waitTime) end
+    fungsi lokal playRecord()
+        jika #_G.recordData == 0 atau _G.playing maka kembalikan
+        _G.playing = true
+        status.Text = "Status: Sedang diputar..."
+        local startTick = tick()
+        untuk i, langkah dalam ipairs(_G.recordData) lakukan
+            jika tidak _G.playing maka break end
+            waktu tunggu lokal = (startTick + step.t) - tick()
+            Jika waitTime > 0 maka task.wait(waitTime) selesai
 
-            local targetPos=step.cf.Position
-            local dist=(hrp.Position-targetPos).Magnitude
-            if dist>15 then hrp.CFrame=step.cf else humanoid:MoveTo(targetPos) end
-            if step.jump then humanoid.Jump=true end
-        end
-        _G.playing=false
-        status.Text="Finished"
-    end
+            local targetPos = step.cf.Position
+            jarak lokal = (hrp.Posisi - targetPosisi).Besaran
+            jika dist > 15 maka hrp.CFrame = step.cf else humanoid:MoveTo(targetPos) end
+            Jika langkah.lompat maka humanoid.Lompat = benar
+        akhir
+        _G.playing = false
+        status.Text = "Status: Selesai"
+    akhir
 
-    local function stopPlay()
-        _G.playing=false
-        _G.looping=false
-        status.Text="Stopped"
-    end
+    fungsi lokal stopPlay()
+        _G.playing = false
+        _G.looping = false
+        status.Text = "Status: Berhenti"
+    akhir
 
-    local function loopRecord()
-        if #_G.recordData==0 or _G.looping then return end
-        _G.looping=true
-        status.Text="Looping..."
-        task.spawn(function()
-            while _G.looping do
+    fungsi lokal loopRecord()
+        jika #_G.recordData == 0 atau _G.looping maka kembalikan akhir
+        _G.looping = true
+        status.Text = "Status: Berulang..."
+        tugas.munculkan(fungsi())
+            sementara _G.looping lakukan
                 playRecord()
-                task.wait(0.1)
-            end
-        end)
-    end
+                tugas.tunggu(0.1)
+            akhir
+        akhir)
+    akhir
 
-    local function stopLoop()
-        _G.looping=false
-        status.Text="Stopped Loop"
-    end
+    fungsi lokal stopLoop()
+        _G.looping = false
+        status.Text = "Status: Loop Dihentikan"
+    akhir
 
-    -- Tombol
-    makeButton("Start Record",40,startRecord)
-    makeButton("Stop Record",70,stopRecord)
-    makeButton("Play",100,playRecord)
-    makeButton("Stop Play",130,stopPlay)
-    makeButton("Start Loop",160,loopRecord)
-    makeButton("Stop Loop",190,stopLoop)
+    makeButton("Mulai Merekam", 55, startRecord)
+    makeButton("Stop Recording", 95, stopRecord)
+    makeButton("Putar Rekaman", 135, playRecord)
+    makeButton("Hentikan Eksekusi", 175, stopPlay)
+    makeButton("Loop Tak Terbatas", 215, loopRecord)
+    makeButton("Stop Loop", 255, stopLoop)
 
-    -- Minimize
-    local minimized=false
-    minimizeBtn.MouseButton1Click:Connect(function()
-        if minimized then
-            for _,btn in pairs(buttons) do btn.Visible=true end
-            mainFrame.Size=UDim2.new(0,220,0,200)
-            minimized=false
-        else
-            for _,btn in pairs(buttons) do btn.Visible=false end
-            mainFrame.Size=UDim2.new(0,220,0,30)
-            minimized=true
-        end
-    end)
+    mainFrame.Size = UDim2.new(0, 240, 0, 300)
 
-    -- Close
-    closeBtn.MouseButton1Click:Connect(function() _G.AutoWalkGUI:Destroy() end)
-end
+    closeBtn.MouseButton1Click:Connect(function()
+        _G.AutoWalkGUI:Hancurkan()
+    akhir)
+akhir
 
--- Tampilkan key prompt hanya jika belum valid
-if not _G.keyValid then
-    showKeyPrompt(createGUI)
-else
-    createGUI()
-end
+buatGUI()
