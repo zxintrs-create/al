@@ -12,6 +12,7 @@ end
 local connections={}
 local destroyed=false
 local btnWLock=nil
+local btnLoop=nil
 
 local MAIN_BUTTON_COLOR=Color3.fromRGB(255,255,255)
 local DIAGONAL_BUTTON_COLOR=Color3.fromRGB(190,190,190)
@@ -20,6 +21,12 @@ local WLOCK_OFF_COLOR=Color3.fromRGB(220,70,70)
 local WLOCK_ON_COLOR=Color3.fromRGB(70,200,100)
 local BUTTON_TRANSPARENCY=.15
 local BUTTON_TEXT_COLOR=Color3.fromRGB(20,20,20)
+
+-- Variable untuk Auto Loop (Kiri-Kanan + Jump)
+local isLooping = false
+local loopTimer = 0
+local loopDirection = 1 -- 1 = Left, 2 = Right
+local LOOP_INTERVAL = 0.18 -- Kecepatan ganti arah Kiri/Kanan (dalam detik)
 
 local function connect(signal,callback)
 	local c
@@ -84,18 +91,7 @@ local moveState={
 	WLock=false
 }
 
-local inputActions={}
-local buttonInputs={}
 local buttonDefaults={}
-
-local function isPressInput(input)
-	if not input then
-		return false
-	end
-
-	return input.UserInputType==Enum.UserInputType.Touch
-		or input.UserInputType==Enum.UserInputType.MouseButton1
-end
 
 local function setButtonVisual(button,pressed)
 	if not button or not button.Parent then
@@ -123,6 +119,20 @@ local function updateWLock()
 	end
 end
 
+local function updateLoopButton()
+	if destroyed or not btnLoop or not btnLoop.Parent then
+		return
+	end
+
+	if isLooping then
+		btnLoop.BackgroundColor3 = WLOCK_ON_COLOR
+		btnLoop.Text = "LOOP: ON"
+	else
+		btnLoop.BackgroundColor3 = WLOCK_OFF_COLOR
+		btnLoop.Text = "LOOP: OFF"
+	end
+end
+
 local function resetMovementVisuals()
 	for button,color in pairs(buttonDefaults) do
 		if button and button.Parent then
@@ -131,6 +141,7 @@ local function resetMovementVisuals()
 	end
 
 	updateWLock()
+	updateLoopButton()
 end
 
 local function clearMovement()
@@ -143,50 +154,9 @@ local function clearMovement()
 	moveState.DownLeft=false
 	moveState.DownRight=false
 	moveState.WLock=false
-
-	table.clear(inputActions)
-
-	for name in pairs(buttonInputs) do
-		buttonInputs[name]={}
-	end
+	isLooping=false
 
 	resetMovementVisuals()
-end
-
-local function releaseInput(input)
-	if not input then
-		return
-	end
-
-	local action=inputActions[input]
-
-	if not action then
-		return
-	end
-
-	inputActions[input]=nil
-
-	local inputs=buttonInputs[action]
-
-	if not inputs then
-		moveState[action]=false
-		return
-	end
-
-	inputs[input]=nil
-
-	local pressed=false
-
-	for _ in pairs(inputs) do
-		pressed=true
-		break
-	end
-
-	moveState[action]=pressed
-
-	for button,name in pairs({
-		}) do
-	end
 end
 
 local screenGui=Instance.new("ScreenGui")
@@ -196,6 +166,41 @@ screenGui.IgnoreGuiInset=true
 screenGui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
 screenGui.DisplayOrder=100
 screenGui.Parent=playerGui
+
+--==================================================
+-- BUTTON LOOP (ATAS KIRI LAYAR)
+--==================================================
+
+btnLoop=Instance.new("TextButton")
+btnLoop.Name="LoopButton"
+btnLoop.Position=UDim2.new(0,18,0,50) -- Di atas kiri layar
+btnLoop.Size=UDim2.fromOffset(110,42)
+btnLoop.Text="LOOP: OFF"
+btnLoop.BackgroundColor3=WLOCK_OFF_COLOR
+btnLoop.BackgroundTransparency=BUTTON_TRANSPARENCY
+btnLoop.TextColor3=Color3.fromRGB(255,255,255)
+btnLoop.Font=Enum.Font.GothamBold
+btnLoop.TextSize=16
+btnLoop.AutoButtonColor=false
+btnLoop.Active=true
+btnLoop.Selectable=false
+btnLoop.BorderSizePixel=0
+btnLoop.ZIndex=100
+btnLoop.Parent=screenGui
+
+local loopCorner=Instance.new("UICorner")
+loopCorner.CornerRadius=UDim.new(0,12)
+loopCorner.Parent=btnLoop
+
+connect(btnLoop.Activated, function()
+	if destroyed then return end
+	isLooping = not isLooping
+	updateLoopButton()
+end)
+
+--==================================================
+-- MOVEMENT GUI FRAME
+--==================================================
 
 local mainFrame=Instance.new("Frame")
 mainFrame.Name="ControlsFrame"
@@ -218,7 +223,7 @@ local function createButton(name,position,size,text,zIndex,bgColor)
 	button.Font=Enum.Font.GothamBold
 	button.TextSize=28
 	button.AutoButtonColor=false
-	button.Active=true
+	button.Active=false -- Dimatikan agar tidak menghalangi TouchZone trackpad
 	button.Selectable=false
 	button.BorderSizePixel=0
 	button.ZIndex=zIndex or 10
@@ -233,77 +238,14 @@ local function createButton(name,position,size,text,zIndex,bgColor)
 	return button
 end
 
-local btnUp=createButton(
-	"Up",
-	UDim2.new(.33,0,0,0),
-	UDim2.new(.34,0,.34,0),
-	"▲",
-	10,
-	MAIN_BUTTON_COLOR
-)
-
-local btnDown=createButton(
-	"Down",
-	UDim2.new(.33,0,.66,0),
-	UDim2.new(.34,0,.34,0),
-	"▼",
-	10,
-	MAIN_BUTTON_COLOR
-)
-
-local btnLeft=createButton(
-	"Left",
-	UDim2.new(0,0,.33,0),
-	UDim2.new(.34,0,.34,0),
-	"◀",
-	10,
-	MAIN_BUTTON_COLOR
-)
-
-local btnRight=createButton(
-	"Right",
-	UDim2.new(.66,0,.33,0),
-	UDim2.new(.34,0,.34,0),
-	"▶",
-	10,
-	MAIN_BUTTON_COLOR
-)
-
-local btnUL=createButton(
-	"UpLeft",
-	UDim2.new(.03,0,.03,0),
-	UDim2.new(.27,0,.27,0),
-	"↖",
-	11,
-	DIAGONAL_BUTTON_COLOR
-)
-
-local btnUR=createButton(
-	"UpRight",
-	UDim2.new(.70,0,.03,0),
-	UDim2.new(.27,0,.27,0),
-	"↗",
-	11,
-	DIAGONAL_BUTTON_COLOR
-)
-
-local btnDL=createButton(
-	"DownLeft",
-	UDim2.new(.03,0,.70,0),
-	UDim2.new(.27,0,.27,0),
-	"↙",
-	11,
-	DIAGONAL_BUTTON_COLOR
-)
-
-local btnDR=createButton(
-	"DownRight",
-	UDim2.new(.70,0,.70,0),
-	UDim2.new(.27,0,.27,0),
-	"↘",
-	11,
-	DIAGONAL_BUTTON_COLOR
-)
+local btnUp=createButton("Up",UDim2.new(.33,0,0,0),UDim2.new(.34,0,.34,0),"▲",10,MAIN_BUTTON_COLOR)
+local btnDown=createButton("Down",UDim2.new(.33,0,.66,0),UDim2.new(.34,0,.34,0),"▼",10,MAIN_BUTTON_COLOR)
+local btnLeft=createButton("Left",UDim2.new(0,0,.33,0),UDim2.new(.34,0,.34,0),"◀",10,MAIN_BUTTON_COLOR)
+local btnRight=createButton("Right",UDim2.new(.66,0,.33,0),UDim2.new(.34,0,.34,0),"▶",10,MAIN_BUTTON_COLOR)
+local btnUL=createButton("UpLeft",UDim2.new(.03,0,.03,0),UDim2.new(.27,0,.27,0),"↖",11,DIAGONAL_BUTTON_COLOR)
+local btnUR=createButton("UpRight",UDim2.new(.70,0,.03,0),UDim2.new(.27,0,.27,0),"↗",11,DIAGONAL_BUTTON_COLOR)
+local btnDL=createButton("DownLeft",UDim2.new(.03,0,.70,0),UDim2.new(.27,0,.27,0),"↙",11,DIAGONAL_BUTTON_COLOR)
+local btnDR=createButton("DownRight",UDim2.new(.70,0,.70,0),UDim2.new(.27,0,.27,0),"↘",11,DIAGONAL_BUTTON_COLOR)
 
 btnWLock=Instance.new("TextButton")
 btnWLock.Name="WLock"
@@ -316,7 +258,7 @@ btnWLock.TextColor3=BUTTON_TEXT_COLOR
 btnWLock.Font=Enum.Font.GothamBold
 btnWLock.TextSize=28
 btnWLock.AutoButtonColor=false
-btnWLock.Active=true
+btnWLock.Active=false -- Dimatikan juga untuk TouchZone
 btnWLock.Selectable=false
 btnWLock.BorderSizePixel=0
 btnWLock.ZIndex=12
@@ -326,128 +268,126 @@ local centerCorner=Instance.new("UICorner")
 centerCorner.CornerRadius=UDim.new(1,0)
 centerCorner.Parent=btnWLock
 
-local movementButtons={
-	[btnUp]="Forward",
-	[btnDown]="Backward",
-	[btnLeft]="Left",
-	[btnRight]="Right",
-	[btnUL]="UpLeft",
-	[btnUR]="UpRight",
-	[btnDL]="DownLeft",
-	[btnDR]="DownRight"
-}
+--==================================================
+-- TOUCH ZONE TRACKPAD (ANTI MISS-CLICK & STUTTER)
+--==================================================
 
-local actionButtons={}
+local touchZone = Instance.new("Frame")
+touchZone.Name = "TouchZone"
+touchZone.Size = UDim2.new(1, 0, 1, 0)
+touchZone.BackgroundTransparency = 1 
+touchZone.ZIndex = 50 
+touchZone.Active = true
+touchZone.Parent = mainFrame
 
-for button,name in pairs(movementButtons) do
-	buttonInputs[name]={}
-	actionButtons[name]=button
+local activeTouchId = nil
+local touchStartPos = nil
+local touchStartTime = 0
+local currentActiveButton = nil
 
-	connect(button.InputBegan,function(input)
-		if destroyed or not isPressInput(input) then
-			return
-		end
-
-		if inputActions[input] then
-			return
-		end
-
-		inputActions[input]=name
-		buttonInputs[name][input]=true
-		moveState[name]=true
-
-		setButtonVisual(button,true)
-	end)
-
-	connect(button.InputEnded,function(input)
-		releaseInput(input)
-
-		local inputs=buttonInputs[name]
-		local stillPressed=false
-
-		if inputs then
-			for _ in pairs(inputs) do
-				stillPressed=true
-				break
-			end
-		end
-
-		setButtonVisual(button,stillPressed)
-	end)
+local function getButtonFromGrid(row, col)
+	if row == 0 and col == 0 then return btnUL end
+	if row == 0 and col == 1 then return btnUp end
+	if row == 0 and col == 2 then return btnUR end
+	if row == 1 and col == 0 then return btnLeft end
+	if row == 1 and col == 2 then return btnRight end
+	if row == 2 and col == 0 then return btnDL end
+	if row == 2 and col == 1 then return btnDown end
+	if row == 2 and col == 2 then return btnDR end
+	return nil
 end
 
-connect(UserInputService.InputEnded,function(input)
-	local action=inputActions[input]
+local function updateMovementFromPosition(pos)
+	local absPos = touchZone.AbsolutePosition
+	local absSize = touchZone.AbsoluteSize
+	
+	local relX = math.clamp((pos.X - absPos.X) / absSize.X, 0, 1)
+	local relY = math.clamp((pos.Y - absPos.Y) / absSize.Y, 0, 1)
+	
+	moveState.Forward = false
+	moveState.Backward = false
+	moveState.Left = false
+	moveState.Right = false
+	
+	local row = math.min(math.floor(relY * 3), 2)
+	local col = math.min(math.floor(relX * 3), 2)
+	
+	local newBtn = getButtonFromGrid(row, col)
+	if newBtn ~= currentActiveButton then
+		setButtonVisual(currentActiveButton, false)
+		setButtonVisual(newBtn, true)
+		currentActiveButton = newBtn
+	end
+	
+	if row == 1 and col == 1 then
+		-- Area WLock, tidak trigger jalan manual
+	else
+		if row == 0 then moveState.Forward = true end
+		if row == 2 then moveState.Backward = true end
+		if col == 0 then moveState.Left = true end
+		if col == 2 then moveState.Right = true end
+	end
+end
 
-	if action then
-		releaseInput(input)
-
-		local button=actionButtons[action]
-
-		local inputs=buttonInputs[action]
-		local stillPressed=false
-
-		if inputs then
-			for _ in pairs(inputs) do
-				stillPressed=true
-				break
-			end
+connect(touchZone.InputBegan, function(input)
+	if destroyed then return end
+	if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+		if activeTouchId == nil then
+			activeTouchId = input
+			touchStartPos = input.Position
+			touchStartTime = tick()
+			updateMovementFromPosition(input.Position)
 		end
-
-		setButtonVisual(button,stillPressed)
 	end
 end)
 
-connect(UserInputService.TouchEnded,function(input)
-	local action=inputActions[input]
-
-	if action then
-		releaseInput(input)
-
-		local button=actionButtons[action]
-
-		local inputs=buttonInputs[action]
-		local stillPressed=false
-
-		if inputs then
-			for _ in pairs(inputs) do
-				stillPressed=true
-				break
-			end
-		end
-
-		setButtonVisual(button,stillPressed)
+connect(touchZone.InputChanged, function(input)
+	if destroyed then return end
+	if input == activeTouchId then
+		updateMovementFromPosition(input.Position)
 	end
 end)
 
-connect(UserInputService.WindowFocusReleased,function()
+local function stopTouch(input)
+	if input == activeTouchId then
+		local holdTime = tick() - touchStartTime
+		local dist = (input.Position - touchStartPos).Magnitude
+		
+		-- Logic WLock: Ketuk cepat di area tengah
+		if holdTime < 0.3 and dist < 30 then
+			local relX = (input.Position.X - touchZone.AbsolutePosition.X) / touchZone.AbsoluteSize.X
+			local relY = (input.Position.Y - touchZone.AbsolutePosition.Y) / touchZone.AbsoluteSize.Y
+			
+			if relX > 0.33 and relX < 0.66 and relY > 0.33 and relY < 0.66 then
+				moveState.WLock = not moveState.WLock
+				updateWLock()
+			end
+		end
+		
+		activeTouchId = nil
+		moveState.Forward = false
+		moveState.Backward = false
+		moveState.Left = false
+		moveState.Right = false
+		
+		setButtonVisual(currentActiveButton, false)
+		currentActiveButton = nil
+	end
+end
+
+connect(touchZone.InputEnded, stopTouch)
+connect(UserInputService.InputEnded, function(input)
+	if input == activeTouchId then stopTouch(input) end
+end)
+connect(UserInputService.WindowFocusReleased, function()
 	clearMovement()
+	activeTouchId = nil
+	currentActiveButton = nil
 end)
 
-connect(btnWLock.InputBegan,function(input)
-	if destroyed or not isPressInput(input) then
-		return
-	end
-
-	setButtonVisual(btnWLock,true)
-end)
-
-connect(btnWLock.InputEnded,function(input)
-	if destroyed then
-		return
-	end
-
-	updateWLock()
-end)
-
-connect(btnWLock.Activated,function()
-	if destroyed then
-		return
-	end
-
-	moveState.WLock=not moveState.WLock
-	updateWLock()
-end)
+--==================================================
+-- CAMERA & MOVEMENT UPDATE (WITH LOOP ENGINE)
+--==================================================
 
 local cachedForward=Vector3.new(0,0,-1)
 local cachedSide=Vector3.new(1,0,0)
@@ -491,47 +431,15 @@ local function getMoveVector()
 	local x=0
 	local z=0
 
-	if moveState.Forward then
-		z+=1
-	end
-
-	if moveState.Backward then
-		z-=1
-	end
-
-	if moveState.Left then
-		x-=1
-	end
-
-	if moveState.Right then
-		x+=1
-	end
-
-	if moveState.UpLeft then
-		x-=1
-		z+=1
-	end
-
-	if moveState.UpRight then
-		x+=1
-		z+=1
-	end
-
-	if moveState.DownLeft then
-		x-=1
-		z-=1
-	end
-
-	if moveState.DownRight then
-		x+=1
-		z-=1
-	end
+	if moveState.Forward then z+=1 end
+	if moveState.Backward then z-=1 end
+	if moveState.Left then x-=1 end
+	if moveState.Right then x+=1 end
 
 	if x==0 and z==0 then
 		if moveState.WLock then
 			return cachedForward
 		end
-
 		return Vector3.zero
 	end
 
@@ -544,7 +452,7 @@ local function getMoveVector()
 	return movement.Unit
 end
 
-connect(RunService.RenderStepped,function()
+connect(RunService.RenderStepped,function(deltaTime)
 	if destroyed then
 		return
 	end
@@ -560,9 +468,36 @@ connect(RunService.RenderStepped,function()
 		return
 	end
 
+	-- PERBAIKAN: AUTO LOOP LOGIC (KIRI - KANAN - JUMP)
+	if isLooping then
+		loopTimer += deltaTime
+		if loopTimer >= LOOP_INTERVAL then
+			loopTimer = 0
+			loopDirection = (loopDirection == 1) and 2 or 1
+		end
+
+		if loopDirection == 1 then
+			moveState.Left = true
+			moveState.Right = false
+		else
+			moveState.Left = false
+			moveState.Right = true
+		end
+
+		-- Trigger Jump Otomatis saat di tanah
+		local state = currentHumanoid:GetState()
+		if state ~= Enum.HumanoidStateType.Jumping and state ~= Enum.HumanoidStateType.Freefall then
+			currentHumanoid.Jump = true
+		end
+	end
+
 	updateCameraVectors()
 	currentHumanoid:Move(getMoveVector(),false)
 end)
+
+--==================================================
+-- SETTINGS ERGO (INTACT)
+--==================================================
 
 local x=.70
 local y=.70
@@ -1227,6 +1162,7 @@ connect(player.CharacterAdded,function(newCharacter)
 	humanoid=newHumanoid
 
 	updateWLock()
+	updateLoopButton()
 	refreshJump()
 end)
 
@@ -1298,4 +1234,5 @@ end)
 
 updateCameraVectors()
 updateWLock()
+updateLoopButton()
 updateJump()
