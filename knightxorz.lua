@@ -24,11 +24,11 @@ local state = {
 	lastSafeRotation = nil,
 	recordConnection = nil,
 	playbackConnection = nil,
-	playbackIndex = 1,
+	playbackTime = 0,
 	playbackDirection = 1,
 	playbackStarted = false,
-	lastPlaybackDirection = Vector3.zero,
-	lastPlaybackSpeed = 0,
+	smoothDirection = Vector3.zero,
+	lastGrounded = true,
 	jumpCooldown = 0,
 	approachSpeed = 16
 }
@@ -219,7 +219,7 @@ local btnClear = makeButton(
 
 y += 30
 
-local separator1 = makeFrame(
+makeFrame(
 	"Separator1",
 	mainWindow,
 	UDim2.new(0, 200, 0, 1),
@@ -271,7 +271,7 @@ local rotLabel, rotBox =
 
 y += 40
 
-local separator2 = makeFrame(
+makeFrame(
 	"Separator2",
 	mainWindow,
 	UDim2.new(0, 200, 0, 1),
@@ -327,7 +327,7 @@ local function createPathSegment(firstPosition, secondPosition, color)
 
 	local segment = Instance.new("Part")
 	segment.Name = "VisualPath"
-	segment.Size = Vector3.new(0.1, 0.1, distance)
+	segment.Size = Vector3.new(0.08, 0.08, distance)
 	segment.CFrame = CFrame.lookAt(
 		(firstPosition + secondPosition) * 0.5,
 		secondPosition
@@ -339,7 +339,7 @@ local function createPathSegment(firstPosition, secondPosition, color)
 	segment.CastShadow = false
 	segment.Locked = true
 	segment.Material = Enum.Material.Neon
-	segment.Transparency = 0.35
+	segment.Transparency = 0.45
 	segment.Color = color
 	segment.Parent = pathFolder
 end
@@ -389,7 +389,7 @@ local function updateSafePoint()
 	end
 
 	state.lastSafePosition = rootPart.Position
-	state.lastSafeRotation = rootPart.Orientation
+	state.lastSafeRotation = rootPart.CFrame.Rotation
 end
 
 local function rollbackToSafe()
@@ -398,15 +398,9 @@ local function rollbackToSafe()
 		return
 	end
 
-	local rotationY = 0
-
-	if state.lastSafeRotation then
-		rotationY = math.rad(state.lastSafeRotation.Y)
-	end
-
 	character:PivotTo(
 		CFrame.new(state.lastSafePosition)
-			* CFrame.Angles(0, rotationY, 0)
+			* state.lastSafeRotation
 	)
 
 	humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
@@ -433,57 +427,367 @@ local function recordFrame()
 		"Frames: " .. tostring(#state.recordedFrames)
 end
 
-local function getHorizontal(vector)
-	return Vector3.new(vector.X, 0, vector.Z)
-end
-
-local function getMovement(index, directionMultiplier)
+local function normalizeTimes()
 	if #state.recordedFrames < 2 then
-		return Vector3.zero, 0
+		return
 	end
 
-	local nextIndex = index + directionMultiplier
+	local firstTime = state.recordedFrames[1].time
+
+	for _, frame in ipairs(state.recordedFrames) do
+		frame.time = frame.time - firstTime
+	end
+end
+
+local function getTotalDuration()
+	if #state.recordedFrames < 2 then
+		return 0
+	end
+
+	return state.recordedFrames[#state.recordedFrames].time
+end
+
+local function sampleFrameAt(targetTime)
+	if #state.recordedFrames == 0 then
+		return nil
+	end
+
+	if #state.recordedFrames == 1 then
+		return state.recordedFrames[1]
+	end
+
+	targetTime = math.clamp(
+		targetTime,
+		0,
+		getTotalDuration()
+	)
+
+	local low = 1
+	local high = #state.recordedFrames
+
+	while low <= high do
+		local middle = math.floor((low + high) / 2)
+
+		if state.recordedFrames[middle].time < targetTime then
+			low = middle + 1
+		else
+			high = middle - 1
+		end
+	end
+
+	local secondIndex = math.clamp(
+		low,
+		2,
+		#state.recordedFrames
+	)
+
+	local firstIndex = secondIndex - 1
+
+	local firstFrame =
+		state.recordedFrames[firstIndex]
+
+	local secondFrame =
+		state.recordedFrames[secondIndex]
+
+	local duration =
+		secondFrame.time - firstFrame.time
+
+	if duration <= 0 then
+		return firstFrame
+	end
+
+	local alpha =
+		math.clamp(
+			(targetTime - firstFrame.time) / duration,
+			0,
+			1
+		)
+
+	return {
+		position =
+			firstFrame.position:Lerp(
+				secondFrame.position,
+				alpha
+			),
+
+		rotation =
+			firstFrame.rotation:Lerp(
+				secondFrame.rotation,
+				alpha
+			),
+
+		grounded =
+			alpha < 0.5
+			and firstFrame.grounded
+			or secondFrame.grounded
+	}
+end
+
+local function getFrameDirection(index, direction)
+	local nextIndex = index + direction
 
 	if nextIndex < 1 or nextIndex > #state.recordedFrames then
 		return Vector3.zero, 0
 	end
 
-	local first = state.recordedFrames[index]
-	local second = state.recordedFrames[nextIndex]
+	local first =
+		state.recordedFrames[index]
 
-	local delta = second.position - first.position
-	local horizontalDelta = getHorizontal(delta)
+	local second =
+		state.recordedFrames[nextIndex]
 
-	local duration = math.abs(second.time - first.time)
+	local delta =
+		second.position - first.position
+
+	local horizontal =
+		Vector3.new(
+			delta.X,
+			0,
+			delta.Z
+		)
+
+	local duration =
+		math.abs(
+			second.time - first.time
+		)
 
 	if duration <= 0 then
-		duration = 0.016
+		duration = 1 / 30
 	end
 
-	if horizontalDelta.Magnitude < 0.01 then
+	if horizontal.Magnitude <= 0.01 then
 		return Vector3.zero, 0
 	end
 
-	return horizontalDelta.Unit, horizontalDelta.Magnitude / duration
+	return horizontal.Unit,
+		horizontal.Magnitude / duration
+end
+
+local function getNearestPathFrame()
+	if #state.recordedFrames == 0 or not rootPart then
+		return nil, math.huge
+	end
+
+	local bestIndex = 1
+	local bestDistance = math.huge
+
+	local currentPosition =
+		rootPart.Position
+
+	local startIndex = 1
+	local endIndex = #state.recordedFrames
+
+	if state.playbackDirection > 0 then
+		startIndex =
+			math.max(
+				1,
+				math.floor(
+					state.playbackTime /
+					math.max(
+						getTotalDuration() /
+						#state.recordedFrames,
+						0.001
+					)
+				) - 8
+			)
+
+		endIndex =
+			math.min(
+				#state.recordedFrames,
+				startIndex + 30
+			)
+	else
+		endIndex =
+			math.min(
+				#state.recordedFrames,
+				math.floor(
+					state.playbackTime /
+					math.max(
+						getTotalDuration() /
+						#state.recordedFrames,
+						0.001
+					)
+				) + 8
+			)
+
+		startIndex =
+			math.max(
+				1,
+				endIndex - 30
+			)
+	end
+
+	for index = startIndex, endIndex do
+		local frame =
+			state.recordedFrames[index]
+
+		local delta =
+			frame.position - currentPosition
+
+		local horizontal =
+			Vector3.new(
+				delta.X,
+				0,
+				delta.Z
+			)
+
+		local distance =
+			horizontal.Magnitude
+
+		if distance < bestDistance then
+			bestDistance = distance
+			bestIndex = index
+		end
+	end
+
+	return bestIndex, bestDistance
+end
+
+local function getPathDirection()
+	if not rootPart or #state.recordedFrames < 2 then
+		return Vector3.zero
+	end
+
+	local currentFrame =
+		sampleFrameAt(state.playbackTime)
+
+	if not currentFrame then
+		return Vector3.zero
+	end
+
+	local targetDelta =
+		currentFrame.position -
+		rootPart.Position
+
+	local targetHorizontal =
+		Vector3.new(
+			targetDelta.X,
+			0,
+			targetDelta.Z
+		)
+
+	local nearestIndex, nearestDistance =
+		getNearestPathFrame()
+
+	if nearestIndex then
+		local pathDirection, pathSpeed =
+			getFrameDirection(
+				nearestIndex,
+				state.playbackDirection
+			)
+
+		local correction =
+			Vector3.zero
+
+		if nearestDistance > 0.75
+			and targetHorizontal.Magnitude > 0.05 then
+
+			local correctionStrength =
+				math.clamp(
+					nearestDistance / 3,
+					0,
+					1
+				)
+
+			correction =
+				targetHorizontal.Unit *
+				correctionStrength
+		end
+
+		local result =
+			pathDirection + correction
+
+		result =
+			Vector3.new(
+				result.X,
+				0,
+				result.Z
+			)
+
+		if result.Magnitude > 0.01 then
+			return result.Unit, pathSpeed
+		end
+	end
+
+	if targetHorizontal.Magnitude > 0.05 then
+		return targetHorizontal.Unit, state.autoWalkSpeed
+	end
+
+	return Vector3.zero, 0
+end
+
+local function getGroundAhead(direction, distance)
+	if not rootPart or not character then
+		return false
+	end
+
+	if direction.Magnitude <= 0.01 then
+		return true
+	end
+
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	params.FilterDescendantsInstances = {character}
+	params.IgnoreWater = false
+
+	local origin =
+		rootPart.Position +
+		Vector3.new(0, 2.5, 0) +
+		direction.Unit * distance
+
+	local result =
+		workspace:Raycast(
+			origin,
+			Vector3.new(0, -7, 0),
+			params
+		)
+
+	return result ~= nil
+end
+
+local function getForwardGround(direction)
+	if not rootPart or direction.Magnitude <= 0.01 then
+		return true
+	end
+
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	params.FilterDescendantsInstances = {character}
+	params.IgnoreWater = false
+
+	local origin =
+		rootPart.Position +
+		Vector3.new(0, 2, 0)
+
+	local result =
+		workspace:Raycast(
+			origin,
+			direction.Unit * 2.2 +
+			Vector3.new(0, -6, 0),
+			params
+		)
+
+	return result ~= nil
 end
 
 local function getApproachDirection(targetPosition)
 	if not rootPart then
-		return Vector3.zero, 0
+		return Vector3.zero, math.huge
 	end
 
 	local delta =
-		targetPosition - rootPart.Position
+		targetPosition -
+		rootPart.Position
 
 	local horizontal =
-		getHorizontal(delta)
+		Vector3.new(
+			delta.X,
+			0,
+			delta.Z
+		)
 
 	local distance =
 		horizontal.Magnitude
-
-	if distance <= arrivalDistance then
-		return Vector3.zero, distance
-	end
 
 	if distance <= 0.01 then
 		return Vector3.zero, distance
@@ -492,14 +796,27 @@ local function getApproachDirection(targetPosition)
 	return horizontal.Unit, distance
 end
 
-local function finishPlayback()
-	state.isPlaying = false
+local function resetPlaybackState()
+	state.playbackTime = 0
+	state.playbackDirection = 1
 	state.playbackStarted = false
+	state.smoothDirection = Vector3.zero
+	state.lastGrounded = true
+	state.jumpCooldown = 0
+end
 
+local function disconnectPlayback()
 	if state.playbackConnection then
 		state.playbackConnection:Disconnect()
 		state.playbackConnection = nil
 	end
+end
+
+local function finishPlayback()
+	state.isPlaying = false
+	state.playbackStarted = false
+
+	disconnectPlayback()
 
 	if humanoid then
 		humanoid:Move(Vector3.zero, false)
@@ -507,25 +824,22 @@ local function finishPlayback()
 		humanoid.WalkSpeed = state.autoWalkSpeed
 	end
 
-	state.lastPlaybackDirection = Vector3.zero
-	state.lastPlaybackSpeed = 0
+	state.smoothDirection = Vector3.zero
 	state.jumpCooldown = 0
 
 	btnPlay.Text = "▶ PLAY"
 	btnPlay.BackgroundColor3 =
 		Color3.fromRGB(40, 120, 40)
 
-	statusLabel.Text = "Status: Playback complete"
+	statusLabel.Text =
+		"Status: Playback complete"
 end
 
 local function stopPlayback()
 	state.isPlaying = false
 	state.playbackStarted = false
 
-	if state.playbackConnection then
-		state.playbackConnection:Disconnect()
-		state.playbackConnection = nil
-	end
+	disconnectPlayback()
 
 	if humanoid then
 		humanoid:Move(Vector3.zero, false)
@@ -533,8 +847,7 @@ local function stopPlayback()
 		humanoid.WalkSpeed = state.autoWalkSpeed
 	end
 
-	state.lastPlaybackDirection = Vector3.zero
-	state.lastPlaybackSpeed = 0
+	state.smoothDirection = Vector3.zero
 	state.jumpCooldown = 0
 
 	btnPlay.Text = "▶ PLAY"
@@ -550,24 +863,22 @@ local function startPlayback()
 	end
 
 	if #state.recordedFrames < 2 then
-		statusLabel.Text = "Status: Not enough frames"
+		statusLabel.Text =
+			"Status: Not enough frames"
 		return
 	end
 
 	if not character or not humanoid or not rootPart then
-		statusLabel.Text = "Status: Character unavailable"
+		statusLabel.Text =
+			"Status: Character unavailable"
 		return
 	end
 
-	state.isPlaying = true
-	state.playbackStarted = false
-	state.playbackIndex = 1
-	state.playbackDirection = 1
-	state.lastPlaybackDirection = Vector3.zero
-	state.lastPlaybackSpeed = 0
-	state.jumpCooldown = 0
+	normalizeTimes()
 
-	humanoid.AutoRotate = true
+	resetPlaybackState()
+
+	state.isPlaying = true
 
 	btnPlay.Text = "⏸ PLAYING"
 	btnPlay.BackgroundColor3 =
@@ -576,9 +887,7 @@ local function startPlayback()
 	statusLabel.Text =
 		"Status: Walking to start..."
 
-	if state.playbackConnection then
-		state.playbackConnection:Disconnect()
-	end
+	disconnectPlayback()
 
 	state.playbackConnection =
 		RunService.Heartbeat:Connect(function(dt)
@@ -594,6 +903,20 @@ local function startPlayback()
 				return
 			end
 
+			local totalDuration =
+				getTotalDuration()
+
+			if totalDuration <= 0 then
+				finishPlayback()
+				return
+			end
+
+			state.jumpCooldown =
+				math.max(
+					0,
+					state.jumpCooldown - dt
+				)
+
 			if not state.playbackStarted then
 				local startPosition =
 					state.recordedFrames[1].position
@@ -605,69 +928,178 @@ local function startPlayback()
 
 				if distance <= arrivalDistance then
 					state.playbackStarted = true
-					state.playbackIndex = 1
+					state.playbackTime = 0
 					state.playbackDirection = 1
-					state.lastPlaybackDirection =
+					state.smoothDirection =
 						Vector3.zero
-					state.lastPlaybackSpeed = 0
 
 					statusLabel.Text =
 						"Status: Playing"
-
-					humanoid:Move(
-						Vector3.zero,
-						false
-					)
 				else
 					humanoid.WalkSpeed =
 						state.approachSpeed
 
-					humanoid:Move(
-						direction,
-						false
-					)
+					if direction.Magnitude > 0.01 then
+						local smoothing =
+							1 -
+							math.exp(
+								-dt * 12
+							)
 
-					updateSafePoint()
+						if state.smoothDirection.Magnitude <= 0.01 then
+							state.smoothDirection =
+								direction
+						else
+							state.smoothDirection =
+								state.smoothDirection:Lerp(
+									direction,
+									smoothing
+								)
+
+							if state.smoothDirection.Magnitude > 0.01 then
+								state.smoothDirection =
+									state.smoothDirection.Unit
+							end
+						end
+
+						humanoid:Move(
+							state.smoothDirection,
+							false
+						)
+					else
+						humanoid:Move(
+							Vector3.zero,
+							false
+						)
+					end
 				end
 
+				updateSafePoint()
 				return
 			end
 
-			local directionMultiplier =
-				state.playbackDirection
+			local direction, recordedSpeed =
+				getPathDirection()
 
-			local movementDirection, recordedSpeed =
-				getMovement(
-					state.playbackIndex,
-					directionMultiplier
+			local currentFrame =
+				sampleFrameAt(
+					state.playbackTime
 				)
 
-			if movementDirection.Magnitude > 0 then
-				local smoothedDirection =
-					state.lastPlaybackDirection
+			local lookAheadTime =
+				math.clamp(
+					state.playbackTime +
+					0.12 *
+					state.playbackDirection,
+					0,
+					totalDuration
+				)
 
-				if smoothedDirection.Magnitude <= 0 then
-					smoothedDirection =
-						movementDirection
-				else
-					smoothedDirection =
-						smoothedDirection:Lerp(
-							movementDirection,
-							math.clamp(
-								dt * 12,
-								0,
-								1
-							)
+			local nextFrame =
+				sampleFrameAt(
+					lookAheadTime
+				)
+
+			if currentFrame and nextFrame then
+				local verticalDifference =
+					nextFrame.position.Y -
+					currentFrame.position.Y
+
+				local currentGrounded =
+					isGrounded()
+
+				if verticalDifference > 0.45
+					and currentGrounded
+					and state.jumpCooldown <= 0 then
+
+					local jumpDirection =
+						getApproachDirection(
+							nextFrame.position
 						)
+
+					if jumpDirection.Magnitude > 0 then
+						humanoid.Jump = true
+						state.jumpCooldown = 0.4
+					end
+				end
+			end
+
+			if direction.Magnitude > 0.01 then
+				local groundAvailable =
+					getForwardGround(direction)
+
+				if not groundAvailable
+					and isGrounded() then
+
+					local alternate =
+						direction
+
+					local right =
+						Vector3.new(
+							-direction.Z,
+							0,
+							direction.X
+						)
+
+					local left =
+						-right
+
+					local rightGround =
+						getGroundAhead(
+							right,
+							1.5
+						)
+
+					local leftGround =
+						getGroundAhead(
+							left,
+							1.5
+						)
+
+					if rightGround then
+						alternate =
+							(
+								direction +
+								right * 0.45
+							).Unit
+
+					elseif leftGround then
+						alternate =
+							(
+								direction +
+								left * 0.45
+							).Unit
+					end
+
+					direction = alternate
 				end
 
-				if smoothedDirection.Magnitude > 0 then
-					smoothedDirection =
-						smoothedDirection.Unit
-				end
+				local smoothing =
+					1 -
+					math.exp(
+						-dt *
+						math.clamp(
+							state.rotateSpeed * 3,
+							8,
+							30
+						)
+					)
 
-				state.lastPlaybackDirection =
-					smoothedDirection
+				if state.smoothDirection.Magnitude <= 0.01 then
+					state.smoothDirection =
+						direction
+				else
+					state.smoothDirection =
+						state.smoothDirection:Lerp(
+							direction,
+							smoothing
+						)
+
+					if state.smoothDirection.Magnitude > 0.01 then
+						state.smoothDirection =
+							state.smoothDirection.Unit
+					end
+				end
 
 				local targetSpeed =
 					math.clamp(
@@ -676,150 +1108,93 @@ local function startPlayback()
 						200
 					)
 
-				local smoothSpeed =
-					state.lastPlaybackSpeed
-
-				if smoothSpeed <= 0 then
-					smoothSpeed =
-						targetSpeed
-				else
-					smoothSpeed =
-						smoothSpeed
-						+ (targetSpeed - smoothSpeed)
-						* math.clamp(
-							dt * 10,
-							0,
-							1
-						)
+				if targetSpeed < 1 then
+					targetSpeed =
+						state.autoWalkSpeed
 				end
 
-				state.lastPlaybackSpeed =
-					smoothSpeed
+				local speedAlpha =
+					1 -
+					math.exp(
+						-dt * 10
+					)
+
+				local currentSpeed =
+					humanoid.WalkSpeed
+
+				currentSpeed =
+					currentSpeed +
+					(
+						targetSpeed -
+						currentSpeed
+					) * speedAlpha
 
 				humanoid.WalkSpeed =
-					smoothSpeed
+					math.clamp(
+						currentSpeed,
+						1,
+						200
+					)
 
 				humanoid:Move(
-					smoothedDirection,
+					state.smoothDirection,
 					false
 				)
-
-				state.playbackIndex +=
-					state.playbackDirection
-
-				if state.playbackIndex >=
-					#state.recordedFrames then
-
-					state.playbackIndex =
-						#state.recordedFrames
-
-					if state.isLooping then
-						state.playbackDirection = -1
-					else
-						humanoid:Move(
-							Vector3.zero,
-							false
-						)
-
-						finishPlayback()
-						return
-					end
-
-				elseif state.playbackIndex <= 1 then
-
-					state.playbackIndex = 1
-
-					if state.isLooping then
-						state.playbackDirection = 1
-					else
-						humanoid:Move(
-							Vector3.zero,
-							false
-						)
-
-						finishPlayback()
-						return
-					end
-				end
 			else
 				humanoid:Move(
 					Vector3.zero,
 					false
 				)
-
-				state.playbackIndex +=
-					state.playbackDirection
-
-				if state.playbackIndex >=
-					#state.recordedFrames then
-
-					state.playbackIndex =
-						#state.recordedFrames
-
-					if state.isLooping then
-						state.playbackDirection = -1
-					else
-						finishPlayback()
-						return
-					end
-
-				elseif state.playbackIndex <= 1 then
-
-					state.playbackIndex = 1
-
-					if state.isLooping then
-						state.playbackDirection = 1
-					else
-						finishPlayback()
-						return
-					end
-				end
 			end
 
-			state.jumpCooldown =
-				math.max(
-					0,
-					state.jumpCooldown - dt
-				)
-
-			local currentIndex =
+			local timeStep =
+				dt *
 				math.clamp(
-					state.playbackIndex,
-					1,
-					#state.recordedFrames
+					humanoid.WalkSpeed /
+					math.max(
+						state.autoWalkSpeed,
+						1
+					),
+					0.65,
+					1.5
 				)
 
-			local nextIndex =
-				math.clamp(
-					currentIndex
-						+ state.playbackDirection,
-					1,
-					#state.recordedFrames
-				)
+			state.playbackTime +=
+				timeStep *
+				state.playbackDirection
 
-			local currentFrame =
-				state.recordedFrames[currentIndex]
+			if state.playbackTime >= totalDuration then
+				state.playbackTime =
+					totalDuration
 
-			local nextFrame =
-				state.recordedFrames[nextIndex]
+				if state.isLooping then
+					state.playbackDirection = -1
+					state.smoothDirection =
+						Vector3.zero
+				else
+					finishPlayback()
+					return
+				end
+			elseif state.playbackTime <= 0 then
+				state.playbackTime = 0
 
-			if currentFrame
-				and nextFrame
-				and currentFrame.grounded
-				and not nextFrame.grounded
-				and state.jumpCooldown <= 0 then
-
-				local heightDifference =
-					nextFrame.position.Y
-					- currentFrame.position.Y
-
-				if heightDifference > 0.35 then
-					humanoid.Jump = true
-					state.jumpCooldown = 0.35
+				if state.isLooping then
+					state.playbackDirection = 1
+					state.smoothDirection =
+						Vector3.zero
+				else
+					finishPlayback()
+					return
 				end
 			end
 
 			updateSafePoint()
+
+			if isGrounded() then
+				state.lastGrounded = true
+			else
+				state.lastGrounded = false
+			end
 		end)
 end
 
@@ -830,6 +1205,8 @@ local function stopRecording()
 		state.recordConnection:Disconnect()
 		state.recordConnection = nil
 	end
+
+	normalizeTimes()
 
 	btnRecord.Text = "● RECORD"
 	btnRecord.BackgroundColor3 =
@@ -858,11 +1235,14 @@ local function startRecording()
 
 	frameCountLabel.Text = "Frames: 0"
 
-	btnRecord.Text = "● RECORDING..."
+	btnRecord.Text =
+		"● RECORDING..."
+
 	btnRecord.BackgroundColor3 =
 		Color3.fromRGB(255, 50, 50)
 
-	statusLabel.Text = "Status: Recording"
+	statusLabel.Text =
+		"Status: Recording"
 
 	recordFrame()
 	updateSafePoint()
@@ -923,17 +1303,22 @@ local function stopEverything()
 end
 
 local function toggleAutoWalk()
-	state.isAutoWalk = not state.isAutoWalk
+	state.isAutoWalk =
+		not state.isAutoWalk
 
 	if state.isAutoWalk then
-		btnAutoWalk.Text = "◆ AUTO WALK ON"
+		btnAutoWalk.Text =
+			"◆ AUTO WALK ON"
+
 		btnAutoWalk.BackgroundColor3 =
 			Color3.fromRGB(40, 120, 40)
 
 		humanoid.WalkSpeed =
 			state.autoWalkSpeed
 	else
-		btnAutoWalk.Text = "◇ AUTO WALK OFF"
+		btnAutoWalk.Text =
+			"◇ AUTO WALK OFF"
+
 		btnAutoWalk.BackgroundColor3 =
 			Color3.fromRGB(60, 60, 80)
 
@@ -945,21 +1330,27 @@ local function toggleAutoWalk()
 end
 
 local function toggleLoop()
-	state.isLooping = not state.isLooping
+	state.isLooping =
+		not state.isLooping
 
 	if state.isLooping then
-		btnLoop.Text = "↻ LOOP ON"
+		btnLoop.Text =
+			"↻ LOOP ON"
+
 		btnLoop.BackgroundColor3 =
 			Color3.fromRGB(40, 120, 40)
 	else
-		btnLoop.Text = "↻ LOOP OFF"
+		btnLoop.Text =
+			"↻ LOOP OFF"
+
 		btnLoop.BackgroundColor3 =
 			Color3.fromRGB(60, 60, 80)
 	end
 end
 
 local function toggleVisualLine()
-	showVisualLine = not showVisualLine
+	showVisualLine =
+		not showVisualLine
 
 	if showVisualLine then
 		btnToggleLine.Text =
@@ -980,221 +1371,287 @@ local function toggleVisualLine()
 	end
 end
 
-btnRecord.MouseButton1Click:Connect(toggleRecord)
+btnRecord.MouseButton1Click:Connect(
+	toggleRecord
+)
 
-btnPlay.MouseButton1Click:Connect(togglePlayback)
+btnPlay.MouseButton1Click:Connect(
+	togglePlayback
+)
 
-btnStop.MouseButton1Click:Connect(stopEverything)
+btnStop.MouseButton1Click:Connect(
+	stopEverything
+)
 
-btnRollback.MouseButton1Click:Connect(function()
-	if state.isPlaying then
-		stopPlayback()
-	end
-
-	rollbackToSafe()
-end)
-
-btnClear.MouseButton1Click:Connect(function()
-	if state.isRecording then
-		stopRecording()
-	end
-
-	if state.isPlaying then
-		stopPlayback()
-	end
-
-	state.recordedFrames = {}
-	state.safePoints = {}
-	state.lastSafePosition = nil
-	state.lastSafeRotation = nil
-
-	clearVisualPath()
-
-	frameCountLabel.Text = "Frames: 0"
-	statusLabel.Text = "Status: Cleared"
-end)
-
-btnAutoWalk.MouseButton1Click:Connect(toggleAutoWalk)
-
-btnLoop.MouseButton1Click:Connect(toggleLoop)
-
-btnToggleLine.MouseButton1Click:Connect(toggleVisualLine)
-
-speedBox.FocusLost:Connect(function()
-	local value =
-		tonumber(speedBox.Text) or 16
-
-	value =
-		math.clamp(value, 1, 200)
-
-	state.autoWalkSpeed = value
-	state.approachSpeed = value
-
-	speedBox.Text =
-		tostring(value)
-
-	speedLabel.Text =
-		"Speed: " .. tostring(value)
-
-	if not state.isPlaying then
-		humanoid.WalkSpeed = value
-	end
-end)
-
-jumpBox.FocusLost:Connect(function()
-	local value =
-		tonumber(jumpBox.Text) or 50
-
-	value =
-		math.clamp(value, 10, 200)
-
-	state.jumpPower = value
-
-	jumpBox.Text =
-		tostring(value)
-
-	jumpLabel.Text =
-		"JumpPower: " .. tostring(value)
-
-	humanoid.JumpPower = value
-end)
-
-fallBox.FocusLost:Connect(function()
-	local value =
-		tonumber(fallBox.Text) or 1
-
-	value =
-		math.clamp(value, 0.5, 10)
-
-	state.fallMultiplier = value
-
-	fallBox.Text =
-		tostring(value)
-
-	fallLabel.Text =
-		"FallMult: " .. tostring(value)
-end)
-
-rotBox.FocusLost:Connect(function()
-	local value =
-		tonumber(rotBox.Text) or 5
-
-	value =
-		math.clamp(value, 0.5, 20)
-
-	state.rotateSpeed = value
-
-	rotBox.Text =
-		tostring(value)
-
-	rotLabel.Text =
-		"RotSpeed: " .. tostring(value)
-end)
-
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-	if gameProcessed then
-		return
-	end
-
-	if input.KeyCode == Enum.KeyCode.F5 then
-		toggleRecord()
-
-	elseif input.KeyCode == Enum.KeyCode.F6 then
-		togglePlayback()
-
-	elseif input.KeyCode == Enum.KeyCode.F7 then
+btnRollback.MouseButton1Click:Connect(
+	function()
 		if state.isPlaying then
 			stopPlayback()
 		end
 
 		rollbackToSafe()
-
-	elseif input.KeyCode == Enum.KeyCode.F8 then
-		toggleAutoWalk()
-
-	elseif input.KeyCode == Enum.KeyCode.F9 then
-		stopEverything()
-
-	elseif input.KeyCode == Enum.KeyCode.F10 then
-		toggleVisualLine()
-
-	elseif input.KeyCode == Enum.KeyCode.F11 then
-		toggleLoop()
 	end
-end)
+)
 
-player.CharacterAdded:Connect(function(newCharacter)
-	if state.recordConnection then
-		state.recordConnection:Disconnect()
-		state.recordConnection = nil
+btnClear.MouseButton1Click:Connect(
+	function()
+		if state.isRecording then
+			stopRecording()
+		end
+
+		if state.isPlaying then
+			stopPlayback()
+		end
+
+		state.recordedFrames = {}
+		state.safePoints = {}
+		state.lastSafePosition = nil
+		state.lastSafeRotation = nil
+
+		clearVisualPath()
+
+		frameCountLabel.Text =
+			"Frames: 0"
+
+		statusLabel.Text =
+			"Status: Cleared"
 	end
+)
 
-	if state.playbackConnection then
-		state.playbackConnection:Disconnect()
-		state.playbackConnection = nil
-	end
+btnAutoWalk.MouseButton1Click:Connect(
+	toggleAutoWalk
+)
 
-	state.isRecording = false
-	state.isPlaying = false
-	state.playbackStarted = false
-	state.isAutoWalk = false
+btnLoop.MouseButton1Click:Connect(
+	toggleLoop
+)
 
-	setupCharacter(newCharacter)
+btnToggleLine.MouseButton1Click:Connect(
+	toggleVisualLine
+)
 
-	btnRecord.Text = "● RECORD"
-	btnRecord.BackgroundColor3 =
-		Color3.fromRGB(180, 40, 40)
+speedBox.FocusLost:Connect(
+	function()
+		local value =
+			tonumber(speedBox.Text) or 16
 
-	btnPlay.Text = "▶ PLAY"
-	btnPlay.BackgroundColor3 =
-		Color3.fromRGB(40, 120, 40)
-
-	btnAutoWalk.Text =
-		"◇ AUTO WALK OFF"
-
-	btnAutoWalk.BackgroundColor3 =
-		Color3.fromRGB(60, 60, 80)
-
-	statusLabel.Text =
-		"Status: Character respawned"
-end)
-
-RunService.Heartbeat:Connect(function()
-	if not character
-		or not humanoid
-		or not rootPart then
-		return
-	end
-
-	if not state.isPlaying
-		and not state.isRecording
-		and not state.isAutoWalk then
-
-		updateSafePoint()
-	end
-
-	if state.isAutoWalk
-		and not state.isPlaying
-		and not state.isRecording then
-
-		local look =
-			rootPart.CFrame.LookVector
-
-		local direction =
-			Vector3.new(
-				look.X,
-				0,
-				look.Z
+		value =
+			math.clamp(
+				value,
+				1,
+				200
 			)
 
-		if direction.Magnitude > 0.01 then
-			humanoid:Move(
-				direction.Unit,
-				false
-			)
+		state.autoWalkSpeed =
+			value
+
+		state.approachSpeed =
+			value
+
+		speedBox.Text =
+			tostring(value)
+
+		speedLabel.Text =
+			"Speed: " ..
+			tostring(value)
+
+		if not state.isPlaying then
+			humanoid.WalkSpeed =
+				value
 		end
 	end
-end)
+)
+
+jumpBox.FocusLost:Connect(
+	function()
+		local value =
+			tonumber(jumpBox.Text) or 50
+
+		value =
+			math.clamp(
+				value,
+				10,
+				200
+			)
+
+		state.jumpPower =
+			value
+
+		jumpBox.Text =
+			tostring(value)
+
+		jumpLabel.Text =
+			"JumpPower: " ..
+			tostring(value)
+
+		humanoid.JumpPower =
+			value
+	end
+)
+
+fallBox.FocusLost:Connect(
+	function()
+		local value =
+			tonumber(fallBox.Text) or 1
+
+		value =
+			math.clamp(
+				value,
+				0.5,
+				10
+			)
+
+		state.fallMultiplier =
+			value
+
+		fallBox.Text =
+			tostring(value)
+
+		fallLabel.Text =
+			"FallMult: " ..
+			tostring(value)
+	end
+)
+
+rotBox.FocusLost:Connect(
+	function()
+		local value =
+			tonumber(rotBox.Text) or 5
+
+		value =
+			math.clamp(
+				value,
+				0.5,
+				20
+			)
+
+		state.rotateSpeed =
+			value
+
+		rotBox.Text =
+			tostring(value)
+
+		rotLabel.Text =
+			"RotSpeed: " ..
+			tostring(value)
+	end
+)
+
+UserInputService.InputBegan:Connect(
+	function(input, gameProcessed)
+		if gameProcessed then
+			return
+		end
+
+		if input.KeyCode == Enum.KeyCode.F5 then
+			toggleRecord()
+
+		elseif input.KeyCode == Enum.KeyCode.F6 then
+			togglePlayback()
+
+		elseif input.KeyCode == Enum.KeyCode.F7 then
+			if state.isPlaying then
+				stopPlayback()
+			end
+
+			rollbackToSafe()
+
+		elseif input.KeyCode == Enum.KeyCode.F8 then
+			toggleAutoWalk()
+
+		elseif input.KeyCode == Enum.KeyCode.F9 then
+			stopEverything()
+
+		elseif input.KeyCode == Enum.KeyCode.F10 then
+			toggleVisualLine()
+
+		elseif input.KeyCode == Enum.KeyCode.F11 then
+			toggleLoop()
+		end
+	end
+)
+
+player.CharacterAdded:Connect(
+	function(newCharacter)
+		if state.recordConnection then
+			state.recordConnection:Disconnect()
+			state.recordConnection = nil
+		end
+
+		if state.playbackConnection then
+			state.playbackConnection:Disconnect()
+			state.playbackConnection = nil
+		end
+
+		state.isRecording = false
+		state.isPlaying = false
+		state.isAutoWalk = false
+		state.playbackStarted = false
+		state.smoothDirection = Vector3.zero
+
+		setupCharacter(newCharacter)
+
+		btnRecord.Text =
+			"● RECORD"
+
+		btnRecord.BackgroundColor3 =
+			Color3.fromRGB(180, 40, 40)
+
+		btnPlay.Text =
+			"▶ PLAY"
+
+		btnPlay.BackgroundColor3 =
+			Color3.fromRGB(40, 120, 40)
+
+		btnAutoWalk.Text =
+			"◇ AUTO WALK OFF"
+
+		btnAutoWalk.BackgroundColor3 =
+			Color3.fromRGB(60, 60, 80)
+
+		statusLabel.Text =
+			"Status: Character respawned"
+	end
+)
+
+RunService.Heartbeat:Connect(
+	function()
+		if not character
+			or not humanoid
+			or not rootPart then
+			return
+		end
+
+		if not state.isPlaying
+			and not state.isRecording
+			and not state.isAutoWalk then
+
+			updateSafePoint()
+		end
+
+		if state.isAutoWalk
+			and not state.isPlaying
+			and not state.isRecording then
+
+			local look =
+				rootPart.CFrame.LookVector
+
+			local direction =
+				Vector3.new(
+					look.X,
+					0,
+					look.Z
+				)
+
+			if direction.Magnitude > 0.01 then
+				humanoid:Move(
+					direction.Unit,
+					false
+				)
+			end
+		end
+	end
+)
 
 humanoid.WalkSpeed =
 	state.autoWalkSpeed
@@ -1205,6 +1662,7 @@ humanoid.JumpPower =
 statusLabel.Text =
 	"Status: Ready - F5 Record | F6 Play | F7 Rollback | F8 AutoWalk | F11 Loop"
 
-frameCountLabel.Text = "Frames: 0"
+frameCountLabel.Text =
+	"Frames: 0"
 
 print("AldoVz")
