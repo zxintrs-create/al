@@ -31,7 +31,7 @@ UIStroke.Color = Config.ThemeColor
 UIStroke.Parent = MainFrame  
 
 local Title = Instance.new("TextLabel")  
-Title.Text = "RAPID FISHING HUB"  
+Title.Text = "Aldo_Vz HUB"  
 Title.Size = UDim2.new(1, 0, 0, 40)  
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)  
 Title.Font = Enum.Font.GothamBold  
