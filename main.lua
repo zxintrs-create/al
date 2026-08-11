@@ -136,7 +136,7 @@ local crosshairCorner = Instance.new("UICorner")
 crosshairCorner.CornerRadius = UDim.new(1, 0)
 crosshairCorner.Parent = crosshair
 
--- LOGIKA SHIFT LOCK MOBILE (OFFSET KAMERA + CROSSHAIR)
+-- LOGIKA SHIFT LOCK (KAMERA TETAP DI TENGAH)
 local function toggleShiftLock()
 	if destroyed then return end
 	_G.ShiftLocked = not _G.ShiftLocked
@@ -149,7 +149,7 @@ local function toggleShiftLock()
 	
 	if humanoid and humanoid.Parent then
 		humanoid.AutoRotate = not _G.ShiftLocked
-		humanoid.CameraOffset = _G.ShiftLocked and Vector3.new(1.75, 0, 0) or Vector3.new(0, 0, 0)
+		humanoid.CameraOffset = Vector3.new(0, 0, 0) -- Kamera tetap tepat di tengah
 	end
 end
 
@@ -472,7 +472,7 @@ connect(RunService.RenderStepped,function()
 	updateCameraVectors()
 	currentHumanoid:Move(getMoveVector(),false)
 
-	-- PERBAIKAN ROTASI SHIFT LOCK KHUSUS MOBILE
+	-- ROTASI KARAKTER SAAT SHIFT LOCK (KAMERA TETAP DI TENGAH)
 	if _G.ShiftLocked then
 		local camera = workspace.CurrentCamera
 		local rootPart = currentCharacter:FindFirstChild("HumanoidRootPart")
@@ -481,7 +481,7 @@ connect(RunService.RenderStepped,function()
 			rootPart.CFrame = CFrame.new(rootPart.Position) * CFrame.Angles(0, y, 0)
 		end
 		currentHumanoid.AutoRotate = false
-		currentHumanoid.CameraOffset = Vector3.new(1.75, 0, 0)
+		currentHumanoid.CameraOffset = Vector3.new(0, 0, 0)
 	else
 		currentHumanoid.AutoRotate = true
 		currentHumanoid.CameraOffset = Vector3.new(0, 0, 0)
