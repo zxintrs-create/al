@@ -6,7 +6,6 @@ local Debris = game:GetService("Debris")
 local SoundService = game:GetService("SoundService")
 local UserInputService = game:GetService("UserInputService")
 local StarterGui = game:GetService("StarterGui")
-local TweenService = game:GetService("TweenService")
 
 local player = Players.LocalPlayer
 local character = player.Character or player.CharacterAdded:Wait()
@@ -46,11 +45,13 @@ local CONFIG = {
 }
 
 local function notify(title, text, dur)
-	StarterGui:SetCore("SendNotification", {
-		Title = title,
-		Text = text or "",
-		Duration = dur or 5
-	})
+	pcall(function()
+		StarterGui:SetCore("SendNotification", {
+			Title = title,
+			Text = text or "",
+			Duration = dur or 5
+		})
+	end)
 end
 
 local screenGui = Instance.new("ScreenGui")
@@ -138,7 +139,6 @@ local volDownCorner = Instance.new("UICorner")
 volDownCorner.CornerRadius = UDim.new(0, 25)
 volDownCorner.Parent = volDownBtn
 
--- Volume label
 local volLabel = Instance.new("TextLabel")
 volLabel.Name = "VolLabel"
 volLabel.Size = UDim2.new(0, 50, 0, 20)
@@ -209,39 +209,24 @@ local function hideDisplayName()
 			v.Enabled = false
 		end
 	end
-	player.NameDisplayDistance = 0
+	pcall(function() player.NameDisplayDistance = 0 end)
 end
-=
-local function scaleAvatar()
-	local hDesc = Instance.new("HumanoidDescription")
-	hDesc.BodyHeightScale = CONFIG.ScaleTarget.Y
-	hDesc.BodyWidthScale = CONFIG.ScaleTarget.X
-	hDesc.BodyDepthScale = CONFIG.ScaleTarget.Z
-	hDesc.HeadScale = CONFIG.ScaleTarget.X * 0.8
 
-	local tweenInfo = TweenInfo.new(CONFIG.ScaleDuration, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-	local scaleValues = {
+local function scaleAvatar()
+	local scales = {
 		BodyHeightScale = CONFIG.ScaleTarget.Y,
 		BodyWidthScale = CONFIG.ScaleTarget.X,
 		BodyDepthScale = CONFIG.ScaleTarget.Z,
-		HeadScale = CONFIG.ScaleTarget.X * 0.8,
+		HeadScale = CONFIG.ScaleTarget.X * 0.8
 	}
-
-	for prop, target in pairs(scaleValues) do
-		local current = hDesc[prop] or 1
-		local tween = TweenService:Create(hDesc, tweenInfo, {[prop] = target})
-		tween:Play()
+	
+	local tweenInfo = TweenInfo.new(CONFIG.ScaleDuration, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	for name, val in pairs(scales) do
+		local valObj = humanoid:FindFirstChild(name)
+		if valObj and valObj:IsA("NumberValue") then
+			TweenService:Create(valObj, tweenInfo, {Value = val}):Play()
+		end
 	end
-
-	humanoid:ApplyDescription(hDesc)
-	task.wait(CONFIG.ScaleDuration + 0.1)
-
-	local hDesc2 = Instance.new("HumanoidDescription")
-	hDesc2.BodyHeightScale = CONFIG.ScaleTarget.Y
-	hDesc2.BodyWidthScale = CONFIG.ScaleTarget.X
-	hDesc2.BodyDepthScale = CONFIG.ScaleTarget.Z
-	hDesc2.HeadScale = CONFIG.ScaleTarget.X * 0.8
-	humanoid:ApplyDescription(hDesc2)
 
 	notify("⚡ Avatar", "Soul Avatar enlarged!", 2)
 end
@@ -316,7 +301,6 @@ local function updateSoulRings()
 	end
 	soulRingParts = {}
 
-	local basePos = rootPart.Position
 	local ringHeightOffset = -1.5
 
 	for i = 1, CONFIG.SoulRingCount do
@@ -409,8 +393,6 @@ local function createEnergySword()
 	local torso = character:FindFirstChild("UpperTorso") or character:FindFirstChild("Torso") or rootPart
 	if not torso then return end
 
-	local rightHand = character:FindFirstChild("RightHand") or character:FindFirstChild("Right Arm")
-
 	local blade = Instance.new("Part")
 	blade.Name = "EnergySword_Blade"
 	blade.Size = Vector3.new(0.5, 6, 0.5)
@@ -471,6 +453,7 @@ end
 local meteorParts = {}
 
 local function createMeteor()
+	if not rootPart then return end
 	local spawnPos = rootPart.Position + Vector3.new(
 		math.random(-CONFIG.MeteorSpawnRadius, CONFIG.MeteorSpawnRadius),
 		CONFIG.MeteorHeight + math.random(0, 30),
@@ -567,6 +550,7 @@ end
 local auraParticles = {}
 
 local function createBodyAura()
+	if not rootPart then return end
 	local att = Instance.new("Attachment")
 	att.Name = "BodyAuraAtt"
 	att.Position = Vector3.new(0, 0, 0)
@@ -630,23 +614,15 @@ local function setupAudio()
 	sound.Parent = workspace
 	soundRef = sound
 
-	local loaded
-	loaded = sound.Loaded:Connect(function()
-		sound:Play()
-		notify("🎵 Audio", "Soul Master theme playing", 2)
-		loaded:Disconnect()
-	end)
-
-	task.wait(1)
-	if not sound.Playing then
-		sound:Play()
-	end
-
+	sound:Play()
+	notify("🎵 Audio", "Soul Master theme playing", 2)
 	return sound
 end
 
+local updateConnection
 local function startUpdateLoop()
-	RunService.Heartbeat:Connect(function(dt)
+	if updateConnection then updateConnection:Disconnect() end
+	updateConnection = RunService.Heartbeat:Connect(function(dt)
 		if not rootPart then return end
 		local charPos = rootPart.Position
 
@@ -675,7 +651,6 @@ local function startUpdateLoop()
 			end
 		end
 
-		-- Sword
 		local rightHand = character:FindFirstChild("RightHand") or character:FindFirstChild("Right Arm")
 		if rightHand then
 			local handCF = rightHand.CFrame
@@ -691,7 +666,6 @@ local function startUpdateLoop()
 			end
 		end
 
-		-- Meteors
 		for i = #meteorParts, 1, -1 do
 			local m = meteorParts[i]
 			if m.part and m.part.Parent then
@@ -709,12 +683,12 @@ local function startUpdateLoop()
 end
 
 local function startMeteorRain()
-	for i = 1, CONFIG.MeteorCount do
-		task.wait(0.1)
-		createMeteor()
-	end
-
 	task.spawn(function()
+		for i = 1, CONFIG.MeteorCount do
+			task.wait(0.1)
+			createMeteor()
+		end
+
 		while character and character.Parent and _G._soulMasterActive do
 			task.wait(0.3 + math.random() * 0.5)
 			createMeteor()
@@ -723,6 +697,11 @@ local function startMeteorRain()
 end
 
 local function cleanup()
+	if updateConnection then
+		updateConnection:Disconnect()
+		updateConnection = nil
+	end
+
 	local sky = Lighting:FindFirstChild("HellSky")
 	if sky then sky:Destroy() end
 
@@ -735,25 +714,17 @@ local function cleanup()
 		end
 	end
 
-	for _, ring in ipairs(soulRingParts) do
-		ring:Destroy()
-	end
+	for _, ring in ipairs(soulRingParts) do ring:Destroy() end
 	soulRingParts = {}
 
-	for _, w in ipairs(wingParts) do
-		w.part:Destroy()
-	end
+	for _, w in ipairs(wingParts) do w.part:Destroy() end
 	wingParts = {}
 
-	for _, s in ipairs(swordParts) do
-		s.part:Destroy()
-	end
+	for _, s in ipairs(swordParts) do s.part:Destroy() end
 	swordParts = {}
 
 	for _, m in ipairs(meteorParts) do
-		if m.part and m.part.Parent then
-			m.part:Destroy()
-		end
+		if m.part and m.part.Parent then m.part:Destroy() end
 	end
 	meteorParts = {}
 
@@ -766,7 +737,9 @@ local function cleanup()
 	if sound then sound:Destroy() end
 	soundRef = nil
 
-	humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer
+	if humanoid then
+		humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer
+	end
 
 	notify("🌀 Deactivated", "Soul Master mode off", 2)
 end
@@ -812,7 +785,6 @@ mainBtn.MouseButton1Click:Connect(function()
 	end
 end)
 
--- Volume buttons
 volUpBtn.MouseButton1Click:Connect(function()
 	if soundRef then
 		soundRef.Volume = math.min(soundRef.Volume + 0.1, 2)
@@ -846,12 +818,7 @@ player.CharacterAdded:Connect(function(newChar)
 	if _G._soulMasterActive then
 		task.wait(0.5)
 		hideDisplayName()
-		local hDesc = Instance.new("HumanoidDescription")
-		hDesc.BodyHeightScale = CONFIG.ScaleTarget.Y
-		hDesc.BodyWidthScale = CONFIG.ScaleTarget.X
-		hDesc.BodyDepthScale = CONFIG.ScaleTarget.Z
-		hDesc.HeadScale = CONFIG.ScaleTarget.X * 0.8
-		humanoid:ApplyDescription(hDesc)
+		scaleAvatar()
 
 		for _, ring in ipairs(soulRingParts) do ring:Destroy() end
 		soulRingParts = {}
@@ -869,8 +836,5 @@ player.CharacterAdded:Connect(function(newChar)
 	end
 end)
 
--- ============================================================
--- INIT
--- ============================================================
 notify("🌀 Soul Master Loaded", "Tap 🔥 button to activate", 5)
 print("AldoVz")
