@@ -21,8 +21,7 @@ local WLOCK_ON_COLOR=Color3.fromRGB(70,200,100)
 local BUTTON_TRANSPARENCY=.15
 local BUTTON_TEXT_COLOR=Color3.fromRGB(20,20,20)
 
--- Config Shift Lock (Gambar ID & Warna)
-local SHIFT_IMAGE_ID = "rbxassetid://100460721272551"
+-- Config Shift Lock (Warna & Asset)
 local SHIFT_OFF_COLOR = Color3.fromRGB(255, 255, 255) -- Putih OFF
 local SHIFT_ON_COLOR = Color3.fromRGB(170, 0, 255)   -- Ungu ON
 
@@ -120,7 +119,7 @@ screenGui.Name="DeltaMobileControls"
 screenGui.ResetOnSpawn=false
 screenGui.IgnoreGuiInset=true
 screenGui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
-screenGui.DisplayOrder=100
+screenGui.DisplayOrder=999999 -- Dipastikan di lapisan paling atas
 screenGui.Parent=playerGui
 
 -- Crosshair Shift Lock (Titik di tengah layar)
@@ -131,6 +130,7 @@ crosshair.Position = UDim2.new(0.5, -3, 0.5, -3)
 crosshair.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 crosshair.BorderSizePixel = 0
 crosshair.Visible = false
+crosshair.ZIndex = 1000000
 crosshair.Parent = screenGui
 
 local crosshairCorner = Instance.new("UICorner")
@@ -143,7 +143,7 @@ local function toggleShiftLock()
 	_G.ShiftLocked = not _G.ShiftLocked
 	
 	if btnShiftLock and btnShiftLock.Parent then
-		btnShiftLock.ImageColor3 = _G.ShiftLocked and SHIFT_ON_COLOR or SHIFT_OFF_COLOR
+		btnShiftLock.BackgroundColor3 = _G.ShiftLocked and SHIFT_ON_COLOR or SHIFT_OFF_COLOR
 	end
 
 	crosshair.Visible = _G.ShiftLocked
@@ -175,25 +175,35 @@ local function clearMovement()
 end
 
 --==================================================
--- BUTTON SHIFT LOCK (IMAGEBUTTON FIX TRANSPARENCY)
+-- BUTTON SHIFT LOCK (BULAT 35x35 DENGAN FALLBACK ICON)
 --==================================================
 
 btnShiftLock=Instance.new("ImageButton")
 btnShiftLock.Name="ShiftLockButton"
 btnShiftLock.AnchorPoint=Vector2.new(0.5, 0.5)
-btnShiftLock.Position=UDim2.new(0.75, 0, 0.65, 0) -- Area dekat tombol Jump
+btnShiftLock.Position=UDim2.new(0.75, 0, 0.65, 0)
 btnShiftLock.Size=UDim2.fromOffset(35, 35)
-btnShiftLock.Image=SHIFT_IMAGE_ID
-btnShiftLock.ImageColor3=SHIFT_OFF_COLOR
-btnShiftLock.ImageTransparency=0         -- DIPASTIKAN TIDAK TRANSPARAN
-btnShiftLock.BackgroundTransparency=1   -- Latar belakang hilang, hanya gambarnya
+btnShiftLock.Image="rbxassetid://6031068426" -- Asset resmi Shift Lock Roblox
+btnShiftLock.ImageColor3=Color3.fromRGB(255, 255, 255)
+btnShiftLock.BackgroundColor3=SHIFT_OFF_COLOR
+btnShiftLock.BackgroundTransparency=0.2 -- Memberikan background bundar ungu/putih agar dipastikan SELALU kelihatan
 btnShiftLock.AutoButtonColor=false
 btnShiftLock.Active=true
-btnShiftLock.Selectable=false
+btnShiftLock.Selectable=true
 btnShiftLock.BorderSizePixel=0
-btnShiftLock.ZIndex=100
+btnShiftLock.ZIndex=100000
 btnShiftLock.Visible=true
 btnShiftLock.Parent=screenGui
+
+local shiftCorner = Instance.new("UICorner")
+shiftCorner.CornerRadius = UDim.new(1, 0) -- Membuatnya bulat sempurna
+shiftCorner.Parent = btnShiftLock
+
+local shiftStroke = Instance.new("UIStroke")
+shiftStroke.Thickness = 2
+shiftStroke.Color = Color3.fromRGB(0, 0, 0)
+shiftStroke.Transparency = 0.3
+shiftStroke.Parent = btnShiftLock
 
 connect(btnShiftLock.Activated, toggleShiftLock)
 
@@ -468,14 +478,14 @@ local shiftY = 0.65
 local shiftBtnSize = 35
 
 local step=.018
-local targetSettingMode = "JUMP" -- Mode pengeditan ("JUMP" atau "SHIFT")
+local targetSettingMode = "JUMP"
 
 local gui=Instance.new("ScreenGui")
 gui.Name="DeltaMobileErgo"
 gui.ResetOnSpawn=false
 gui.IgnoreGuiInset=true
 gui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
-gui.DisplayOrder=102
+gui.DisplayOrder=1000000
 gui.Parent=playerGui
 
 local function makeButton(parent,name,position,sizeValue,text,bg,zIndex)
