@@ -189,8 +189,6 @@ local function rebuildVisualPath()
 	if not showVisualLine then return end
 	if #state.recordedFrames < 2 then return end
 
-	local color = state.isPlaying and Color3.fromRGB(0, 255, 100) or Color3.fromRGB(0, 200, 255)
-
 	for i = 1, #state.recordedFrames - 1 do
 		local f1 = state.recordedFrames[i]
 		local f2 = state.recordedFrames[i + 1]
@@ -241,9 +239,9 @@ end
 local function isFalling()
 	if not character or not rootPart then return false end
 	local pos = rootPart.Position
-	-- Raycast ke bawah
+
 	local rayParams = RaycastParams.new()
-	rayParams.FilterType = Enum.RaycastFilterType.Blacklist
+	rayParams.FilterType = Enum.RaycastFilterType.Exclude
 	rayParams.FilterDescendantsInstances = {character}
 
 	local origin = pos + Vector3.new(0, 1, 0)
@@ -282,7 +280,7 @@ local function recordFrame()
 	table.insert(state.recordedFrames, {
 		pos = rootPart.Position,
 		rot = rootPart.Orientation,
-		vel = rootPart.Velocity or Vector3.new(),
+		vel = rootPart.AssemblyLinearVelocity or rootPart.Velocity or Vector3.new(),
 		time = tick()
 	})
 	frameCountLabel.Text = "Frames: " .. #state.recordedFrames
@@ -298,6 +296,7 @@ end
 
 print("AldoVz")
 
+-- FIX BUGS ANIMATION REPLAY HERE --
 local function startPlayback()
 	if #state.recordedFrames < 2 then
 		statusLabel.Text = "Status: Not enough frames!"
@@ -309,6 +308,9 @@ local function startPlayback()
 	state.playbackStartTime = tick()
 
 	local firstFrame = state.recordedFrames[1]
+	local recordStartTime = firstFrame.time
+	local totalDuration = state.recordedFrames[#state.recordedFrames].time - recordStartTime
+
 	if rootPart then
 		rootPart.CFrame = CFrame.new(firstFrame.pos) * CFrame.Angles(0, math.rad(firstFrame.rot.Y), 0)
 	end
@@ -326,27 +328,42 @@ local function startPlayback()
 		end
 
 		local elapsed = tick() - state.playbackStartTime
-		local totalDuration = state.recordedFrames[#state.recordedFrames].time - state.recordedFrames[1].time
-		if totalDuration <= 0 then totalDuration = 1 end
 
-		local progress = elapsed / totalDuration
-		progress = math.clamp(progress, 0, 1)
+		if elapsed >= totalDuration then
+			state.isPlaying = false
+			btnPlay.Text = "▶ PLAY"
+			btnPlay.BackgroundColor3 = Color3.fromRGB(40, 120, 40)
+			statusLabel.Text = "Status: Playback complete"
+			playbackConn:Disconnect()
 
-		local targetIndex = math.floor(progress * (#state.recordedFrames - 1)) + 1
-		targetIndex = math.clamp(targetIndex, 1, #state.recordedFrames - 1)
+			local lastFrame = state.recordedFrames[#state.recordedFrames]
+			rootPart.CFrame = CFrame.new(lastFrame.pos) * CFrame.Angles(0, math.rad(lastFrame.rot.Y), 0)
+			rebuildVisualPath()
+			return
+		end
 
-		local f1 = state.recordedFrames[targetIndex]
-		local f2 = state.recordedFrames[targetIndex + 1]
+		-- Cari frame saat ini berdasarkan timestamp
+		local targetIdx = state.playbackIndex
+		while targetIdx < #state.recordedFrames and (state.recordedFrames[targetIdx + 1].time - recordStartTime) <= elapsed do
+			targetIdx = targetIdx + 1
+		end
+		state.playbackIndex = targetIdx
 
-		local segDuration = f2.time - f1.time
-		if segDuration <= 0 then segDuration = 0.016 end
-		local segElapsed = elapsed - (targetIndex - 1) * (totalDuration / (#state.recordedFrames - 1))
-		local segProgress = math.clamp(segElapsed / segDuration, 0, 1)
+		local f1 = state.recordedFrames[targetIdx]
+		local f2 = state.recordedFrames[math.min(targetIdx + 1, #state.recordedFrames)]
 
-		local smoothT = segProgress * segProgress * (3 - 2 * segProgress)
+		local f1Time = f1.time - recordStartTime
+		local f2Time = f2.time - recordStartTime
 
-		local lerpPos = f1.pos:Lerp(f2.pos, smoothT)
-		local lerpRotY = f1.rot.Y + (f2.rot.Y - f1.rot.Y) * smoothT
+		local segDuration = f2Time - f1Time
+		local segProgress = 0
+
+		if segDuration > 0 then
+			segProgress = math.clamp((elapsed - f1Time) / segDuration, 0, 1)
+		end
+
+		local lerpPos = f1.pos:Lerp(f2.pos, segProgress)
+		local lerpRotY = f1.rot.Y + (f2.rot.Y - f1.rot.Y) * segProgress
 
 		rootPart.CFrame = CFrame.new(lerpPos) * CFrame.Angles(0, math.rad(lerpRotY), 0)
 
@@ -361,19 +378,6 @@ local function startPlayback()
 		end
 
 		updateSafePoint()
-			
-		if progress >= 1 then
-			state.isPlaying = false
-			btnPlay.Text = "▶ PLAY"
-			btnPlay.BackgroundColor3 = Color3.fromRGB(40, 120, 40)
-			statusLabel.Text = "Status: Playback complete"
-			playbackConn:Disconnect()
-
-			local firstFramePos = state.recordedFrames[1].pos
-			local firstFrameRot = state.recordedFrames[1].rot
-			rootPart.CFrame = CFrame.new(firstFramePos) * CFrame.Angles(0, math.rad(firstFrameRot.Y), 0)
-			rebuildVisualPath()
-		end
 	end)
 end
 
@@ -397,7 +401,6 @@ btnRecord.MouseButton1Click:Connect(function()
 	state.isRecording = not state.isRecording
 
 	if state.isRecording then
-			
 		state.recordedFrames = {}
 		clearVisualPath()
 
@@ -523,22 +526,16 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	if gameProcessed then return end
 
 	if input.KeyCode == Enum.KeyCode.F5 then
-			
 		btnRecord.MouseButton1Click:Fire()
 	elseif input.KeyCode == Enum.KeyCode.F6 then
-			
 		btnPlay.MouseButton1Click:Fire()
 	elseif input.KeyCode == Enum.KeyCode.F7 then
-	
 		btnRollback.MouseButton1Click:Fire()
 	elseif input.KeyCode == Enum.KeyCode.F8 then
-	
 		btnAutoWalk.MouseButton1Click:Fire()
 	elseif input.KeyCode == Enum.KeyCode.F9 then
-	
 		btnStop.MouseButton1Click:Fire()
 	elseif input.KeyCode == Enum.KeyCode.F10 then
-
 		btnToggleLine.MouseButton1Click:Fire()
 	end
 end)
@@ -552,7 +549,7 @@ fallCheckConn = RunService.Heartbeat:Connect(function()
 	end
 
 	if isFalling() and not state.isPlaying and not state.isRecording then
-		local velY = rootPart.Velocity.Y
+		local velY = rootPart.AssemblyLinearVelocity.Y
 		if velY < -30 then
 			statusLabel.Text = "Status: Falling! Press F7 to rollback"
 		end
