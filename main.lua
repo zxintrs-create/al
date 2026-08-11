@@ -6,7 +6,6 @@ local HttpService=game:GetService("HttpService")
 local player=Players.LocalPlayer
 local playerGui=player:WaitForChild("PlayerGui")
 
-local SAVE_KEY = "DeltaMobileConfig"
 local SAVE_FILE = "DeltaMobileControls.json"
 
 local defaultConfig = {
@@ -18,6 +17,7 @@ local defaultConfig = {
 	ShiftBtnSize = 35,
 	CameraSens = 1.0,
 	ShiftLockState = false,
+	HasCustomPos = false -- Penanda apakah pengguna pernah menyimpan posisi custom
 }
 
 local config = {}
@@ -584,11 +584,11 @@ local sensMinus=createSensButton("Minus",UDim2.new(.06,0,0,85),UDim2.fromOffset(
 local sensReset=createSensButton("Reset",UDim2.new(.5,-42,0,85),UDim2.fromOffset(84,42),"RESET")
 local sensPlus=createSensButton("Plus",UDim2.new(.94,-76,0,85),UDim2.fromOffset(76,42),"+")
 
-local function applySensitivity()
+local function applySensitivity(autoSave)
 	CurrentSens = math.clamp(CurrentSens, MinSens, MaxSens)
 	sensLabel.Text="Multiplier: "..string.format("%.1f",CurrentSens).."x"
 	config.CameraSens = CurrentSens
-	saveConfig()
+	if autoSave then saveConfig() end
 	pcall(function()
 		UserSettings().GameSettings.MouseSensitivity=CurrentSens
 	end)
@@ -596,14 +596,14 @@ end
 
 local function updateSensitivity(amount)
 	CurrentSens=math.clamp(CurrentSens+amount,MinSens,MaxSens)
-	applySensitivity()
+	applySensitivity(true)
 end
 
 connect(sensMinus.Activated,function() if not destroyed then updateSensitivity(-.1) end end)
 connect(sensPlus.Activated,function() if not destroyed then updateSensitivity(.1) end end)
-connect(sensReset.Activated,function() if not destroyed then CurrentSens=1 applySensitivity() end end)
+connect(sensReset.Activated,function() if not destroyed then CurrentSens=1 applySensitivity(true) end end)
 
-applySensitivity()
+applySensitivity(false)
 
 local jumpSection=Instance.new("Frame")
 jumpSection.Name="ControlSetting"
@@ -703,6 +703,11 @@ local function updateShiftLockPosition()
 end
 
 local function alignShiftLockNearJump()
+	if config.HasCustomPos then 
+		updateShiftLockPosition()
+		return 
+	end
+	
 	local jump = getJump()
 	if jump then
 		shiftX = jump.Position.X.Scale - 0.10
@@ -721,11 +726,14 @@ connect(saveBtn.Activated, function()
 	config.ShiftBtnSize = shiftBtnSize
 	config.CameraSens = CurrentSens
 	config.ShiftLockState = _G.ShiftLocked
+	config.HasCustomPos = true
+	
 	saveConfig()
+	
 	pcall(function()
 		game:GetService("StarterGui"):SetCore("SendNotification", {
 			Title = "💾 SAVED",
-			Text = "All settings saved!",
+			Text = "All settings saved permanently!",
 			Duration = 2
 		})
 	end)
