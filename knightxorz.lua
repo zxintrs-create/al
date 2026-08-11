@@ -30,10 +30,16 @@ local state = {
 
 local showVisualLine = true
 
+local LINE_HEIGHT = 0.06
+local LINE_THICKNESS = 0.18
+local RAY_START_HEIGHT = 8
+local RAY_LENGTH = 30
+
 local function setupCharacter(char)
 	character = char
 	humanoid = char:WaitForChild("Humanoid")
 	rootPart = char:WaitForChild("HumanoidRootPart")
+
 	animator = humanoid:FindFirstChildOfClass("Animator")
 
 	if not animator then
@@ -140,7 +146,7 @@ mainWindow.Draggable = true
 local title = makeLabel(
 	"Title",
 	mainWindow,
-	"ANIM RECORDER v5",
+	"ANIM RECORDER",
 	UDim2.new(0, 10, 0, 5),
 	UDim2.new(0, 200, 0, 22)
 )
@@ -288,6 +294,32 @@ local pathFolder = Instance.new("Folder")
 pathFolder.Name = "VisualPathLines"
 pathFolder.Parent = workspace
 
+local function getLineSurface(position)
+	local params = RaycastParams.new()
+
+	params.FilterType =
+		Enum.RaycastFilterType.Exclude
+
+	params.FilterDescendantsInstances = {
+		character,
+		pathFolder
+	}
+
+	params.IgnoreWater = false
+
+	local result = workspace:Raycast(
+		position + Vector3.new(0, RAY_START_HEIGHT, 0),
+		Vector3.new(0, -RAY_LENGTH, 0),
+		params
+	)
+
+	if result then
+		return result.Position + result.Normal * LINE_HEIGHT
+	end
+
+	return position
+end
+
 local function clearVisualPath()
 	for _, object in ipairs(pathFolder:GetChildren()) do
 		object:Destroy()
@@ -295,24 +327,56 @@ local function clearVisualPath()
 end
 
 local function createPathSegment(p1, p2, color)
-	local distance = (p2 - p1).Magnitude
+	local a = getLineSurface(p1)
+	local b = getLineSurface(p2)
 
-	if distance < 0.05 then
+	local difference = b - a
+	local distance = difference.Magnitude
+
+	if distance < 0.03 then
 		return
 	end
 
+	local middle = (a + b) * 0.5
+
 	local part = Instance.new("Part")
-	part.Name = "PathSegment"
+	part.Name = "VisualPath"
 	part.Anchored = true
 	part.CanCollide = false
 	part.CanTouch = false
 	part.CanQuery = false
+	part.CastShadow = false
 	part.Material = Enum.Material.Neon
-	part.Transparency = 0.2
-	part.Color = color or Color3.fromRGB(0, 200, 255)
-	part.Size = Vector3.new(0.25, 0.25, distance)
-	part.CFrame = CFrame.lookAt((p1 + p2) / 2, p2)
+	part.Transparency = 0.18
+	part.Color = color
+	part.Size = Vector3.new(
+		LINE_THICKNESS,
+		LINE_THICKNESS,
+		distance
+	)
+	part.CFrame = CFrame.lookAt(
+		middle,
+		b
+	)
 	part.Parent = pathFolder
+end
+
+local function createMarker(name, position, color)
+	local surface = getLineSurface(position)
+
+	local marker = Instance.new("Part")
+	marker.Name = name
+	marker.Shape = Enum.PartType.Ball
+	marker.Size = Vector3.new(0.5, 0.5, 0.5)
+	marker.Anchored = true
+	marker.CanCollide = false
+	marker.CanTouch = false
+	marker.CanQuery = false
+	marker.CastShadow = false
+	marker.Material = Enum.Material.Neon
+	marker.Color = color
+	marker.Position = surface
+	marker.Parent = pathFolder
 end
 
 local function rebuildVisualPath()
@@ -327,14 +391,18 @@ local function rebuildVisualPath()
 	end
 
 	for i = 1, #state.recordedFrames - 1 do
-		local a = state.recordedFrames[i]
-		local b = state.recordedFrames[i + 1]
+		local f1 = state.recordedFrames[i]
+		local f2 = state.recordedFrames[i + 1]
 
-		local t = i / math.max(#state.recordedFrames - 1, 1)
+		local t =
+			i / math.max(
+				#state.recordedFrames - 1,
+				1
+			)
 
 		createPathSegment(
-			a.pos,
-			b.pos,
+			f1.pos,
+			f2.pos,
 			Color3.new(
 				0.2 + 0.8 * t,
 				0.5 + 0.5 * (1 - t),
@@ -343,60 +411,33 @@ local function rebuildVisualPath()
 		)
 	end
 
-	local startMarker = Instance.new("Part")
-	startMarker.Name = "StartMarker"
-	startMarker.Size = Vector3.new(1, 1, 1)
-	startMarker.Shape = Enum.PartType.Ball
-	startMarker.Anchored = true
-	startMarker.CanCollide = false
-	startMarker.CanTouch = false
-	startMarker.CanQuery = false
-	startMarker.Material = Enum.Material.Neon
-	startMarker.BrickColor = BrickColor.new("Bright green")
-	startMarker.Position = state.recordedFrames[1].pos
-	startMarker.Parent = pathFolder
+	createMarker(
+		"StartMarker",
+		state.recordedFrames[1].pos,
+		Color3.fromRGB(0, 255, 0)
+	)
 
-	local endMarker = Instance.new("Part")
-	endMarker.Name = "EndMarker"
-	endMarker.Size = Vector3.new(1, 1, 1)
-	endMarker.Shape = Enum.PartType.Ball
-	endMarker.Anchored = true
-	endMarker.CanCollide = false
-	endMarker.CanTouch = false
-	endMarker.CanQuery = false
-	endMarker.Material = Enum.Material.Neon
-	endMarker.BrickColor = BrickColor.new("Bright red")
-	endMarker.Position = state.recordedFrames[#state.recordedFrames].pos
-	endMarker.Parent = pathFolder
-
-	if state.lastSafePosition then
-		local safeMarker = Instance.new("Part")
-		safeMarker.Name = "SafeMarker"
-		safeMarker.Size = Vector3.new(0.8, 0.8, 0.8)
-		safeMarker.Shape = Enum.PartType.Ball
-		safeMarker.Anchored = true
-		safeMarker.CanCollide = false
-		safeMarker.CanTouch = false
-		safeMarker.CanQuery = false
-		safeMarker.Material = Enum.Material.Neon
-		safeMarker.BrickColor = BrickColor.new("Bright yellow")
-		safeMarker.Position = state.lastSafePosition
-		safeMarker.Parent = pathFolder
-	end
+	createMarker(
+		"EndMarker",
+		state.recordedFrames[#state.recordedFrames].pos,
+		Color3.fromRGB(255, 0, 0)
+	)
 end
 
 local function isGrounded()
-	if not character or not rootPart then
+	if not rootPart or not character then
 		return false
 	end
 
 	local params = RaycastParams.new()
-	params.FilterType = Enum.RaycastFilterType.Exclude
-	params.FilterDescendantsInstances = {character}
+	params.FilterType =
+		Enum.RaycastFilterType.Exclude
+	params.FilterDescendantsInstances =
+		{character}
 
 	local result = workspace:Raycast(
 		rootPart.Position + Vector3.new(0, 1, 0),
-		Vector3.new(0, -5, 0),
+		Vector3.new(0, -4.5, 0),
 		params
 	)
 
@@ -404,21 +445,19 @@ local function isGrounded()
 end
 
 local function updateSafePoint()
-	if not rootPart or not isGrounded() then
+	if not rootPart then
 		return
 	end
 
-	state.lastSafePosition = rootPart.Position
-	state.lastSafeRotation = rootPart.Orientation
-
-	table.insert(state.safePoints, {
-		pos = rootPart.Position,
-		rot = rootPart.Orientation
-	})
-
-	if #state.safePoints > 20 then
-		table.remove(state.safePoints, 1)
+	if not isGrounded() then
+		return
 	end
+
+	state.lastSafePosition =
+		rootPart.Position
+
+	state.lastSafeRotation =
+		rootPart.Orientation
 end
 
 local function rollbackToSafe()
@@ -427,23 +466,73 @@ local function rollbackToSafe()
 		return
 	end
 
-	local yRotation = 0
+	local rotationY = 0
 
 	if state.lastSafeRotation then
-		yRotation = math.rad(state.lastSafeRotation.Y)
+		rotationY =
+			math.rad(
+				state.lastSafeRotation.Y
+			)
 	end
 
-	rootPart.AssemblyLinearVelocity = Vector3.zero
-	rootPart.AssemblyAngularVelocity = Vector3.zero
+	rootPart.AssemblyLinearVelocity =
+		Vector3.zero
+
+	rootPart.AssemblyAngularVelocity =
+		Vector3.zero
 
 	character:PivotTo(
-		CFrame.new(state.lastSafePosition)
-			* CFrame.Angles(0, yRotation, 0)
+		CFrame.new(
+			state.lastSafePosition
+		)
+			* CFrame.Angles(
+				0,
+				rotationY,
+				0
+			)
 	)
 
-	humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+	statusLabel.Text =
+		"Status: Rollback complete"
+end
 
-	statusLabel.Text = "Status: Rollback complete"
+local function getWalkAnimation()
+	if not character then
+		return nil
+	end
+
+	local animate =
+		character:FindFirstChild("Animate")
+
+	if not animate then
+		return nil
+	end
+
+	local runFolder =
+		animate:FindFirstChild("run")
+
+	if runFolder then
+		local animation =
+			runFolder:FindFirstChild("RunAnim")
+
+		if animation and animation:IsA("Animation") then
+			return animation
+		end
+	end
+
+	local walkFolder =
+		animate:FindFirstChild("walk")
+
+	if walkFolder then
+		local animation =
+			walkFolder:FindFirstChild("WalkAnim")
+
+		if animation and animation:IsA("Animation") then
+			return animation
+		end
+	end
+
+	return nil
 end
 
 local function stopWalkAnimation()
@@ -457,40 +546,6 @@ local function stopWalkAnimation()
 	end
 end
 
-local function getWalkAnimation()
-	if not character then
-		return nil
-	end
-
-	local animate = character:FindFirstChild("Animate")
-
-	if not animate then
-		return nil
-	end
-
-	local runFolder = animate:FindFirstChild("run")
-
-	if runFolder then
-		local animation = runFolder:FindFirstChild("RunAnim")
-
-		if animation and animation:IsA("Animation") then
-			return animation
-		end
-	end
-
-	local walkFolder = animate:FindFirstChild("walk")
-
-	if walkFolder then
-		local animation = walkFolder:FindFirstChild("WalkAnim")
-
-		if animation and animation:IsA("Animation") then
-			return animation
-		end
-	end
-
-	return nil
-end
-
 local function playWalkAnimation(speed)
 	if not animator then
 		return
@@ -502,9 +557,18 @@ local function playWalkAnimation(speed)
 		return
 	end
 
-	if state.walkTrack and state.walkTrack.IsPlaying then
+	local animationSpeed =
+		math.clamp(
+			speed / 16,
+			0.5,
+			3
+		)
+
+	if state.walkTrack
+		and state.walkTrack.IsPlaying then
+
 		state.walkTrack:AdjustSpeed(
-			math.clamp(speed / 16, 0.5, 3)
+			animationSpeed
 		)
 
 		return
@@ -512,21 +576,26 @@ local function playWalkAnimation(speed)
 
 	stopWalkAnimation()
 
-	local success, track = pcall(function()
-		return animator:LoadAnimation(animation)
-	end)
+	local success, track =
+		pcall(function()
+			return animator:LoadAnimation(
+				animation
+			)
+		end)
 
 	if not success or not track then
 		return
 	end
 
-	track.Priority = Enum.AnimationPriority.Movement
+	track.Priority =
+		Enum.AnimationPriority.Movement
+
 	track.Looped = true
 
 	track:Play(
 		0.12,
 		1,
-		math.clamp(speed / 16, 0.5, 3)
+		animationSpeed
 	)
 
 	state.walkTrack = track
@@ -537,23 +606,42 @@ local function recordFrame()
 		return
 	end
 
-	table.insert(state.recordedFrames, {
-		pos = rootPart.Position,
-		rot = rootPart.Orientation,
-		time = os.clock()
-	})
+	table.insert(
+		state.recordedFrames,
+		{
+			pos = rootPart.Position,
+			rot = rootPart.Orientation,
+			time = os.clock()
+		}
+	)
 
 	frameCountLabel.Text =
-		"Frames: " .. tostring(#state.recordedFrames)
+		"Frames: "
+		.. tostring(
+			#state.recordedFrames
+		)
 
-	if showVisualLine and #state.recordedFrames >= 2 then
-		local a = state.recordedFrames[#state.recordedFrames - 1]
-		local b = state.recordedFrames[#state.recordedFrames]
+	if showVisualLine
+		and #state.recordedFrames >= 2 then
+
+		local a =
+			state.recordedFrames[
+				#state.recordedFrames - 1
+			]
+
+		local b =
+			state.recordedFrames[
+				#state.recordedFrames
+			]
 
 		createPathSegment(
 			a.pos,
 			b.pos,
-			Color3.fromRGB(0, 200, 255)
+			Color3.fromRGB(
+				0,
+				200,
+				255
+			)
 		)
 	end
 end
@@ -570,13 +658,21 @@ local function stopRecording()
 		state.recordConnection = nil
 	end
 
-	btnRecord.Text = "● RECORD"
+	btnRecord.Text =
+		"● RECORD"
+
 	btnRecord.BackgroundColor3 =
-		Color3.fromRGB(180, 40, 40)
+		Color3.fromRGB(
+			180,
+			40,
+			40
+		)
 
 	statusLabel.Text =
 		"Status: Recorded "
-		.. tostring(#state.recordedFrames)
+		.. tostring(
+			#state.recordedFrames
+		)
 		.. " frames"
 
 	rebuildVisualPath()
@@ -591,17 +687,29 @@ local function startRecording()
 	state.recordedFrames = {}
 	state.safePoints = {}
 
-	state.lastSafePosition = rootPart.Position
-	state.lastSafeRotation = rootPart.Orientation
+	state.lastSafePosition =
+		rootPart.Position
+
+	state.lastSafeRotation =
+		rootPart.Orientation
 
 	clearVisualPath()
 
-	btnRecord.Text = "● RECORDING..."
-	btnRecord.BackgroundColor3 =
-		Color3.fromRGB(255, 50, 50)
+	btnRecord.Text =
+		"● RECORDING..."
 
-	statusLabel.Text = "Status: Recording"
-	frameCountLabel.Text = "Frames: 0"
+	btnRecord.BackgroundColor3 =
+		Color3.fromRGB(
+			255,
+			50,
+			50
+		)
+
+	statusLabel.Text =
+		"Status: Recording"
+
+	frameCountLabel.Text =
+		"Frames: 0"
 
 	recordFrame()
 
@@ -610,18 +718,21 @@ local function startRecording()
 	end
 
 	state.recordConnection =
-		RunService.Heartbeat:Connect(function()
-			if not state.isRecording then
-				return
-			end
+		RunService.Heartbeat:Connect(
+			function()
+				if not state.isRecording then
+					return
+				end
 
-			if not rootPart or not rootPart.Parent then
-				return
-			end
+				if not rootPart
+					or not rootPart.Parent then
+					return
+				end
 
-			recordFrame()
-			updateSafePoint()
-		end)
+				recordFrame()
+				updateSafePoint()
+			end
+		)
 end
 
 local function stopPlayback()
@@ -635,21 +746,32 @@ local function stopPlayback()
 	stopWalkAnimation()
 
 	if humanoid then
-		humanoid.AutoRotate = state.oldAutoRotate
+		humanoid.AutoRotate =
+			state.oldAutoRotate
 	end
 
 	if rootPart then
-		rootPart.AssemblyLinearVelocity = Vector3.zero
-		rootPart.AssemblyAngularVelocity = Vector3.zero
+		rootPart.AssemblyLinearVelocity =
+			Vector3.zero
+
+		rootPart.AssemblyAngularVelocity =
+			Vector3.zero
 	end
 
-	btnPlay.Text = "▶ PLAY"
+	btnPlay.Text =
+		"▶ PLAY"
+
 	btnPlay.BackgroundColor3 =
-		Color3.fromRGB(40, 120, 40)
+		Color3.fromRGB(
+			40,
+			120,
+			40
+		)
 end
 
 local function startPlayback()
-	if state.isRecording or state.isPlaying then
+	if state.isRecording
+		or state.isPlaying then
 		return
 	end
 
@@ -659,25 +781,26 @@ local function startPlayback()
 		return
 	end
 
-	if not character or not humanoid or not rootPart then
-		statusLabel.Text =
-			"Status: Character not ready"
+	if not character
+		or not humanoid
+		or not rootPart then
 		return
 	end
 
 	state.isPlaying = true
 	state.playbackIndex = 1
-	state.playbackStartTime = os.clock()
+	state.playbackStartTime =
+		os.clock()
 
-	state.oldAutoRotate = humanoid.AutoRotate
+	state.oldAutoRotate =
+		humanoid.AutoRotate
+
 	humanoid.AutoRotate = false
 
 	stopWalkAnimation()
 
-	local first = state.recordedFrames[1]
-
-	rootPart.AssemblyLinearVelocity = Vector3.zero
-	rootPart.AssemblyAngularVelocity = Vector3.zero
+	local first =
+		state.recordedFrames[1]
 
 	character:PivotTo(
 		CFrame.new(first.pos)
@@ -688,138 +811,142 @@ local function startPlayback()
 			)
 	)
 
-	btnPlay.Text = "⏸ PLAYING"
-	btnPlay.BackgroundColor3 =
-		Color3.fromRGB(200, 150, 40)
+	rootPart.AssemblyLinearVelocity =
+		Vector3.zero
 
-	statusLabel.Text = "Status: Playing"
+	rootPart.AssemblyAngularVelocity =
+		Vector3.zero
+
+	btnPlay.Text =
+		"⏸ PLAYING"
+
+	btnPlay.BackgroundColor3 =
+		Color3.fromRGB(
+			200,
+			150,
+			40
+		)
+
+	statusLabel.Text =
+		"Status: Playing"
 
 	state.playbackConnection =
-		RunService.RenderStepped:Connect(function()
-			if not state.isPlaying then
-				return
-			end
+		RunService.RenderStepped:Connect(
+			function()
+				if not state.isPlaying then
+					return
+				end
 
-			if not character or not rootPart or not rootPart.Parent then
-				stopPlayback()
-				return
-			end
+				if not character
+					or not rootPart
+					or not rootPart.Parent then
 
-			local frames = state.recordedFrames
-			local firstFrame = frames[1]
-			local lastFrame = frames[#frames]
+					stopPlayback()
+					return
+				end
 
-			local elapsed =
-				os.clock() - state.playbackStartTime
+				local frames =
+					state.recordedFrames
 
-			local totalTime =
-				lastFrame.time - firstFrame.time
+				local firstFrame =
+					frames[1]
 
-			if totalTime <= 0 then
-				totalTime = 0.016
-			end
+				local lastFrame =
+					frames[#frames]
 
-			local targetTime =
-				firstFrame.time + elapsed
+				local elapsed =
+					os.clock()
+					- state.playbackStartTime
 
-			local index = state.playbackIndex
+				local totalTime =
+					lastFrame.time
+					- firstFrame.time
 
-			while index < #frames - 1
-				and frames[index + 1].time <= targetTime do
-				index = index + 1
-			end
+				if totalTime <= 0 then
+					totalTime = 0.016
+				end
 
-			state.playbackIndex = index
+				local targetTime =
+					firstFrame.time
+					+ elapsed
 
-			local a = frames[index]
-			local b = frames[math.min(index + 1, #frames)]
+				local index =
+					state.playbackIndex
 
-			local segmentTime =
-				b.time - a.time
+				while index < #frames - 1
+					and frames[index + 1].time <= targetTime do
+					index += 1
+				end
 
-			local alpha = 0
+				state.playbackIndex =
+					index
 
-			if segmentTime > 0 then
+				local a =
+					frames[index]
+
+				local b =
+					frames[
+						math.min(
+							index + 1,
+							#frames
+						)
+					]
+
+				local segmentTime =
+					b.time - a.time
+
+				local alpha = 0
+
+				if segmentTime > 0 then
+					alpha =
+						(targetTime - a.time)
+						/ segmentTime
+				end
+
 				alpha =
-					(targetTime - a.time)
-					/ segmentTime
-			end
-
-			alpha = math.clamp(alpha, 0, 1)
-
-			alpha =
-				alpha * alpha * (3 - 2 * alpha)
-
-			local position =
-				a.pos:Lerp(b.pos, alpha)
-
-			local angleA =
-				math.rad(a.rot.Y)
-
-			local angleB =
-				math.rad(b.rot.Y)
-
-			local angleDifference =
-				math.atan2(
-					math.sin(angleB - angleA),
-					math.cos(angleB - angleA)
-				)
-
-			local rotation =
-				angleA
-				+ angleDifference * alpha
-
-			character:PivotTo(
-				CFrame.new(position)
-					* CFrame.Angles(
+					math.clamp(
+						alpha,
 						0,
-						rotation,
-						0
+						1
 					)
-			)
 
-			rootPart.AssemblyLinearVelocity =
-				Vector3.zero
+				alpha =
+					alpha
+					* alpha
+					* (3 - 2 * alpha)
 
-			rootPart.AssemblyAngularVelocity =
-				Vector3.zero
+				local position =
+					a.pos:Lerp(
+						b.pos,
+						alpha
+					)
 
-			local delta =
-				b.pos - a.pos
+				local angleA =
+					math.rad(a.rot.Y)
 
-			local horizontal =
-				Vector3.new(
-					delta.X,
-					0,
-					delta.Z
-				)
+				local angleB =
+					math.rad(b.rot.Y)
 
-			local speed = 0
+				local angleDifference =
+					math.atan2(
+						math.sin(
+							angleB - angleA
+						),
+						math.cos(
+							angleB - angleA
+						)
+					)
 
-			if segmentTime > 0 then
-				speed =
-					horizontal.Magnitude
-					/ segmentTime
-			end
+				local rotation =
+					angleA
+					+ angleDifference
+					* alpha
 
-			if horizontal.Magnitude > 0.015 then
-				playWalkAnimation(
-					math.clamp(speed, 1, 48)
-				)
-			else
-				stopWalkAnimation()
-			end
-
-			if isGrounded() then
-				updateSafePoint()
-			end
-
-			if elapsed >= totalTime then
 				character:PivotTo(
-					CFrame.new(lastFrame.pos)
+					CFrame.new(position)
 						* CFrame.Angles(
 							0,
-							math.rad(lastFrame.rot.Y),
+							rotation,
 							0
 						)
 				)
@@ -830,217 +957,139 @@ local function startPlayback()
 				rootPart.AssemblyAngularVelocity =
 					Vector3.zero
 
-				stopWalkAnimation()
+				local movement =
+					b.pos - a.pos
 
-				state.isPlaying = false
+				local horizontal =
+					Vector3.new(
+						movement.X,
+						0,
+						movement.Z
+					)
 
-				if state.playbackConnection then
-					state.playbackConnection:Disconnect()
-					state.playbackConnection = nil
+				local movementSpeed = 0
+
+				if segmentTime > 0 then
+					movementSpeed =
+						horizontal.Magnitude
+						/ segmentTime
 				end
 
-				humanoid.AutoRotate =
-					state.oldAutoRotate
+				if horizontal.Magnitude > 0.015 then
+					playWalkAnimation(
+						movementSpeed
+					)
+				else
+					stopWalkAnimation()
+				end
 
-				btnPlay.Text = "▶ PLAY"
-				btnPlay.BackgroundColor3 =
-					Color3.fromRGB(40, 120, 40)
+				if elapsed >= totalTime then
+					character:PivotTo(
+						CFrame.new(
+							lastFrame.pos
+						)
+							* CFrame.Angles(
+								0,
+								math.rad(
+									lastFrame.rot.Y
+								),
+								0
+							)
+					)
 
-				statusLabel.Text =
-					"Status: Playback complete"
+					rootPart.AssemblyLinearVelocity =
+						Vector3.zero
+
+					rootPart.AssemblyAngularVelocity =
+						Vector3.zero
+
+					stopWalkAnimation()
+
+					state.isPlaying = false
+
+					if state.playbackConnection then
+						state.playbackConnection:Disconnect()
+						state.playbackConnection = nil
+					end
+
+					humanoid.AutoRotate =
+						state.oldAutoRotate
+
+					btnPlay.Text =
+						"▶ PLAY"
+
+					btnPlay.BackgroundColor3 =
+						Color3.fromRGB(
+							40,
+							120,
+							40
+						)
+
+					statusLabel.Text =
+						"Status: Playback complete"
+				end
 			end
-		end)
+		)
 end
 
 local function setAutoWalk(enabled)
 	state.isAutoWalk = enabled
 
 	if enabled then
-		btnAutoWalk.Text = "◆ AUTO WALK ON"
+		btnAutoWalk.Text =
+			"◆ AUTO WALK ON"
+
 		btnAutoWalk.BackgroundColor3 =
-			Color3.fromRGB(40, 120, 40)
+			Color3.fromRGB(
+				40,
+				120,
+				40
+			)
 
 		humanoid.WalkSpeed =
 			state.autoWalkSpeed
 
 		humanoid.AutoRotate = true
-
-		statusLabel.Text =
-			"Status: Auto Walk"
 	else
-		btnAutoWalk.Text = "◇ AUTO WALK OFF"
+		btnAutoWalk.Text =
+			"◇ AUTO WALK OFF"
+
 		btnAutoWalk.BackgroundColor3 =
-			Color3.fromRGB(60, 60, 80)
+			Color3.fromRGB(
+				60,
+				60,
+				80
+			)
 
-		humanoid:Move(Vector3.zero, false)
-
-		statusLabel.Text =
-			"Status: Auto Walk OFF"
+		humanoid:Move(
+			Vector3.zero,
+			false
+		)
 	end
 end
 
-btnRecord.MouseButton1Click:Connect(function()
-	if state.isRecording then
-		stopRecording()
-	else
-		startRecording()
-	end
-end)
-
-btnPlay.MouseButton1Click:Connect(function()
-	if state.isPlaying then
-		stopPlayback()
-	else
-		startPlayback()
-	end
-end)
-
-btnStop.MouseButton1Click:Connect(function()
-	if state.isRecording then
-		stopRecording()
-	end
-
-	if state.isPlaying then
-		stopPlayback()
-	end
-
-	statusLabel.Text = "Status: Idle"
-end)
-
-btnRollback.MouseButton1Click:Connect(function()
-	if state.isPlaying then
-		stopPlayback()
-	end
-
-	rollbackToSafe()
-end)
-
-btnClear.MouseButton1Click:Connect(function()
-	if state.isRecording then
-		stopRecording()
-	end
-
-	if state.isPlaying then
-		stopPlayback()
-	end
-
-	state.recordedFrames = {}
-	state.safePoints = {}
-	state.lastSafePosition = nil
-	state.lastSafeRotation = nil
-
-	clearVisualPath()
-
-	frameCountLabel.Text = "Frames: 0"
-	statusLabel.Text = "Status: Cleared"
-end)
-
-btnAutoWalk.MouseButton1Click:Connect(function()
-	setAutoWalk(not state.isAutoWalk)
-end)
-
-btnToggleLine.MouseButton1Click:Connect(function()
-	showVisualLine = not showVisualLine
-
-	if showVisualLine then
-		btnToggleLine.Text =
-			"◉ VISUAL LINE ON"
-
-		btnToggleLine.BackgroundColor3 =
-			Color3.fromRGB(60, 80, 60)
-
-		rebuildVisualPath()
-	else
-		btnToggleLine.Text =
-			"○ VISUAL LINE OFF"
-
-		btnToggleLine.BackgroundColor3 =
-			Color3.fromRGB(80, 60, 60)
-
-		clearVisualPath()
-	end
-end)
-
-speedSlider.FocusLost:Connect(function()
-	local value = tonumber(speedSlider.Text) or 16
-
-	value = math.clamp(value, 1, 200)
-
-	state.autoWalkSpeed = value
-
-	speedSlider.Text = tostring(value)
-	speedLabel.Text = "Speed: " .. tostring(value)
-
-	if not state.isPlaying then
-		humanoid.WalkSpeed = value
-	end
-end)
-
-jumpSlider.FocusLost:Connect(function()
-	local value = tonumber(jumpSlider.Text) or 50
-
-	value = math.clamp(value, 10, 200)
-
-	state.jumpPower = value
-
-	jumpSlider.Text = tostring(value)
-	jumpLabel.Text = "JumpPower: " .. tostring(value)
-
-	humanoid.JumpPower = value
-end)
-
-fallSlider.FocusLost:Connect(function()
-	local value = tonumber(fallSlider.Text) or 1
-
-	value = math.clamp(value, 0.5, 10)
-
-	state.fallMultiplier = value
-
-	fallSlider.Text = tostring(value)
-	fallLabel.Text = "FallMult: " .. tostring(value)
-end)
-
-rotSlider.FocusLost:Connect(function()
-	local value = tonumber(rotSlider.Text) or 5
-
-	value = math.clamp(value, 0.5, 20)
-
-	state.rotateSpeed = value
-
-	rotSlider.Text = tostring(value)
-	rotLabel.Text = "RotSpeed: " .. tostring(value)
-end)
-
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-	if gameProcessed then
-		return
-	end
-
-	if input.KeyCode == Enum.KeyCode.F5 then
+btnRecord.MouseButton1Click:Connect(
+	function()
 		if state.isRecording then
 			stopRecording()
 		else
 			startRecording()
 		end
+	end
+)
 
-	elseif input.KeyCode == Enum.KeyCode.F6 then
+btnPlay.MouseButton1Click:Connect(
+	function()
 		if state.isPlaying then
 			stopPlayback()
 		else
 			startPlayback()
 		end
+	end
+)
 
-	elseif input.KeyCode == Enum.KeyCode.F7 then
-		if state.isPlaying then
-			stopPlayback()
-		end
-
-		rollbackToSafe()
-
-	elseif input.KeyCode == Enum.KeyCode.F8 then
-		setAutoWalk(not state.isAutoWalk)
-
-	elseif input.KeyCode == Enum.KeyCode.F9 then
+btnStop.MouseButton1Click:Connect(
+	function()
 		if state.isRecording then
 			stopRecording()
 		end
@@ -1049,17 +1098,69 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 			stopPlayback()
 		end
 
-		statusLabel.Text = "Status: Idle"
+		statusLabel.Text =
+			"Status: Idle"
+	end
+)
 
-	elseif input.KeyCode == Enum.KeyCode.F10 then
-		showVisualLine = not showVisualLine
+btnRollback.MouseButton1Click:Connect(
+	function()
+		if state.isPlaying then
+			stopPlayback()
+		end
+
+		rollbackToSafe()
+	end
+)
+
+btnClear.MouseButton1Click:Connect(
+	function()
+		if state.isRecording then
+			stopRecording()
+		end
+
+		if state.isPlaying then
+			stopPlayback()
+		end
+
+		state.recordedFrames = {}
+		state.safePoints = {}
+		state.lastSafePosition = nil
+		state.lastSafeRotation = nil
+
+		clearVisualPath()
+
+		frameCountLabel.Text =
+			"Frames: 0"
+
+		statusLabel.Text =
+			"Status: Cleared"
+	end
+)
+
+btnAutoWalk.MouseButton1Click:Connect(
+	function()
+		setAutoWalk(
+			not state.isAutoWalk
+		)
+	end
+)
+
+btnToggleLine.MouseButton1Click:Connect(
+	function()
+		showVisualLine =
+			not showVisualLine
 
 		if showVisualLine then
 			btnToggleLine.Text =
 				"◉ VISUAL LINE ON"
 
 			btnToggleLine.BackgroundColor3 =
-				Color3.fromRGB(60, 80, 60)
+				Color3.fromRGB(
+					60,
+					80,
+					60
+				)
 
 			rebuildVisualPath()
 		else
@@ -1067,90 +1168,289 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 				"○ VISUAL LINE OFF"
 
 			btnToggleLine.BackgroundColor3 =
-				Color3.fromRGB(80, 60, 60)
+				Color3.fromRGB(
+					80,
+					60,
+					60
+				)
 
 			clearVisualPath()
 		end
 	end
-end)
+)
 
-player.CharacterAdded:Connect(function(char)
-	if state.recordConnection then
-		state.recordConnection:Disconnect()
-		state.recordConnection = nil
+speedSlider.FocusLost:Connect(
+	function()
+		local value =
+			tonumber(
+				speedSlider.Text
+			) or 16
+
+		value =
+			math.clamp(
+				value,
+				1,
+				200
+			)
+
+		state.autoWalkSpeed =
+			value
+
+		speedSlider.Text =
+			tostring(value)
+
+		speedLabel.Text =
+			"Speed: " .. tostring(value)
+
+		if not state.isPlaying then
+			humanoid.WalkSpeed =
+				value
+		end
 	end
+)
 
-	if state.playbackConnection then
-		state.playbackConnection:Disconnect()
-		state.playbackConnection = nil
+jumpSlider.FocusLost:Connect(
+	function()
+		local value =
+			tonumber(
+				jumpSlider.Text
+			) or 50
+
+		value =
+			math.clamp(
+				value,
+				10,
+				200
+			)
+
+		state.jumpPower =
+			value
+
+		jumpSlider.Text =
+			tostring(value)
+
+		jumpLabel.Text =
+			"JumpPower: " .. tostring(value)
+
+		humanoid.JumpPower =
+			value
 	end
+)
 
-	state.isRecording = false
-	state.isPlaying = false
+fallSlider.FocusLost:Connect(
+	function()
+		local value =
+			tonumber(
+				fallSlider.Text
+			) or 1
 
-	stopWalkAnimation()
+		value =
+			math.clamp(
+				value,
+				0.5,
+				10
+			)
 
-	setupCharacter(char)
+		state.fallMultiplier =
+			value
 
-	humanoid.WalkSpeed =
-		state.autoWalkSpeed
+		fallSlider.Text =
+			tostring(value)
 
-	humanoid.JumpPower =
-		state.jumpPower
-
-	humanoid.AutoRotate = true
-
-	btnRecord.Text = "● RECORD"
-	btnRecord.BackgroundColor3 =
-		Color3.fromRGB(180, 40, 40)
-
-	btnPlay.Text = "▶ PLAY"
-	btnPlay.BackgroundColor3 =
-		Color3.fromRGB(40, 120, 40)
-
-	statusLabel.Text =
-		"Status: Character respawned"
-end)
-
-RunService.Heartbeat:Connect(function()
-	if not character or not humanoid or not rootPart then
-		return
+		fallLabel.Text =
+			"FallMult: " .. tostring(value)
 	end
+)
 
-	if not state.isPlaying and not state.isRecording then
-		if isGrounded() then
+rotSlider.FocusLost:Connect(
+	function()
+		local value =
+			tonumber(
+				rotSlider.Text
+			) or 5
+
+		value =
+			math.clamp(
+				value,
+				0.5,
+				20
+			)
+
+		state.rotateSpeed =
+			value
+
+		rotSlider.Text =
+			tostring(value)
+
+		rotLabel.Text =
+			"RotSpeed: " .. tostring(value)
+	end
+)
+
+UserInputService.InputBegan:Connect(
+	function(input, gameProcessed)
+		if gameProcessed then
+			return
+		end
+
+		if input.KeyCode == Enum.KeyCode.F5 then
+			if state.isRecording then
+				stopRecording()
+			else
+				startRecording()
+			end
+
+		elseif input.KeyCode == Enum.KeyCode.F6 then
+			if state.isPlaying then
+				stopPlayback()
+			else
+				startPlayback()
+			end
+
+		elseif input.KeyCode == Enum.KeyCode.F7 then
+			if state.isPlaying then
+				stopPlayback()
+			end
+
+			rollbackToSafe()
+
+		elseif input.KeyCode == Enum.KeyCode.F8 then
+			setAutoWalk(
+				not state.isAutoWalk
+			)
+
+		elseif input.KeyCode == Enum.KeyCode.F9 then
+			if state.isRecording then
+				stopRecording()
+			end
+
+			if state.isPlaying then
+				stopPlayback()
+			end
+
+			statusLabel.Text =
+				"Status: Idle"
+
+		elseif input.KeyCode == Enum.KeyCode.F10 then
+			showVisualLine =
+				not showVisualLine
+
+			if showVisualLine then
+				btnToggleLine.Text =
+					"◉ VISUAL LINE ON"
+
+				btnToggleLine.BackgroundColor3 =
+					Color3.fromRGB(
+						60,
+						80,
+						60
+					)
+
+				rebuildVisualPath()
+			else
+				btnToggleLine.Text =
+					"○ VISUAL LINE OFF"
+
+				btnToggleLine.BackgroundColor3 =
+					Color3.fromRGB(
+						80,
+						60,
+						60
+					)
+
+				clearVisualPath()
+			end
+		end
+	end
+)
+
+player.CharacterAdded:Connect(
+	function(char)
+		if state.recordConnection then
+			state.recordConnection:Disconnect()
+			state.recordConnection = nil
+		end
+
+		if state.playbackConnection then
+			state.playbackConnection:Disconnect()
+			state.playbackConnection = nil
+		end
+
+		state.isRecording = false
+		state.isPlaying = false
+
+		stopWalkAnimation()
+
+		setupCharacter(char)
+
+		humanoid.WalkSpeed =
+			state.autoWalkSpeed
+
+		humanoid.JumpPower =
+			state.jumpPower
+
+		humanoid.AutoRotate = true
+
+		btnRecord.Text =
+			"● RECORD"
+
+		btnPlay.Text =
+			"▶ PLAY"
+
+		statusLabel.Text =
+			"Status: Character respawned"
+	end
+)
+
+RunService.Heartbeat:Connect(
+	function()
+		if not character
+			or not humanoid
+			or not rootPart then
+			return
+		end
+
+		if not state.isPlaying
+			and not state.isRecording
+			and isGrounded() then
+
 			updateSafePoint()
 		end
-	end
 
-	if state.isAutoWalk
-		and not state.isPlaying
-		and not state.isRecording then
+		if state.isAutoWalk
+			and not state.isPlaying
+			and not state.isRecording then
 
-		local direction = rootPart.CFrame.LookVector
+			local direction =
+				rootPart.CFrame.LookVector
 
-		local moveDirection =
-			Vector3.new(
-				direction.X,
-				0,
-				direction.Z
-			)
+			local movement =
+				Vector3.new(
+					direction.X,
+					0,
+					direction.Z
+				)
 
-		if moveDirection.Magnitude > 0 then
-			humanoid:Move(
-				moveDirection.Unit,
-				false
-			)
+			if movement.Magnitude > 0 then
+				humanoid:Move(
+					movement.Unit,
+					false
+				)
+			end
 		end
 	end
-end)
+)
 
-humanoid.WalkSpeed = state.autoWalkSpeed
-humanoid.JumpPower = state.jumpPower
+humanoid.WalkSpeed =
+	state.autoWalkSpeed
+
+humanoid.JumpPower =
+	state.jumpPower
 
 statusLabel.Text =
 	"Status: Ready - F5 Record | F6 Play | F7 Rollback | F8 AutoWalk"
 
-frameCountLabel.Text = "Frames: 0"
+frameCountLabel.Text =
+	"Frames: 0"
 
 print("AldoVz")
