@@ -114,11 +114,18 @@ local function updateWLock()
 	end
 end
 
+-- FIX: LOGIKA SHIFT LOCK SEBENARNYA (Mengunci Karakter ke Kamera)
 local function toggleShiftLock()
 	if destroyed then return end
 	_G.ShiftLocked = not _G.ShiftLocked
+	
 	if btnShiftLock and btnShiftLock.Parent then
 		btnShiftLock.TextColor3 = _G.ShiftLocked and COLOR_ON or COLOR_OFF
+	end
+	
+	-- Menyesuaikan AutoRotate saat Shift Lock berubah
+	if humanoid and humanoid.Parent then
+		humanoid.AutoRotate = not _G.ShiftLocked
 	end
 end
 
@@ -390,7 +397,7 @@ connect(UserInputService.WindowFocusReleased, function()
 end)
 
 --==================================================
--- CAMERA & MOVEMENT UPDATE
+-- CAMERA & MOVEMENT UPDATE (DENGAN MANIPULASI SHIFT LOCK)
 --==================================================
 
 local cachedForward=Vector3.new(0,0,-1)
@@ -448,6 +455,20 @@ connect(RunService.RenderStepped,function()
 
 	updateCameraVectors()
 	currentHumanoid:Move(getMoveVector(),false)
+
+	-- EXECUTE ROTASI SHIFT LOCK
+	if _G.ShiftLocked then
+		local camera = workspace.CurrentCamera
+		local rootPart = currentCharacter:FindFirstChild("HumanoidRootPart")
+		if camera and rootPart then
+			local lookVector = camera.CFrame.LookVector
+			local targetCFrame = CFrame.new(rootPart.Position, rootPart.Position + Vector3.new(lookVector.X, 0, lookVector.Z))
+			rootPart.CFrame = targetCFrame
+		end
+		currentHumanoid.AutoRotate = false
+	else
+		currentHumanoid.AutoRotate = true
+	end
 end)
 
 --==================================================
