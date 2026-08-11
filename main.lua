@@ -21,7 +21,7 @@ local WLOCK_ON_COLOR=Color3.fromRGB(70,200,100)
 local BUTTON_TRANSPARENCY=.15
 local BUTTON_TEXT_COLOR=Color3.fromRGB(20,20,20)
 
--- Config Shift Lock
+-- Config Shift Lock (Gambar ID & Warna)
 local SHIFT_IMAGE_ID = "rbxassetid://100460721272551"
 local SHIFT_OFF_COLOR = Color3.fromRGB(255, 255, 255) -- Putih OFF
 local SHIFT_ON_COLOR = Color3.fromRGB(170, 0, 255)   -- Ungu ON
@@ -123,7 +123,7 @@ screenGui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
 screenGui.DisplayOrder=100
 screenGui.Parent=playerGui
 
--- Crosshair Shift Lock
+-- Crosshair Shift Lock (Titik di tengah layar)
 local crosshair = Instance.new("Frame")
 crosshair.Name = "ShiftLockCrosshair"
 crosshair.Size = UDim2.fromOffset(6, 6)
@@ -137,7 +137,7 @@ local crosshairCorner = Instance.new("UICorner")
 crosshairCorner.CornerRadius = UDim.new(1, 0)
 crosshairCorner.Parent = crosshair
 
--- LOGIKA SHIFT LOCK
+-- LOGIKA TOGGLE SHIFT LOCK
 local function toggleShiftLock()
 	if destroyed then return end
 	_G.ShiftLocked = not _G.ShiftLocked
@@ -175,22 +175,24 @@ local function clearMovement()
 end
 
 --==================================================
--- BUTTON SHIFT LOCK (IMAGEBUTTON BULAT 35x35)
+-- BUTTON SHIFT LOCK (IMAGEBUTTON FIX TRANSPARENCY)
 --==================================================
 
 btnShiftLock=Instance.new("ImageButton")
 btnShiftLock.Name="ShiftLockButton"
 btnShiftLock.AnchorPoint=Vector2.new(0.5, 0.5)
-btnShiftLock.Position=UDim2.new(0, 50, 0, 70)
+btnShiftLock.Position=UDim2.new(0.75, 0, 0.65, 0) -- Area dekat tombol Jump
 btnShiftLock.Size=UDim2.fromOffset(35, 35)
 btnShiftLock.Image=SHIFT_IMAGE_ID
 btnShiftLock.ImageColor3=SHIFT_OFF_COLOR
-btnShiftLock.BackgroundTransparency=1
+btnShiftLock.ImageTransparency=0         -- DIPASTIKAN TIDAK TRANSPARAN
+btnShiftLock.BackgroundTransparency=1   -- Latar belakang hilang, hanya gambarnya
 btnShiftLock.AutoButtonColor=false
 btnShiftLock.Active=true
 btnShiftLock.Selectable=false
 btnShiftLock.BorderSizePixel=0
 btnShiftLock.ZIndex=100
+btnShiftLock.Visible=true
 btnShiftLock.Parent=screenGui
 
 connect(btnShiftLock.Activated, toggleShiftLock)
@@ -457,16 +459,16 @@ end)
 -- SETTINGS ERGO (BISA ATUR JUMP & SHIFT LOCK)
 --==================================================
 
-local x=.70
-local y=.70
+local x=.85
+local y=.75
 local jumpSize=.30
 
-local shiftX = 0.10
-local shiftY = 0.15
+local shiftX = 0.75
+local shiftY = 0.65
 local shiftBtnSize = 35
 
 local step=.018
-local targetSettingMode = "JUMP" -- "JUMP" atau "SHIFT"
+local targetSettingMode = "JUMP" -- Mode pengeditan ("JUMP" atau "SHIFT")
 
 local gui=Instance.new("ScreenGui")
 gui.Name="DeltaMobileErgo"
@@ -725,6 +727,15 @@ local function updateShiftLockPosition()
 	end
 end
 
+local function alignShiftLockNearJump()
+	local jump = getJump()
+	if jump then
+		shiftX = jump.Position.X.Scale - 0.10
+		shiftY = jump.Position.Y.Scale - 0.10
+		updateShiftLockPosition()
+	end
+end
+
 local holding={
 	[moveUp]=false,
 	[moveDown]=false,
@@ -865,14 +876,11 @@ end)
 connect(center.Activated,function()
 	if destroyed then return end
 	if targetSettingMode == "JUMP" then
-		x=.70 y=.70
+		x=.85 y=.75
 		lastJumpX=nil lastJumpY=nil lastJumpPixelSize=nil
 		updateJump()
 	else
-		shiftX = 0.10
-		shiftY = 0.15
-		shiftBtnSize = 35
-		updateShiftLockPosition()
+		alignShiftLockNearJump()
 	end
 end)
 
@@ -894,9 +902,9 @@ local function refreshJump()
 	lastJumpY=nil
 	lastJumpPixelSize=nil
 
-	task.defer(function() if not destroyed and token==refreshToken then updateJump() end end)
-	task.delay(.15,function() if not destroyed and token==refreshToken then updateJump() end end)
-	task.delay(.35,function() if not destroyed and token==refreshToken then updateJump() end end)
+	task.defer(function() if not destroyed and token==refreshToken then updateJump() alignShiftLockNearJump() end end)
+	task.delay(.15,function() if not destroyed and token==refreshToken then updateJump() alignShiftLockNearJump() end end)
+	task.delay(.35,function() if not destroyed and token==refreshToken then updateJump() alignShiftLockNearJump() end end)
 end
 
 connect(player.CharacterAdded,function(newCharacter)
@@ -958,6 +966,7 @@ connect(RunService.RenderStepped,function()
 		lastJumpPixelSize=nil
 
 		updateJump()
+		alignShiftLockNearJump()
 	end
 end)
 
@@ -966,4 +975,4 @@ connect(UserInputService.TouchPan,function() if destroyed then return end end)
 updateCameraVectors()
 updateWLock()
 updateJump()
-updateShiftLockPosition()
+alignShiftLockNearJump()
