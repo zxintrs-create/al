@@ -275,12 +275,14 @@ local function rollbackToSafe()
 	end
 end
 
+-- SIMPAN STATE HUMANOID DAN VELOCITY DALAM FRAME
 local function recordFrame()
-	if not rootPart then return end
+	if not rootPart or not humanoid then return end
 	table.insert(state.recordedFrames, {
 		pos = rootPart.Position,
 		rot = rootPart.Orientation,
 		vel = rootPart.AssemblyLinearVelocity or rootPart.Velocity or Vector3.new(),
+		humanoidState = humanoid:GetState(),
 		time = tick()
 	})
 	frameCountLabel.Text = "Frames: " .. #state.recordedFrames
@@ -296,7 +298,7 @@ end
 
 print("AldoVz")
 
--- FIX BUGS ANIMATION REPLAY HERE --
+-- FIX PLAYBACK AGAR MEMUTAR ANIMASI KANAN DAN KIRI DENGAN BENAR
 local function startPlayback()
 	if #state.recordedFrames < 2 then
 		statusLabel.Text = "Status: Not enough frames!"
@@ -322,7 +324,7 @@ local function startPlayback()
 
 	local playbackConn
 	playbackConn = RunService.Heartbeat:Connect(function(dt)
-		if not state.isPlaying or not rootPart then
+		if not state.isPlaying or not rootPart or not humanoid then
 			playbackConn:Disconnect()
 			return
 		end
@@ -342,7 +344,6 @@ local function startPlayback()
 			return
 		end
 
-		-- Cari frame saat ini berdasarkan timestamp
 		local targetIdx = state.playbackIndex
 		while targetIdx < #state.recordedFrames and (state.recordedFrames[targetIdx + 1].time - recordStartTime) <= elapsed do
 			targetIdx = targetIdx + 1
@@ -365,7 +366,21 @@ local function startPlayback()
 		local lerpPos = f1.pos:Lerp(f2.pos, segProgress)
 		local lerpRotY = f1.rot.Y + (f2.rot.Y - f1.rot.Y) * segProgress
 
+		-- Pindahkan Posisi Karakter
 		rootPart.CFrame = CFrame.new(lerpPos) * CFrame.Angles(0, math.rad(lerpRotY), 0)
+
+		-- MEMATUHI DAN MEMICU ANIMASI (Walk, Jump, Fall, dll)
+		if f1.vel then
+			rootPart.AssemblyLinearVelocity = f1.vel
+		end
+
+		if f1.humanoidState then
+			if f1.humanoidState == Enum.HumanoidStateType.Jumping then
+				humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+			elseif f1.humanoidState == Enum.HumanoidStateType.Freefall then
+				humanoid:ChangeState(Enum.HumanoidStateType.Freefall)
+			end
+		end
 
 		if isFalling() then
 			statusLabel.Text = "Status: Fall detected, rolling back..."
