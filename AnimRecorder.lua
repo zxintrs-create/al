@@ -1,10 +1,3 @@
---[[
-  Auto Walk + Animation Recorder + Playback System
-  Fitur: auto walk, record animasi, speed/jump/fall/rotate,
-  playback mulus 100%, rollback ke titik aman, visual line path
-  Tempatkan di StarterGui sebagai LocalScript
-]]--
-
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -15,21 +8,18 @@ local character = player.Character or player.CharacterAdded:Wait()
 local humanoid = character:WaitForChild("Humanoid")
 local rootPart = character:WaitForChild("HumanoidRootPart")
 
--- ============================================================
--- STATE
--- ============================================================
 local state = {
 	isRecording = false,
 	isPlaying = false,
 	isAutoWalk = false,
 	autoWalkSpeed = 16,
-	recordedFrames = {},       -- {pos, rot, vel, time}
-	safePoints = {},           -- {pos, rot} sebelum jatuh
+	recordedFrames = {},
+	safePoints = {},
 	playbackIndex = 1,
 	playbackStartTime = 0,
 	lastSafePosition = nil,
 	lastSafeRotation = nil,
-	visualLines = {},          -- {startPos, endPos, color}
+	visualLines = {},
 	speedMultiplier = 1,
 	jumpPower = 50,
 	fallMultiplier = 1,
@@ -37,9 +27,6 @@ local state = {
 	characterRot = 0,
 }
 
--- ============================================================
--- GUI BUILDER
--- ============================================================
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "AnimRecorderGUI"
 screenGui.ResetOnSpawn = false
@@ -106,22 +93,15 @@ local function makeSlider(name, parent, pos, minVal, maxVal, defaultVal)
 	return container, label, slider
 end
 
--- ============================================================
--- BUILD GUI
--- ============================================================
-
--- Main window
 local mainWindow = makeFrame("MainWindow", screenGui, UDim2.new(0, 220, 0, 520), UDim2.new(0, 15, 0, 50), Color3.fromRGB(25, 25, 35))
 mainWindow.Active = true
 mainWindow.Draggable = true
 
--- Title
 local title = makeLabel("Title", mainWindow, "ANIM RECORDER v2", UDim2.new(0, 10, 0, 5), UDim2.new(0, 200, 0, 22))
 title.TextSize = 16
 title.Font = Enum.Font.GothamBold
 title.TextColor3 = Color3.fromRGB(100, 200, 255)
 
--- === RECORD / PLAY CONTROLS ===
 local yOff = 32
 
 local btnRecord = makeButton("BtnRecord", mainWindow, "● RECORD", UDim2.new(0, 10, 0, yOff), UDim2.new(0, 90, 0, 28), Color3.fromRGB(180, 40, 40))
@@ -135,15 +115,12 @@ yOff = yOff + 34
 local btnClear = makeButton("BtnClear", mainWindow, "✕ CLEAR ALL", UDim2.new(0, 10, 0, yOff), UDim2.new(0, 180, 0, 24), Color3.fromRGB(80, 40, 40))
 yOff = yOff + 30
 
--- Separator
 local sep1 = makeFrame("Sep1", mainWindow, UDim2.new(0, 200, 0, 1), UDim2.new(0, 10, 0, yOff), Color3.fromRGB(80, 80, 100))
 yOff = yOff + 8
 
--- === AUTO WALK ===
 local btnAutoWalk = makeButton("BtnAutoWalk", mainWindow, "◇ AUTO WALK OFF", UDim2.new(0, 10, 0, yOff), UDim2.new(0, 180, 0, 26), Color3.fromRGB(60, 60, 80))
 yOff = yOff + 30
 
--- === SPEED SLIDERS ===
 local speedCont, speedLabel, speedSlider = makeSlider("Speed", mainWindow, UDim2.new(0, 10, 0, yOff), 1, 200, 16)
 yOff = yOff + 40
 
@@ -156,11 +133,9 @@ yOff = yOff + 40
 local rotCont, rotLabel, rotSlider = makeSlider("RotSpeed", mainWindow, UDim2.new(0, 10, 0, yOff), 0.5, 20, 5)
 yOff = yOff + 40
 
--- Separator
 local sep2 = makeFrame("Sep2", mainWindow, UDim2.new(0, 200, 0, 1), UDim2.new(0, 10, 0, yOff), Color3.fromRGB(80, 80, 100))
 yOff = yOff + 8
 
--- Status label
 local statusLabel = makeLabel("Status", mainWindow, "Status: Idle", UDim2.new(0, 10, 0, yOff), UDim2.new(0, 200, 0, 16))
 statusLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
 yOff = yOff + 18
@@ -168,15 +143,11 @@ yOff = yOff + 18
 local frameCountLabel = makeLabel("FrameCount", mainWindow, "Frames: 0", UDim2.new(0, 10, 0, yOff), UDim2.new(0, 200, 0, 16))
 yOff = yOff + 18
 
--- Toggle visual line
 local btnToggleLine = makeButton("BtnToggleLine", mainWindow, "◉ VISUAL LINE ON", UDim2.new(0, 10, 0, yOff), UDim2.new(0, 180, 0, 24), Color3.fromRGB(60, 80, 60))
 local showVisualLine = true
 
 screenGui.Parent = player:WaitForChild("PlayerGui")
 
--- ============================================================
--- VISUAL LINE (Path Renderer)
--- ============================================================
 local pathFolder = Instance.new("Folder")
 pathFolder.Name = "VisualPathLines"
 pathFolder.Parent = workspace
@@ -231,7 +202,6 @@ local function rebuildVisualPath()
 		createPathSegment(p1, p2, c)
 	end
 
-	-- titik start (hijau) dan end (merah)
 	local startMarker = Instance.new("Part")
 	startMarker.Name = "StartMarker"
 	startMarker.Size = Vector3.new(1, 1, 1)
@@ -254,7 +224,6 @@ local function rebuildVisualPath()
 	endMarker.CFrame = CFrame.new(state.recordedFrames[#state.recordedFrames].pos)
 	endMarker.Parent = pathFolder
 
-	-- titik aman (kuning)
 	if state.lastSafePosition then
 		local safeMarker = Instance.new("Part")
 		safeMarker.Name = "SafeMarker"
@@ -269,11 +238,6 @@ local function rebuildVisualPath()
 	end
 end
 
--- ============================================================
--- CORE FUNCTIONS
--- ============================================================
-
--- Deteksi apakah character sedang jatuh (tidak menyentuh ground)
 local function isFalling()
 	if not character or not rootPart then return false end
 	local pos = rootPart.Position
@@ -288,7 +252,6 @@ local function isFalling()
 	return result == nil
 end
 
--- Simpan posisi aman (saat di ground)
 local function updateSafePoint()
 	if not isFalling() and rootPart then
 		state.lastSafePosition = rootPart.Position
@@ -297,14 +260,12 @@ local function updateSafePoint()
 			pos = rootPart.Position,
 			rot = rootPart.Orientation
 		})
-		-- keep last 20 safe points
 		if #state.safePoints > 20 then
 			table.remove(state.safePoints, 1)
 		end
 	end
 end
 
--- Rollback ke titik aman terakhir
 local function rollbackToSafe()
 	if state.lastSafePosition and rootPart then
 		rootPart.CFrame = CFrame.new(state.lastSafePosition) * CFrame.Angles(0, math.rad(rootPart.Orientation.Y), 0)
@@ -316,7 +277,6 @@ local function rollbackToSafe()
 	end
 end
 
--- Record frame
 local function recordFrame()
 	if not rootPart then return end
 	table.insert(state.recordedFrames, {
@@ -327,7 +287,6 @@ local function recordFrame()
 	})
 	frameCountLabel.Text = "Frames: " .. #state.recordedFrames
 
-	-- Update visual line real-time
 	if showVisualLine and #state.recordedFrames >= 2 then
 		local f1 = state.recordedFrames[#state.recordedFrames - 1]
 		local f2 = state.recordedFrames[#state.recordedFrames]
@@ -337,7 +296,6 @@ local function recordFrame()
 	end
 end
 
--- Smooth playback interpolation
 local function startPlayback()
 	if #state.recordedFrames < 2 then
 		statusLabel.Text = "Status: Not enough frames!"
@@ -348,7 +306,6 @@ local function startPlayback()
 	state.playbackIndex = 1
 	state.playbackStartTime = tick()
 
-	-- Teleport ke frame pertama
 	local firstFrame = state.recordedFrames[1]
 	if rootPart then
 		rootPart.CFrame = CFrame.new(firstFrame.pos) * CFrame.Angles(0, math.rad(firstFrame.rot.Y), 0)
@@ -359,7 +316,6 @@ local function startPlayback()
 	btnPlay.BackgroundColor3 = Color3.fromRGB(200, 150, 40)
 	rebuildVisualPath()
 
-	-- Gunakan RunService.Heartbeat untuk playback mulus
 	local playbackConn
 	playbackConn = RunService.Heartbeat:Connect(function(dt)
 		if not state.isPlaying or not rootPart then
@@ -374,30 +330,24 @@ local function startPlayback()
 		local progress = elapsed / totalDuration
 		progress = math.clamp(progress, 0, 1)
 
-		-- Cari frame index berdasarkan progress
 		local targetIndex = math.floor(progress * (#state.recordedFrames - 1)) + 1
 		targetIndex = math.clamp(targetIndex, 1, #state.recordedFrames - 1)
 
 		local f1 = state.recordedFrames[targetIndex]
 		local f2 = state.recordedFrames[targetIndex + 1]
 
-		-- Hitung local progress dalam segment ini
 		local segDuration = f2.time - f1.time
 		if segDuration <= 0 then segDuration = 0.016 end
 		local segElapsed = elapsed - (targetIndex - 1) * (totalDuration / (#state.recordedFrames - 1))
 		local segProgress = math.clamp(segElapsed / segDuration, 0, 1)
 
-		-- Smooth interpolation (cubic ease in/out)
 		local smoothT = segProgress * segProgress * (3 - 2 * segProgress)
 
-		-- Interpolasi posisi
 		local lerpPos = f1.pos:Lerp(f2.pos, smoothT)
 		local lerpRotY = f1.rot.Y + (f2.rot.Y - f1.rot.Y) * smoothT
 
-		-- Terapkan dengan CFrame smoothing
 		rootPart.CFrame = CFrame.new(lerpPos) * CFrame.Angles(0, math.rad(lerpRotY), 0)
 
-		-- Deteksi jatuh selama playback
 		if isFalling() then
 			statusLabel.Text = "Status: Fall detected, rolling back..."
 			state.isPlaying = false
@@ -408,10 +358,8 @@ local function startPlayback()
 			return
 		end
 
-		-- Update safe point selama playback
 		updateSafePoint()
-
-		-- Selesai
+			
 		if progress >= 1 then
 			state.isPlaying = false
 			btnPlay.Text = "▶ PLAY"
@@ -419,7 +367,6 @@ local function startPlayback()
 			statusLabel.Text = "Status: Playback complete"
 			playbackConn:Disconnect()
 
-			-- Kembali ke posisi awal
 			local firstFramePos = state.recordedFrames[1].pos
 			local firstFrameRot = state.recordedFrames[1].rot
 			rootPart.CFrame = CFrame.new(firstFramePos) * CFrame.Angles(0, math.rad(firstFrameRot.Y), 0)
@@ -428,7 +375,6 @@ local function startPlayback()
 	end)
 end
 
--- Stop playback
 local function stopPlayback()
 	state.isPlaying = false
 	btnPlay.Text = "▶ PLAY"
@@ -436,7 +382,6 @@ local function stopPlayback()
 	statusLabel.Text = "Status: Stopped"
 end
 
--- Stop recording
 local function stopRecording()
 	state.isRecording = false
 	btnRecord.Text = "● RECORD"
@@ -444,17 +389,13 @@ local function stopRecording()
 	statusLabel.Text = "Status: Recorded " .. #state.recordedFrames .. " frames"
 end
 
--- ============================================================
--- BUTTON EVENTS
--- ============================================================
-
 btnRecord.MouseButton1Click:Connect(function()
 	if state.isPlaying then return end
 
 	state.isRecording = not state.isRecording
 
 	if state.isRecording then
-		-- Clear previous data
+			
 		state.recordedFrames = {}
 		clearVisualPath()
 
@@ -463,7 +404,6 @@ btnRecord.MouseButton1Click:Connect(function()
 		statusLabel.Text = "Status: Recording..."
 		frameCountLabel.Text = "Frames: 0"
 
-		-- Record loop
 		local recordConn
 		recordConn = RunService.Heartbeat:Connect(function()
 			if not state.isRecording or not rootPart then
@@ -517,7 +457,6 @@ btnClear.MouseButton1Click:Connect(function()
 	if state.isRecording then stopRecording() end
 end)
 
--- Auto Walk toggle
 btnAutoWalk.MouseButton1Click:Connect(function()
 	state.isAutoWalk = not state.isAutoWalk
 	if state.isAutoWalk then
@@ -525,17 +464,16 @@ btnAutoWalk.MouseButton1Click:Connect(function()
 		btnAutoWalk.BackgroundColor3 = Color3.fromRGB(40, 120, 40)
 		humanoid.WalkSpeed = state.autoWalkSpeed
 		humanoid.AutoRotate = true
-		-- Arahkan character ke depan
+
 		local lookCF = rootPart.CFrame * CFrame.new(0, 0, -10)
 		humanoid:MoveTo(lookCF.Position)
 	else
 		btnAutoWalk.Text = "◇ AUTO WALK OFF"
 		btnAutoWalk.BackgroundColor3 = Color3.fromRGB(60, 60, 80)
-		humanoid:MoveTo(rootPart.Position) -- stop
+		humanoid:MoveTo(rootPart.Position) 
 	end
 end)
 
--- Toggle visual line
 btnToggleLine.MouseButton1Click:Connect(function()
 	showVisualLine = not showVisualLine
 	if showVisualLine then
@@ -549,7 +487,6 @@ btnToggleLine.MouseButton1Click:Connect(function()
 	end
 end)
 
--- Slider handlers
 speedSlider.FocusLost:Connect(function()
 	local val = tonumber(speedSlider.Text) or 16
 	val = math.clamp(val, 1, 200)
@@ -580,57 +517,46 @@ rotSlider.FocusLost:Connect(function()
 	rotLabel.Text = "RotSpeed: " .. val
 end)
 
--- ============================================================
--- KEYBOARD SHORTCUTS
--- ============================================================
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	if gameProcessed then return end
 
 	if input.KeyCode == Enum.KeyCode.F5 then
-		-- Toggle record
+			
 		btnRecord.MouseButton1Click:Fire()
 	elseif input.KeyCode == Enum.KeyCode.F6 then
-		-- Toggle play
+			
 		btnPlay.MouseButton1Click:Fire()
 	elseif input.KeyCode == Enum.KeyCode.F7 then
-		-- Rollback
+	
 		btnRollback.MouseButton1Click:Fire()
 	elseif input.KeyCode == Enum.KeyCode.F8 then
-		-- Toggle auto walk
+	
 		btnAutoWalk.MouseButton1Click:Fire()
 	elseif input.KeyCode == Enum.KeyCode.F9 then
-		-- Stop
+	
 		btnStop.MouseButton1Click:Fire()
 	elseif input.KeyCode == Enum.KeyCode.F10 then
-		-- Toggle visual line
+
 		btnToggleLine.MouseButton1Click:Fire()
 	end
 end)
 
--- ============================================================
--- FALL DETECTION (Real-time)
--- ============================================================
 local fallCheckConn
 fallCheckConn = RunService.Heartbeat:Connect(function()
 	if not rootPart then return end
 
-	-- Update safe point jika di ground
 	if not isFalling() then
 		updateSafePoint()
 	end
 
-	-- Auto rollback jika jatuh dan tidak dalam playback
 	if isFalling() and not state.isPlaying and not state.isRecording then
 		local velY = rootPart.Velocity.Y
-		if velY < -30 then -- jatuh cepat
+		if velY < -30 then
 			statusLabel.Text = "Status: Falling! Press F7 to rollback"
 		end
 	end
 end)
 
--- ============================================================
--- CHARACTER RESPAWN HANDLER
--- ============================================================
 player.CharacterAdded:Connect(function(newChar)
 	character = newChar
 	humanoid = character:WaitForChild("Humanoid")
@@ -642,9 +568,6 @@ player.CharacterAdded:Connect(function(newChar)
 	statusLabel.Text = "Status: Character respawned"
 end)
 
--- ============================================================
--- INIT
--- ============================================================
 humanoid.WalkSpeed = state.autoWalkSpeed
 humanoid.JumpPower = state.jumpPower
 statusLabel.Text = "Status: Ready - F5 Record | F6 Play | F7 Rollback | F8 AutoWalk"
