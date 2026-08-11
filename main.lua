@@ -114,7 +114,29 @@ local function updateWLock()
 	end
 end
 
--- FIX: LOGIKA SHIFT LOCK SEBENARNYA (Mengunci Karakter ke Kamera)
+local screenGui=Instance.new("ScreenGui")
+screenGui.Name="DeltaMobileControls"
+screenGui.ResetOnSpawn=false
+screenGui.IgnoreGuiInset=true
+screenGui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
+screenGui.DisplayOrder=100
+screenGui.Parent=playerGui
+
+-- Crosshair untuk Shift Lock
+local crosshair = Instance.new("Frame")
+crosshair.Name = "ShiftLockCrosshair"
+crosshair.Size = UDim2.fromOffset(6, 6)
+crosshair.Position = UDim2.new(0.5, -3, 0.5, -3)
+crosshair.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+crosshair.BorderSizePixel = 0
+crosshair.Visible = false
+crosshair.Parent = screenGui
+
+local crosshairCorner = Instance.new("UICorner")
+crosshairCorner.CornerRadius = UDim.new(1, 0)
+crosshairCorner.Parent = crosshair
+
+-- LOGIKA SHIFT LOCK MOBILE (OFFSET KAMERA + CROSSHAIR)
 local function toggleShiftLock()
 	if destroyed then return end
 	_G.ShiftLocked = not _G.ShiftLocked
@@ -122,10 +144,12 @@ local function toggleShiftLock()
 	if btnShiftLock and btnShiftLock.Parent then
 		btnShiftLock.TextColor3 = _G.ShiftLocked and COLOR_ON or COLOR_OFF
 	end
+
+	crosshair.Visible = _G.ShiftLocked
 	
-	-- Menyesuaikan AutoRotate saat Shift Lock berubah
 	if humanoid and humanoid.Parent then
 		humanoid.AutoRotate = not _G.ShiftLocked
+		humanoid.CameraOffset = _G.ShiftLocked and Vector3.new(1.75, 0, 0) or Vector3.new(0, 0, 0)
 	end
 end
 
@@ -148,14 +172,6 @@ local function clearMovement()
 
 	resetMovementVisuals()
 end
-
-local screenGui=Instance.new("ScreenGui")
-screenGui.Name="DeltaMobileControls"
-screenGui.ResetOnSpawn=false
-screenGui.IgnoreGuiInset=true
-screenGui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
-screenGui.DisplayOrder=100
-screenGui.Parent=playerGui
 
 --==================================================
 -- BUTTON SHIFT LOCK GUI (ATAS KIRI LAYAR)
@@ -397,7 +413,7 @@ connect(UserInputService.WindowFocusReleased, function()
 end)
 
 --==================================================
--- CAMERA & MOVEMENT UPDATE (DENGAN MANIPULASI SHIFT LOCK)
+-- CAMERA & MOVEMENT UPDATE
 --==================================================
 
 local cachedForward=Vector3.new(0,0,-1)
@@ -456,23 +472,24 @@ connect(RunService.RenderStepped,function()
 	updateCameraVectors()
 	currentHumanoid:Move(getMoveVector(),false)
 
-	-- EXECUTE ROTASI SHIFT LOCK
+	-- PERBAIKAN ROTASI SHIFT LOCK KHUSUS MOBILE
 	if _G.ShiftLocked then
 		local camera = workspace.CurrentCamera
 		local rootPart = currentCharacter:FindFirstChild("HumanoidRootPart")
 		if camera and rootPart then
-			local lookVector = camera.CFrame.LookVector
-			local targetCFrame = CFrame.new(rootPart.Position, rootPart.Position + Vector3.new(lookVector.X, 0, lookVector.Z))
-			rootPart.CFrame = targetCFrame
+			local _, y, _ = camera.CFrame:ToOrientation()
+			rootPart.CFrame = CFrame.new(rootPart.Position) * CFrame.Angles(0, y, 0)
 		end
 		currentHumanoid.AutoRotate = false
+		currentHumanoid.CameraOffset = Vector3.new(1.75, 0, 0)
 	else
 		currentHumanoid.AutoRotate = true
+		currentHumanoid.CameraOffset = Vector3.new(0, 0, 0)
 	end
 end)
 
 --==================================================
--- SETTINGS ERGO (INTACT)
+-- SETTINGS ERGO
 --==================================================
 
 local x=.70
