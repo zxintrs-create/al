@@ -1,6 +1,11 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local Lighting = game:GetService("Lighting")
+local Debris = game:GetService("Debris")
+local SoundService = game:GetService("SoundService")
 local UserInputService = game:GetService("UserInputService")
+local StarterGui = game:GetService("StarterGui")
 local TweenService = game:GetService("TweenService")
 
 local player = Players.LocalPlayer
@@ -8,575 +13,828 @@ local character = player.Character or player.CharacterAdded:Wait()
 local humanoid = character:WaitForChild("Humanoid")
 local rootPart = character:WaitForChild("HumanoidRootPart")
 
-local state = {
-	isRecording = false,
-	isPlaying = false,
-	isAutoWalk = false,
-	autoWalkSpeed = 16,
-	recordedFrames = {},
-	safePoints = {},
-	playbackIndex = 1,
-	playbackStartTime = 0,
-	lastSafePosition = nil,
-	lastSafeRotation = nil,
-	visualLines = {},
-	speedMultiplier = 1,
-	jumpPower = 50,
-	fallMultiplier = 1,
-	rotateSpeed = 5,
-	characterRot = 0,
+local CONFIG = {
+	AudioId = "rbxassetid://138004082589684",
+	AudioVolume = 1,
+	AudioLooped = true,
+	ScaleTarget = Vector3.new(3, 3, 3),
+	ScaleDuration = 2,
+	SoulRingCount = 5,
+	SoulRingRadius = 4,
+	SoulRingSpeed = 1.5,
+	SoulRingColors = {
+		Color3.fromRGB(255, 50, 50),
+		Color3.fromRGB(255, 150, 0),
+		Color3.fromRGB(255, 255, 0),
+		Color3.fromRGB(100, 200, 255),
+		Color3.fromRGB(200, 50, 255),
+	},
+	MeteorCount = 30,
+	MeteorSpawnRadius = 60,
+	MeteorHeight = 80,
+	MeteorFallSpeed = 120,
+	AuraParticleCount = 40,
+	AuraRadius = 3.5,
+	SkyColor = Color3.fromRGB(180, 20, 20),
+	FogColor = Color3.fromRGB(80, 5, 5),
+	FogEnd = 200,
+	AmbientColor = Color3.fromRGB(60, 10, 10),
+	OutdoorAmbient = Color3.fromRGB(80, 15, 15),
+	Brightness = 1.5,
+	ClockTime = 0,
+	GlobalShadows = true,
 }
 
+local function notify(title, text, dur)
+	StarterGui:SetCore("SendNotification", {
+		Title = title,
+		Text = text or "",
+		Duration = dur or 5
+	})
+end
+
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "AnimRecorderGUI"
+screenGui.Name = "SoulMasterGUI"
 screenGui.ResetOnSpawn = false
 screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-
-local function makeFrame(name, parent, size, pos, color)
-	local f = Instance.new("Frame")
-	f.Name = name
-	f.Size = size or UDim2.new(0, 200, 0, 30)
-	f.Position = pos or UDim2.new(0, 10, 0, 10)
-	f.BackgroundColor3 = color or Color3.fromRGB(30, 30, 30)
-	f.BackgroundTransparency = 0.15
-	f.BorderSizePixel = 0
-	f.Parent = parent
-	return f
-end
-
-local function makeButton(name, parent, text, pos, size, color)
-	local b = Instance.new("TextButton")
-	b.Name = name
-	b.Size = size or UDim2.new(0, 180, 0, 28)
-	b.Position = pos or UDim2.new(0, 10, 0, 5)
-	b.Text = text
-	b.TextColor3 = Color3.fromRGB(255, 255, 255)
-	b.TextSize = 14
-	b.Font = Enum.Font.GothamBold
-	b.BackgroundColor3 = color or Color3.fromRGB(60, 60, 60)
-	b.BorderSizePixel = 0
-	b.Parent = parent
-	return b
-end
-
-local function makeLabel(name, parent, text, pos, size)
-	local l = Instance.new("TextLabel")
-	l.Name = name
-	l.Size = size or UDim2.new(0, 180, 0, 20)
-	l.Position = pos or UDim2.new(0, 10, 0, 5)
-	l.Text = text
-	l.TextColor3 = Color3.fromRGB(200, 200, 200)
-	l.TextSize = 12
-	l.Font = Enum.Font.Gotham
-	l.BackgroundTransparency = 1
-	l.BorderSizePixel = 0
-	l.TextXAlignment = Enum.TextXAlignment.Left
-	l.Parent = parent
-	return l
-end
-
-local function makeSlider(name, parent, pos, minVal, maxVal, defaultVal)
-	local container = makeFrame(name .. "Cont", parent, UDim2.new(0, 180, 0, 36), pos, Color3.fromRGB(40,40,40))
-	local label = makeLabel(name .. "Label", container, name .. ": " .. tostring(defaultVal), UDim2.new(0, 5, 0, 2), UDim2.new(0, 170, 0, 14))
-	local slider = Instance.new("TextBox")
-	slider.Name = name .. "Slider"
-	slider.Size = UDim2.new(0, 170, 0, 16)
-	slider.Position = UDim2.new(0, 5, 0, 17)
-	slider.Text = tostring(defaultVal)
-	slider.TextColor3 = Color3.fromRGB(255,255,255)
-	slider.TextSize = 12
-	slider.Font = Enum.Font.Gotham
-	slider.BackgroundColor3 = Color3.fromRGB(60,60,60)
-	slider.BorderSizePixel = 0
-	slider.ClearTextOnFocus = false
-	slider.Parent = container
-	return container, label, slider
-end
-
-local mainWindow = makeFrame("MainWindow", screenGui, UDim2.new(0, 220, 0, 520), UDim2.new(0, 15, 0, 50), Color3.fromRGB(25, 25, 35))
-mainWindow.Active = true
-mainWindow.Draggable = true
-
-local title = makeLabel("Title", mainWindow, "ANIM RECORDER v2", UDim2.new(0, 10, 0, 5), UDim2.new(0, 200, 0, 22))
-title.TextSize = 16
-title.Font = Enum.Font.GothamBold
-title.TextColor3 = Color3.fromRGB(100, 200, 255)
-
-local yOff = 32
-
-local btnRecord = makeButton("BtnRecord", mainWindow, "● RECORD", UDim2.new(0, 10, 0, yOff), UDim2.new(0, 90, 0, 28), Color3.fromRGB(180, 40, 40))
-local btnPlay = makeButton("BtnPlay", mainWindow, "▶ PLAY", UDim2.new(0, 110, 0, yOff), UDim2.new(0, 90, 0, 28), Color3.fromRGB(40, 120, 40))
-yOff = yOff + 34
-
-local btnStop = makeButton("BtnStop", mainWindow, "■ STOP", UDim2.new(0, 10, 0, yOff), UDim2.new(0, 90, 0, 28), Color3.fromRGB(100, 100, 100))
-local btnRollback = makeButton("BtnRollback", mainWindow, "↩ ROLLBACK", UDim2.new(0, 110, 0, yOff), UDim2.new(0, 90, 0, 28), Color3.fromRGB(40, 80, 160))
-yOff = yOff + 34
-
-local btnClear = makeButton("BtnClear", mainWindow, "✕ CLEAR ALL", UDim2.new(0, 10, 0, yOff), UDim2.new(0, 180, 0, 24), Color3.fromRGB(80, 40, 40))
-yOff = yOff + 30
-
-local sep1 = makeFrame("Sep1", mainWindow, UDim2.new(0, 200, 0, 1), UDim2.new(0, 10, 0, yOff), Color3.fromRGB(80, 80, 100))
-yOff = yOff + 8
-
-local btnAutoWalk = makeButton("BtnAutoWalk", mainWindow, "◇ AUTO WALK OFF", UDim2.new(0, 10, 0, yOff), UDim2.new(0, 180, 0, 26), Color3.fromRGB(60, 60, 80))
-yOff = yOff + 30
-
-local speedCont, speedLabel, speedSlider = makeSlider("Speed", mainWindow, UDim2.new(0, 10, 0, yOff), 1, 200, 16)
-yOff = yOff + 40
-
-local jumpCont, jumpLabel, jumpSlider = makeSlider("JumpPower", mainWindow, UDim2.new(0, 10, 0, yOff), 10, 200, 50)
-yOff = yOff + 40
-
-local fallCont, fallLabel, fallSlider = makeSlider("FallMult", mainWindow, UDim2.new(0, 10, 0, yOff), 0.5, 10, 1)
-yOff = yOff + 40
-
-local rotCont, rotLabel, rotSlider = makeSlider("RotSpeed", mainWindow, UDim2.new(0, 10, 0, yOff), 0.5, 20, 5)
-yOff = yOff + 40
-
-local sep2 = makeFrame("Sep2", mainWindow, UDim2.new(0, 200, 0, 1), UDim2.new(0, 10, 0, yOff), Color3.fromRGB(80, 80, 100))
-yOff = yOff + 8
-
-local statusLabel = makeLabel("Status", mainWindow, "Status: Idle", UDim2.new(0, 10, 0, yOff), UDim2.new(0, 200, 0, 16))
-statusLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
-yOff = yOff + 18
-
-local frameCountLabel = makeLabel("FrameCount", mainWindow, "Frames: 0", UDim2.new(0, 10, 0, yOff), UDim2.new(0, 200, 0, 16))
-yOff = yOff + 18
-
-local btnToggleLine = makeButton("BtnToggleLine", mainWindow, "◉ VISUAL LINE ON", UDim2.new(0, 10, 0, yOff), UDim2.new(0, 180, 0, 24), Color3.fromRGB(60, 80, 60))
-local showVisualLine = true
-
 screenGui.Parent = player:WaitForChild("PlayerGui")
 
-local pathFolder = Instance.new("Folder")
-pathFolder.Name = "VisualPathLines"
-pathFolder.Parent = workspace
+local mainBtn = Instance.new("TextButton")
+mainBtn.Name = "MainButton"
+mainBtn.Size = UDim2.new(0, 120, 0, 44)
+mainBtn.Position = UDim2.new(0.5, -60, 1, -60)
+mainBtn.Text = "🔥 ACTIVATE"
+mainBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+mainBtn.TextSize = 16
+mainBtn.Font = Enum.Font.GothamBold
+mainBtn.BackgroundColor3 = Color3.fromRGB(180, 30, 30)
+mainBtn.BackgroundTransparency = 0.15
+mainBtn.BorderSizePixel = 0
+mainBtn.Parent = screenGui
 
-local function createPathSegment(p1, p2, color)
-	local dist = (p2 - p1).Magnitude
-	if dist < 0.1 then return end
+local uicorner = Instance.new("UICorner")
+uicorner.CornerRadius = UDim.new(0, 10)
+uicorner.Parent = mainBtn
 
-	local mid = (p1 + p2) / 2
-	local part = Instance.new("Part")
-	part.Name = "PathSegment"
-	part.Size = Vector3.new(0.3, 0.3, dist)
-	part.CFrame = CFrame.lookAt(mid, p2) * CFrame.Angles(math.rad(90), 0, 0)
-	part.Anchored = true
-	part.CanCollide = false
-	part.Material = Enum.Material.Neon
-	part.Color = color or Color3.fromRGB(0, 200, 255)
-	part.Transparency = 0.2
-	part.BrickColor = BrickColor.new("Really blue")
+local uistroke = Instance.new("UIStroke")
+uistroke.Color = Color3.fromRGB(255, 100, 0)
+uistroke.Thickness = 2
+uistroke.Transparency = 0.3
+uistroke.Parent = mainBtn
 
-	local mesh = Instance.new("CylinderMesh")
-	mesh.Scale = Vector3.new(1, 1, 1)
-	mesh.Parent = part
+local shadow = Instance.new("ImageLabel")
+shadow.Name = "Shadow"
+shadow.Size = UDim2.new(1, 10, 1, 10)
+shadow.Position = UDim2.new(0, -5, 0, -5)
+shadow.BackgroundTransparency = 1
+shadow.Image = "rbxassetid://1316045217"
+shadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
+shadow.ImageTransparency = 0.6
+shadow.ScaleType = Enum.ScaleType.Slice
+shadow.SliceCenter = Rect.new(10, 10, 118, 118)
+shadow.Parent = mainBtn
 
-	part.Parent = pathFolder
-	return part
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Name = "StatusLabel"
+statusLabel.Size = UDim2.new(0, 200, 0, 24)
+statusLabel.Position = UDim2.new(0.5, -100, 1, -110)
+statusLabel.Text = "🌀 Press to activate"
+statusLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
+statusLabel.TextSize = 14
+statusLabel.Font = Enum.Font.GothamBold
+statusLabel.BackgroundTransparency = 1
+statusLabel.TextStrokeTransparency = 0.5
+statusLabel.Parent = screenGui
+
+local volUpBtn = Instance.new("TextButton")
+volUpBtn.Name = "VolUp"
+volUpBtn.Size = UDim2.new(0, 50, 0, 50)
+volUpBtn.Position = UDim2.new(1, -60, 0.5, -55)
+volUpBtn.Text = "+"
+volUpBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+volUpBtn.TextSize = 24
+volUpBtn.Font = Enum.Font.GothamBold
+volUpBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+volUpBtn.BackgroundTransparency = 0.2
+volUpBtn.BorderSizePixel = 0
+volUpBtn.Parent = screenGui
+local volUpCorner = Instance.new("UICorner")
+volUpCorner.CornerRadius = UDim.new(0, 25)
+volUpCorner.Parent = volUpBtn
+
+local volDownBtn = Instance.new("TextButton")
+volDownBtn.Name = "VolDown"
+volDownBtn.Size = UDim2.new(0, 50, 0, 50)
+volDownBtn.Position = UDim2.new(1, -60, 0.5, 5)
+volDownBtn.Text = "-"
+volDownBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+volDownBtn.TextSize = 24
+volDownBtn.Font = Enum.Font.GothamBold
+volDownBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+volDownBtn.BackgroundTransparency = 0.2
+volDownBtn.BorderSizePixel = 0
+volDownBtn.Parent = screenGui
+local volDownCorner = Instance.new("UICorner")
+volDownCorner.CornerRadius = UDim.new(0, 25)
+volDownCorner.Parent = volDownBtn
+
+-- Volume label
+local volLabel = Instance.new("TextLabel")
+volLabel.Name = "VolLabel"
+volLabel.Size = UDim2.new(0, 50, 0, 20)
+volLabel.Position = UDim2.new(1, -60, 0.5, -25)
+volLabel.Text = "VOL 1.0"
+volLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+volLabel.TextSize = 11
+volLabel.Font = Enum.Font.Gotham
+volLabel.BackgroundTransparency = 1
+volLabel.Parent = screenGui
+
+local function setHellSky()
+	if not _G._originalLighting then
+		_G._originalLighting = {
+			FogColor = Lighting.FogColor,
+			FogEnd = Lighting.FogEnd,
+			Ambient = Lighting.Ambient,
+			OutdoorAmbient = Lighting.OutdoorAmbient,
+			Brightness = Lighting.Brightness,
+			ClockTime = Lighting.ClockTime,
+			GlobalShadows = Lighting.GlobalShadows,
+			ColorShift_Top = Lighting.ColorShift_Top,
+			ColorShift_Bottom = Lighting.ColorShift_Bottom,
+		}
+	end
+
+	Lighting.FogColor = CONFIG.FogColor
+	Lighting.FogEnd = CONFIG.FogEnd
+	Lighting.Ambient = CONFIG.AmbientColor
+	Lighting.OutdoorAmbient = CONFIG.OutdoorAmbient
+	Lighting.Brightness = CONFIG.Brightness
+	Lighting.ClockTime = CONFIG.ClockTime
+	Lighting.GlobalShadows = CONFIG.GlobalShadows
+	Lighting.ColorShift_Top = Color3.fromRGB(200, 30, 30)
+	Lighting.ColorShift_Bottom = Color3.fromRGB(50, 5, 5)
+
+	local sky = Instance.new("Sky")
+	sky.Name = "HellSky"
+	sky.SkyboxBk = "rbxassetid://14607339215"
+	sky.SkyboxDn = "rbxassetid://14607339215"
+	sky.SkyboxFt = "rbxassetid://14607339215"
+	sky.SkyboxLf = "rbxassetid://14607339215"
+	sky.SkyboxRt = "rbxassetid://14607339215"
+	sky.SkyboxUp = "rbxassetid://14607339215"
+	sky.SunTextureId = "rbxassetid://14607339215"
+	sky.MoonTextureId = ""
+	sky.StarAngle = 0
+	sky.Parent = Lighting
+
+	local atmosphere = Instance.new("Atmosphere")
+	atmosphere.Name = "HellAtmosphere"
+	atmosphere.Density = 0.5
+	atmosphere.Offset = 0.3
+	atmosphere.Color = CONFIG.SkyColor
+	atmosphere.Decay = Color3.fromRGB(100, 10, 10)
+	atmosphere.Glare = 0.4
+	atmosphere.Haze = 0.8
+	atmosphere.Parent = Lighting
+
+	notify("🔥 Hell Mode", "Soul Master activated", 3)
 end
 
-local function clearVisualPath()
-	for _, v in ipairs(pathFolder:GetChildren()) do
-		if v:IsA("BasePart") then
-			v:Destroy()
+local function hideDisplayName()
+	humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+	humanoid.NameOcclusion = Enum.NameOcclusion.NoOcclusion
+	for _, v in ipairs(character:GetDescendants()) do
+		if v:IsA("BillboardGui") and v.Name:lower():match("name") then
+			v.Enabled = false
 		end
 	end
+	player.NameDisplayDistance = 0
 end
+=
+local function scaleAvatar()
+	local hDesc = Instance.new("HumanoidDescription")
+	hDesc.BodyHeightScale = CONFIG.ScaleTarget.Y
+	hDesc.BodyWidthScale = CONFIG.ScaleTarget.X
+	hDesc.BodyDepthScale = CONFIG.ScaleTarget.Z
+	hDesc.HeadScale = CONFIG.ScaleTarget.X * 0.8
 
-local function rebuildVisualPath()
-	clearVisualPath()
-	if not showVisualLine then return end
-	if #state.recordedFrames < 2 then return end
+	local tweenInfo = TweenInfo.new(CONFIG.ScaleDuration, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	local scaleValues = {
+		BodyHeightScale = CONFIG.ScaleTarget.Y,
+		BodyWidthScale = CONFIG.ScaleTarget.X,
+		BodyDepthScale = CONFIG.ScaleTarget.Z,
+		HeadScale = CONFIG.ScaleTarget.X * 0.8,
+	}
 
-	for i = 1, #state.recordedFrames - 1 do
-		local f1 = state.recordedFrames[i]
-		local f2 = state.recordedFrames[i + 1]
-		local p1 = f1.pos
-		local p2 = f2.pos
-
-		local t = i / #state.recordedFrames
-		local c = Color3.new(0.2 + 0.8 * t, 0.5 + 0.5 * (1 - t), 0.8)
-		createPathSegment(p1, p2, c)
+	for prop, target in pairs(scaleValues) do
+		local current = hDesc[prop] or 1
+		local tween = TweenService:Create(hDesc, tweenInfo, {[prop] = target})
+		tween:Play()
 	end
 
-	local startMarker = Instance.new("Part")
-	startMarker.Name = "StartMarker"
-	startMarker.Size = Vector3.new(1, 1, 1)
-	startMarker.Shape = Enum.PartType.Ball
-	startMarker.Anchored = true
-	startMarker.CanCollide = false
-	startMarker.BrickColor = BrickColor.new("Bright green")
-	startMarker.Material = Enum.Material.Neon
-	startMarker.CFrame = CFrame.new(state.recordedFrames[1].pos)
-	startMarker.Parent = pathFolder
+	humanoid:ApplyDescription(hDesc)
+	task.wait(CONFIG.ScaleDuration + 0.1)
 
-	local endMarker = Instance.new("Part")
-	endMarker.Name = "EndMarker"
-	endMarker.Size = Vector3.new(1, 1, 1)
-	endMarker.Shape = Enum.PartType.Ball
-	endMarker.Anchored = true
-	endMarker.CanCollide = false
-	endMarker.BrickColor = BrickColor.new("Bright red")
-	endMarker.Material = Enum.Material.Neon
-	endMarker.CFrame = CFrame.new(state.recordedFrames[#state.recordedFrames].pos)
-	endMarker.Parent = pathFolder
+	local hDesc2 = Instance.new("HumanoidDescription")
+	hDesc2.BodyHeightScale = CONFIG.ScaleTarget.Y
+	hDesc2.BodyWidthScale = CONFIG.ScaleTarget.X
+	hDesc2.BodyDepthScale = CONFIG.ScaleTarget.Z
+	hDesc2.HeadScale = CONFIG.ScaleTarget.X * 0.8
+	humanoid:ApplyDescription(hDesc2)
 
-	if state.lastSafePosition then
-		local safeMarker = Instance.new("Part")
-		safeMarker.Name = "SafeMarker"
-		safeMarker.Size = Vector3.new(0.8, 0.8, 0.8)
-		safeMarker.Shape = Enum.PartType.Ball
-		safeMarker.Anchored = true
-		safeMarker.CanCollide = false
-		safeMarker.BrickColor = BrickColor.new("Bright yellow")
-		safeMarker.Material = Enum.Material.Neon
-		safeMarker.CFrame = CFrame.new(state.lastSafePosition)
-		safeMarker.Parent = pathFolder
-	end
+	notify("⚡ Avatar", "Soul Avatar enlarged!", 2)
 end
 
-local function isFalling()
-	if not character or not rootPart then return false end
-	local pos = rootPart.Position
+local soulRingParts = {}
 
-	local rayParams = RaycastParams.new()
-	rayParams.FilterType = Enum.RaycastFilterType.Exclude
-	rayParams.FilterDescendantsInstances = {character}
+local function createSoulRing(index, color, radius)
+	local ring = Instance.new("Part")
+	ring.Name = "SoulRing_" .. index
+	ring.Size = Vector3.new(radius * 2, 0.2, 0.2)
+	ring.Shape = Enum.PartType.Cylinder
+	ring.Anchored = true
+	ring.CanCollide = false
+	ring.Material = Enum.Material.Neon
+	ring.Color = color
+	ring.Transparency = 0.3
+	ring.BrickColor = BrickColor.new("Really red")
+	ring.Parent = workspace
 
-	local origin = pos + Vector3.new(0, 1, 0)
-	local direction = Vector3.new(0, -5, 0)
-	local result = workspace:Raycast(origin, direction, rayParams)
-	return result == nil
-end
+	local att = Instance.new("Attachment")
+	att.Name = "RingAtt"
+	att.Parent = ring
 
-local function updateSafePoint()
-	if not isFalling() and rootPart then
-		state.lastSafePosition = rootPart.Position
-		state.lastSafeRotation = rootPart.Orientation
-		table.insert(state.safePoints, {
-			pos = rootPart.Position,
-			rot = rootPart.Orientation
-		})
-		if #state.safePoints > 20 then
-			table.remove(state.safePoints, 1)
-		end
-	end
-end
-
-local function rollbackToSafe()
-	if state.lastSafePosition and rootPart then
-		rootPart.CFrame = CFrame.new(state.lastSafePosition) * CFrame.Angles(0, math.rad(rootPart.Orientation.Y), 0)
-		humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
-		statusLabel.Text = "Status: Rollbacked to safe point"
-		rebuildVisualPath()
-	else
-		statusLabel.Text = "Status: No safe point!"
-	end
-end
-
-local function recordFrame()
-	if not rootPart or not humanoid then return end
-
-	local moveDir = humanoid.MoveDirection
-	local isJumping = (humanoid:GetState() == Enum.HumanoidStateType.Jumping or humanoid:GetState() == Enum.HumanoidStateType.Freefall)
-
-	table.insert(state.recordedFrames, {
-		pos = rootPart.Position,
-		rot = rootPart.Orientation,
-		vel = rootPart.AssemblyLinearVelocity or rootPart.Velocity or Vector3.new(),
-		moveDir = moveDir,
-		isJumping = isJumping,
-		time = tick()
+	local particle = Instance.new("ParticleEmitter")
+	particle.Name = "RingParticle"
+	particle.Texture = "rbxassetid://14293532190"
+	particle.Rate = 15
+	particle.Lifetime = NumberRange.new(0.3, 0.6)
+	particle.Speed = NumberRange.new(1, 3)
+	particle.Rotation = NumberRange.new(0, 360)
+	particle.RotSpeed = NumberRange.new(-50, 50)
+	particle.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.5),
+		NumberSequenceKeypoint.new(1, 0)
 	})
-	frameCountLabel.Text = "Frames: " .. #state.recordedFrames
+	particle.Transparency = NumberSequence.new(0.3)
+	particle.Color = ColorSequence.new(color)
+	particle.LightEmission = 1
+	particle.LightInfluence = 0
+	particle.Enabled = true
+	particle.Parent = att
 
-	if showVisualLine and #state.recordedFrames >= 2 then
-		local f1 = state.recordedFrames[#state.recordedFrames - 1]
-		local f2 = state.recordedFrames[#state.recordedFrames]
-		local t = #state.recordedFrames / math.max(#state.recordedFrames, 1)
-		local c = Color3.new(0.2 + 0.8 * t, 0.5 + 0.5 * (1 - t), 0.8)
-		createPathSegment(f1.pos, f2.pos, c)
+	local beam = Instance.new("Beam")
+	beam.Name = "RingBeam"
+	beam.Texture = "rbxassetid://14293532190"
+	beam.TextureSpeed = 5
+	beam.TextureLength = 1
+	beam.Width0 = 0.3
+	beam.Width1 = 0.3
+	beam.Color = ColorSequence.new(color)
+	beam.LightEmission = 1
+	beam.LightInfluence = 0
+	beam.Transparency = NumberSequence.new(0.2)
+	beam.FaceCamera = true
+	beam.Parent = att
+
+	local attEnd = Instance.new("Attachment")
+	attEnd.Name = "RingAttEnd"
+	attEnd.Position = Vector3.new(0, 0, radius * 2)
+	attEnd.Parent = ring
+
+	beam.Attachment0 = att
+	beam.Attachment1 = attEnd
+
+	table.insert(soulRingParts, ring)
+	return ring
+end
+
+local function updateSoulRings()
+	for _, ring in ipairs(soulRingParts) do
+		ring:Destroy()
+	end
+	soulRingParts = {}
+
+	local basePos = rootPart.Position
+	local ringHeightOffset = -1.5
+
+	for i = 1, CONFIG.SoulRingCount do
+		local radius = CONFIG.SoulRingRadius + (i * 0.3)
+		local color = CONFIG.SoulRingColors[(i - 1) % #CONFIG.SoulRingColors + 1]
+		local ring = createSoulRing(i, color, radius)
+
+		local data = {
+			ring = ring,
+			angle = (i / CONFIG.SoulRingCount) * math.pi * 2,
+			radius = radius,
+			heightOffset = ringHeightOffset + (i * 0.6),
+			speed = CONFIG.SoulRingSpeed + (i * 0.1),
+			tiltAngle = math.rad(15 + (i * 5)),
+		}
+
+		ring:SetAttribute("RingData", data)
 	end
 end
 
-print("AldoVz")
+local wingParts = {}
 
-local function startPlayback()
-	if #state.recordedFrames < 2 then
-		statusLabel.Text = "Status: Not enough frames!"
-		return
+local function createWingedAura()
+	local torso = character:FindFirstChild("UpperTorso") or character:FindFirstChild("Torso") or rootPart
+	if not torso then return end
+
+	local wingConfigs = {
+		{side = "Left",  offset = Vector3.new(-2, 0.5, 0), rot = Vector3.new(0, 0, 20)},
+		{side = "Right", offset = Vector3.new(2, 0.5, 0),  rot = Vector3.new(0, 0, -20)},
+	}
+
+	for _, cfg in ipairs(wingConfigs) do
+		local wingPart = Instance.new("Part")
+		wingPart.Name = "WingAura_" .. cfg.side
+		wingPart.Size = Vector3.new(0.5, 3, 4)
+		wingPart.Shape = Enum.PartType.Block
+		wingPart.Anchored = true
+		wingPart.CanCollide = false
+		wingPart.Material = Enum.Material.Neon
+		wingPart.Color = Color3.fromRGB(255, 100, 50)
+		wingPart.Transparency = 0.3
+		wingPart.BrickColor = BrickColor.new("Bright red")
+		wingPart.Parent = workspace
+
+		local att = Instance.new("Attachment")
+		att.Name = "WingAtt"
+		att.Parent = wingPart
+
+		local particle = Instance.new("ParticleEmitter")
+		particle.Name = "WingParticle"
+		particle.Texture = "rbxassetid://14293532190"
+		particle.Rate = 30
+		particle.Lifetime = NumberRange.new(0.5, 1)
+		particle.Speed = NumberRange.new(2, 5)
+		particle.Size = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 1),
+			NumberSequenceKeypoint.new(1, 0)
+		})
+		particle.Transparency = NumberSequence.new(0.2)
+		particle.Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 200, 50)),
+			ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 100, 0)),
+			ColorSequenceKeypoint.new(1, Color3.fromRGB(200, 0, 0))
+		})
+		particle.LightEmission = 1
+		particle.LightInfluence = 0
+		particle.SpreadAngle = Vector2.new(30, 30)
+		particle.Drag = 2
+		particle.Parent = att
+
+		local light = Instance.new("PointLight")
+		light.Name = "WingLight"
+		light.Color = Color3.fromRGB(255, 100, 0)
+		light.Range = 12
+		light.Brightness = 3
+		light.Parent = wingPart
+
+		table.insert(wingParts, {
+			part = wingPart,
+			side = cfg.side,
+			offset = cfg.offset,
+			rot = cfg.rot,
+		})
+	end
+end
+
+local swordParts = {}
+
+local function createEnergySword()
+	local torso = character:FindFirstChild("UpperTorso") or character:FindFirstChild("Torso") or rootPart
+	if not torso then return end
+
+	local rightHand = character:FindFirstChild("RightHand") or character:FindFirstChild("Right Arm")
+
+	local blade = Instance.new("Part")
+	blade.Name = "EnergySword_Blade"
+	blade.Size = Vector3.new(0.5, 6, 0.5)
+	blade.Anchored = true
+	blade.CanCollide = false
+	blade.Material = Enum.Material.Neon
+	blade.Color = Color3.fromRGB(0, 200, 255)
+	blade.Transparency = 0.2
+	blade.BrickColor = BrickColor.new("Cyan")
+	blade.Parent = workspace
+
+	local att = Instance.new("Attachment")
+	att.Name = "BladeAtt"
+	att.Parent = blade
+
+	local particle = Instance.new("ParticleEmitter")
+	particle.Name = "BladeParticle"
+	particle.Texture = "rbxassetid://14293532190"
+	particle.Rate = 40
+	particle.Lifetime = NumberRange.new(0.3, 0.8)
+	particle.Speed = NumberRange.new(1, 3)
+	particle.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.8),
+		NumberSequenceKeypoint.new(1, 0)
+	})
+	particle.Transparency = NumberSequence.new(0.1)
+	particle.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 200, 255)),
+		ColorSequenceKeypoint.new(0.5, Color3.fromRGB(100, 255, 255)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(200, 255, 255))
+	})
+	particle.LightEmission = 2
+	particle.LightInfluence = 0
+	particle.SpreadAngle = Vector2.new(10, 10)
+	particle.Parent = att
+
+	local light = Instance.new("PointLight")
+	light.Name = "SwordLight"
+	light.Color = Color3.fromRGB(0, 200, 255)
+	light.Range = 15
+	light.Brightness = 5
+	light.Parent = blade
+
+	local guard = Instance.new("Part")
+	guard.Name = "EnergySword_Guard"
+	guard.Size = Vector3.new(1.5, 0.3, 0.3)
+	guard.Anchored = true
+	guard.CanCollide = false
+	guard.Material = Enum.Material.Neon
+	guard.Color = Color3.fromRGB(255, 200, 50)
+	guard.BrickColor = BrickColor.new("Bright yellow")
+	guard.Parent = workspace
+
+	table.insert(swordParts, {part = blade, type = "blade", offset = Vector3.new(0, 3, 0)})
+	table.insert(swordParts, {part = guard, type = "guard", offset = Vector3.new(0, 0, 0)})
+end
+
+local meteorParts = {}
+
+local function createMeteor()
+	local spawnPos = rootPart.Position + Vector3.new(
+		math.random(-CONFIG.MeteorSpawnRadius, CONFIG.MeteorSpawnRadius),
+		CONFIG.MeteorHeight + math.random(0, 30),
+		math.random(-CONFIG.MeteorSpawnRadius, CONFIG.MeteorSpawnRadius)
+	)
+
+	local meteor = Instance.new("Part")
+	meteor.Name = "Meteor"
+	meteor.Size = Vector3.new(2 + math.random() * 3, 2 + math.random() * 3, 2 + math.random() * 3)
+	meteor.Shape = Enum.PartType.Ball
+	meteor.Anchored = true
+	meteor.CanCollide = false
+	meteor.Material = Enum.Material.Neon
+	meteor.Color = Color3.fromRGB(255, 100 + math.random(50), 0)
+	meteor.Transparency = 0.1
+	meteor.BrickColor = BrickColor.new("Bright red")
+	meteor.CFrame = CFrame.new(spawnPos)
+	meteor.Parent = workspace
+
+	local att = Instance.new("Attachment")
+	att.Name = "MeteorAtt"
+	att.Parent = meteor
+
+	local fire = Instance.new("ParticleEmitter")
+	fire.Name = "MeteorFire"
+	fire.Texture = "rbxassetid://14293532190"
+	fire.Rate = 50
+	fire.Lifetime = NumberRange.new(0.5, 1.5)
+	fire.Speed = NumberRange.new(3, 8)
+	fire.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 2 + math.random() * 3),
+		NumberSequenceKeypoint.new(1, 0)
+	})
+	fire.Transparency = NumberSequence.new(0)
+	fire.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 200, 50)),
+		ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 100, 0)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(200, 0, 0))
+	})
+	fire.LightEmission = 2
+	fire.LightInfluence = 0
+	fire.SpreadAngle = Vector2.new(20, 20)
+	fire.Acceleration = Vector3.new(0, -20, 0)
+	fire.Drag = 1
+	fire.Parent = att
+
+	local trailAtt = Instance.new("Attachment")
+	trailAtt.Name = "TrailAtt"
+	trailAtt.Parent = meteor
+
+	local trail = Instance.new("Trail")
+	trail.Name = "MeteorTrail"
+	trail.Texture = "rbxassetid://14293532190"
+	trail.TextureLength = 3
+	trail.TextureMode = Enum.TextureMode.Wrap
+	trail.Width0 = 1.5
+	trail.Width1 = 0.5
+	trail.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 150, 0)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(200, 50, 0))
+	})
+	trail.LightEmission = 2
+	trail.Lifetime = 1
+	trail.Parent = trailAtt
+	trail.Attachment0 = trailAtt
+	trail.Attachment1 = att
+
+	local light = Instance.new("PointLight")
+	light.Name = "MeteorLight"
+	light.Color = Color3.fromRGB(255, 100, 0)
+	light.Range = 20
+	light.Brightness = 5
+	light.Parent = meteor
+
+	local data = {
+		part = meteor,
+		velocity = Vector3.new(
+			math.random(-20, 20),
+			-CONFIG.MeteorFallSpeed - math.random(0, 30),
+			math.random(-20, 20)
+		),
+		rotationSpeed = Vector3.new(
+			math.rad(math.random(-100, 100)),
+			math.rad(math.random(-100, 100)),
+			math.rad(math.random(-100, 100))
+		),
+	}
+
+	table.insert(meteorParts, data)
+	Debris:AddItem(meteor, 15)
+	return data
+end
+
+local auraParticles = {}
+
+local function createBodyAura()
+	local att = Instance.new("Attachment")
+	att.Name = "BodyAuraAtt"
+	att.Position = Vector3.new(0, 0, 0)
+	att.Parent = rootPart
+
+	local particle = Instance.new("ParticleEmitter")
+	particle.Name = "BodyAuraParticle"
+	particle.Texture = "rbxassetid://14293532190"
+	particle.Rate = 60
+	particle.Lifetime = NumberRange.new(1, 2.5)
+	particle.Speed = NumberRange.new(2, 6)
+	particle.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 1.5),
+		NumberSequenceKeypoint.new(1, 0)
+	})
+	particle.Transparency = NumberSequence.new(0.2)
+	particle.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 100, 50)),
+		ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 200, 100)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(200, 50, 0))
+	})
+	particle.LightEmission = 2
+	particle.LightInfluence = 0
+	particle.SpreadAngle = Vector2.new(60, 60)
+	particle.VelocityInheritance = 0.2
+	particle.Acceleration = Vector3.new(0, 5, 0)
+	particle.Parent = att
+
+	table.insert(auraParticles, particle)
+
+	local particle2 = particle:Clone()
+	particle2.Rate = 30
+	particle2.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 2.5),
+		NumberSequenceKeypoint.new(1, 0.5)
+	})
+	particle2.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(100, 150, 255)),
+		ColorSequenceKeypoint.new(0.5, Color3.fromRGB(200, 100, 255)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 50, 100))
+	})
+	particle2.Transparency = NumberSequence.new(0.4)
+	particle2.Parent = att
+
+	table.insert(auraParticles, particle2)
+end
+
+local soundRef = nil
+
+local function setupAudio()
+	local oldSound = workspace:FindFirstChild("SoulMasterAudio")
+	if oldSound then oldSound:Destroy() end
+
+	local sound = Instance.new("Sound")
+	sound.Name = "SoulMasterAudio"
+	sound.SoundId = CONFIG.AudioId
+	sound.Volume = CONFIG.AudioVolume
+	sound.Looped = CONFIG.AudioLooped
+	sound.PlayOnRemove = false
+	sound.EmitterSize = 0
+	sound.Parent = workspace
+	soundRef = sound
+
+	local loaded
+	loaded = sound.Loaded:Connect(function()
+		sound:Play()
+		notify("🎵 Audio", "Soul Master theme playing", 2)
+		loaded:Disconnect()
+	end)
+
+	task.wait(1)
+	if not sound.Playing then
+		sound:Play()
 	end
 
-	state.isPlaying = true
-	state.playbackIndex = 1
-	state.playbackStartTime = tick()
+	return sound
+end
 
-	local firstFrame = state.recordedFrames[1]
-	local recordStartTime = firstFrame.time
-	local totalDuration = state.recordedFrames[#state.recordedFrames].time - recordStartTime
+local function startUpdateLoop()
+	RunService.Heartbeat:Connect(function(dt)
+		if not rootPart then return end
+		local charPos = rootPart.Position
 
-	if rootPart then
-		rootPart.CFrame = CFrame.new(firstFrame.pos) * CFrame.Angles(0, math.rad(firstFrame.rot.Y), 0)
-	end
-
-	statusLabel.Text = "Status: Playing..."
-	btnPlay.Text = "⏸ PLAYING"
-	btnPlay.BackgroundColor3 = Color3.fromRGB(200, 150, 40)
-	rebuildVisualPath()
-
-	local playbackConn
-	playbackConn = RunService.Heartbeat:Connect(function(dt)
-		if not state.isPlaying or not rootPart or not humanoid then
-			playbackConn:Disconnect()
-			return
-		end
-
-		local elapsed = tick() - state.playbackStartTime
-
-		if elapsed >= totalDuration then
-			state.isPlaying = false
-			btnPlay.Text = "▶ PLAY"
-			btnPlay.BackgroundColor3 = Color3.fromRGB(40, 120, 40)
-			statusLabel.Text = "Status: Playback complete"
-			humanoid:Move(Vector3.new(0, 0, 0))
-			playbackConn:Disconnect()
-
-			local lastFrame = state.recordedFrames[#state.recordedFrames]
-			rootPart.CFrame = CFrame.new(lastFrame.pos) * CFrame.Angles(0, math.rad(lastFrame.rot.Y), 0)
-			rebuildVisualPath()
-			return
-		end
-
-		local targetIdx = state.playbackIndex
-		while targetIdx < #state.recordedFrames and (state.recordedFrames[targetIdx + 1].time - recordStartTime) <= elapsed do
-			targetIdx = targetIdx + 1
-		end
-		state.playbackIndex = targetIdx
-
-		local f1 = state.recordedFrames[targetIdx]
-		local f2 = state.recordedFrames[math.min(targetIdx + 1, #state.recordedFrames)]
-
-		local f1Time = f1.time - recordStartTime
-		local f2Time = f2.time - recordStartTime
-
-		local segDuration = f2Time - f1Time
-		local segProgress = 0
-
-		if segDuration > 0 then
-			segProgress = math.clamp((elapsed - f1Time) / segDuration, 0, 1)
-		end
-
-		local lerpPos = f1.pos:Lerp(f2.pos, segProgress)
-		local lerpRotY = f1.rot.Y + (f2.rot.Y - f1.rot.Y) * segProgress
-
-		rootPart.CFrame = CFrame.new(lerpPos) * CFrame.Angles(0, math.rad(lerpRotY), 0)
-
-		if f1.moveDir and f1.moveDir.Magnitude > 0 then
-			humanoid:Move(f1.moveDir, false)
-		else
-			local deltaPos = (f2.pos - f1.pos)
-			if deltaPos.Magnitude > 0.05 then
-				humanoid:Move(deltaPos.Unit, false)
-			else
-				humanoid:Move(Vector3.new(0, 0, 0), false)
+		for _, ringPart in ipairs(soulRingParts) do
+			local data = ringPart:GetAttribute("RingData")
+			if data then
+				data.angle = data.angle + data.speed * dt
+				local x = math.cos(data.angle) * data.radius
+				local z = math.sin(data.angle) * data.radius
+				local y = data.heightOffset + math.sin(data.angle * 2) * 0.5
+				local worldPos = charPos + Vector3.new(x, y, z)
+				local lookDir = (charPos - worldPos).Unit
+				if lookDir.Magnitude > 0.01 then
+					ringPart.CFrame = CFrame.lookAt(worldPos, worldPos + lookDir) * CFrame.Angles(math.rad(90), 0, 0)
+				end
 			end
 		end
 
-		if f1.isJumping then
-			humanoid.Jump = true
+		for _, w in ipairs(wingParts) do
+			local torso = character:FindFirstChild("UpperTorso") or character:FindFirstChild("Torso") or rootPart
+			if torso then
+				local torsoCF = torso.CFrame
+				local pos = torsoCF.Position + torsoCF:VectorToWorldSpace(w.offset)
+				local rotCF = torsoCF * CFrame.Angles(math.rad(w.rot.X), math.rad(w.rot.Y), math.rad(w.rot.Z))
+				w.part.CFrame = CFrame.new(pos) * rotCF.Rotation
+			end
 		end
 
-		if isFalling() then
-			statusLabel.Text = "Status: Fall detected, rolling back..."
-			state.isPlaying = false
-			btnPlay.Text = "▶ PLAY"
-			btnPlay.BackgroundColor3 = Color3.fromRGB(40, 120, 40)
-			humanoid:Move(Vector3.new(0, 0, 0))
-			rollbackToSafe()
-			playbackConn:Disconnect()
-			return
+		-- Sword
+		local rightHand = character:FindFirstChild("RightHand") or character:FindFirstChild("Right Arm")
+		if rightHand then
+			local handCF = rightHand.CFrame
+			for _, s in ipairs(swordParts) do
+				local pos = handCF.Position + handCF:VectorToWorldSpace(s.offset)
+				local swordCF = handCF * CFrame.Angles(math.rad(-90), 0, 0)
+				s.part.CFrame = CFrame.new(pos) * swordCF.Rotation
+			end
+		elseif rootPart then
+			for _, s in ipairs(swordParts) do
+				local pos = rootPart.Position + Vector3.new(2, 1, 0) + s.offset
+				s.part.CFrame = CFrame.new(pos) * CFrame.Angles(math.rad(-90), 0, 0)
+			end
 		end
 
-		updateSafePoint()
+		-- Meteors
+		for i = #meteorParts, 1, -1 do
+			local m = meteorParts[i]
+			if m.part and m.part.Parent then
+				m.part.CFrame = m.part.CFrame * CFrame.Angles(m.rotationSpeed.X * dt, m.rotationSpeed.Y * dt, m.rotationSpeed.Z * dt)
+				m.part.Position = m.part.Position + m.velocity * dt
+				if m.part.Position.Y < charPos.Y - 20 then
+					m.part:Destroy()
+					table.remove(meteorParts, i)
+				end
+			else
+				table.remove(meteorParts, i)
+			end
+		end
 	end)
 end
 
-local function stopPlayback()
-	state.isPlaying = false
-	btnPlay.Text = "▶ PLAY"
-	btnPlay.BackgroundColor3 = Color3.fromRGB(40, 120, 40)
-	statusLabel.Text = "Status: Stopped"
-	if humanoid then
-		humanoid:Move(Vector3.new(0, 0, 0))
-	end
-end
-
-local function stopRecording()
-	state.isRecording = false
-	btnRecord.Text = "● RECORD"
-	btnRecord.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
-	statusLabel.Text = "Status: Recorded " .. #state.recordedFrames .. " frames"
-end
-
-btnRecord.MouseButton1Click:Connect(function()
-	if state.isPlaying then return end
-
-	state.isRecording = not state.isRecording
-
-	if state.isRecording then
-		state.recordedFrames = {}
-		clearVisualPath()
-
-		btnRecord.Text = "● RECORDING..."
-		btnRecord.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
-		statusLabel.Text = "Status: Recording..."
-		frameCountLabel.Text = "Frames: 0"
-
-		local recordConn
-		recordConn = RunService.Heartbeat:Connect(function()
-			if not state.isRecording or not rootPart then
-				recordConn:Disconnect()
-				return
-			end
-			recordFrame()
-			updateSafePoint()
-		end)
-	else
-		stopRecording()
-		rebuildVisualPath()
-	end
-end)
-
-btnPlay.MouseButton1Click:Connect(function()
-	if state.isRecording then return end
-	if state.isPlaying then
-		stopPlayback()
-		return
-	end
-	startPlayback()
-end)
-
-btnStop.MouseButton1Click:Connect(function()
-	if state.isRecording then
-		stopRecording()
-	end
-	if state.isPlaying then
-		stopPlayback()
-	end
-	statusLabel.Text = "Status: Idle"
-end)
-
-btnRollback.MouseButton1Click:Connect(function()
-	if state.isPlaying then
-		stopPlayback()
-	end
-	rollbackToSafe()
-end)
-
-btnClear.MouseButton1Click:Connect(function()
-	state.recordedFrames = {}
-	state.safePoints = {}
-	state.lastSafePosition = nil
-	state.lastSafeRotation = nil
-	clearVisualPath()
-	frameCountLabel.Text = "Frames: 0"
-	statusLabel.Text = "Status: Cleared"
-	if state.isPlaying then stopPlayback() end
-	if state.isRecording then stopRecording() end
-end)
-
-btnAutoWalk.MouseButton1Click:Connect(function()
-	state.isAutoWalk = not state.isAutoWalk
-	if state.isAutoWalk then
-		btnAutoWalk.Text = "◆ AUTO WALK ON"
-		btnAutoWalk.BackgroundColor3 = Color3.fromRGB(40, 120, 40)
-		humanoid.WalkSpeed = state.autoWalkSpeed
-		humanoid.AutoRotate = true
-
-		local lookCF = rootPart.CFrame * CFrame.new(0, 0, -10)
-		humanoid:MoveTo(lookCF.Position)
-	else
-		btnAutoWalk.Text = "◇ AUTO WALK OFF"
-		btnAutoWalk.BackgroundColor3 = Color3.fromRGB(60, 60, 80)
-		humanoid:MoveTo(rootPart.Position) 
-	end
-end)
-
-btnToggleLine.MouseButton1Click:Connect(function()
-	showVisualLine = not showVisualLine
-	if showVisualLine then
-		btnToggleLine.Text = "◉ VISUAL LINE ON"
-		btnToggleLine.BackgroundColor3 = Color3.fromRGB(60, 80, 60)
-		rebuildVisualPath()
-	else
-		btnToggleLine.Text = "○ VISUAL LINE OFF"
-		btnToggleLine.BackgroundColor3 = Color3.fromRGB(80, 60, 60)
-		clearVisualPath()
-	end
-end)
-
-speedSlider.FocusLost:Connect(function()
-	local val = tonumber(speedSlider.Text) or 16
-	val = math.clamp(val, 1, 200)
-	state.autoWalkSpeed = val
-	speedLabel.Text = "Speed: " .. val
-	humanoid.WalkSpeed = val
-end)
-
-jumpSlider.FocusLost:Connect(function()
-	local val = tonumber(jumpSlider.Text) or 50
-	val = math.clamp(val, 10, 200)
-	state.jumpPower = val
-	jumpLabel.Text = "JumpPower: " .. val
-	humanoid.JumpPower = val
-end)
-
-fallSlider.FocusLost:Connect(function()
-	local val = tonumber(fallSlider.Text) or 1
-	val = math.clamp(val, 0.5, 10)
-	state.fallMultiplier = val
-	fallLabel.Text = "FallMult: " .. val
-end)
-
-rotSlider.FocusLost:Connect(function()
-	local val = tonumber(rotSlider.Text) or 5
-	val = math.clamp(val, 0.5, 20)
-	state.rotateSpeed = val
-	rotLabel.Text = "RotSpeed: " .. val
-end)
-
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-	if gameProcessed then return end
-
-	if input.KeyCode == Enum.KeyCode.F5 then
-		btnRecord.MouseButton1Click:Fire()
-	elseif input.KeyCode == Enum.KeyCode.F6 then
-		btnPlay.MouseButton1Click:Fire()
-	elseif input.KeyCode == Enum.KeyCode.F7 then
-		btnRollback.MouseButton1Click:Fire()
-	elseif input.KeyCode == Enum.KeyCode.F8 then
-		btnAutoWalk.MouseButton1Click:Fire()
-	elseif input.KeyCode == Enum.KeyCode.F9 then
-		btnStop.MouseButton1Click:Fire()
-	elseif input.KeyCode == Enum.KeyCode.F10 then
-		btnToggleLine.MouseButton1Click:Fire()
-	end
-end)
-
-local fallCheckConn
-fallCheckConn = RunService.Heartbeat:Connect(function()
-	if not rootPart then return end
-
-	if not isFalling() then
-		updateSafePoint()
+local function startMeteorRain()
+	for i = 1, CONFIG.MeteorCount do
+		task.wait(0.1)
+		createMeteor()
 	end
 
-	if isFalling() and not state.isPlaying and not state.isRecording then
-		local velY = rootPart.AssemblyLinearVelocity.Y
-		if velY < -30 then
-			statusLabel.Text = "Status: Falling! Press F7 to rollback"
+	task.spawn(function()
+		while character and character.Parent and _G._soulMasterActive do
+			task.wait(0.3 + math.random() * 0.5)
+			createMeteor()
 		end
+	end)
+end
+
+local function cleanup()
+	local sky = Lighting:FindFirstChild("HellSky")
+	if sky then sky:Destroy() end
+
+	local atmo = Lighting:FindFirstChild("HellAtmosphere")
+	if atmo then atmo:Destroy() end
+
+	if _G._originalLighting then
+		for prop, val in pairs(_G._originalLighting) do
+			pcall(function() Lighting[prop] = val end)
+		end
+	end
+
+	for _, ring in ipairs(soulRingParts) do
+		ring:Destroy()
+	end
+	soulRingParts = {}
+
+	for _, w in ipairs(wingParts) do
+		w.part:Destroy()
+	end
+	wingParts = {}
+
+	for _, s in ipairs(swordParts) do
+		s.part:Destroy()
+	end
+	swordParts = {}
+
+	for _, m in ipairs(meteorParts) do
+		if m.part and m.part.Parent then
+			m.part:Destroy()
+		end
+	end
+	meteorParts = {}
+
+	for _, p in ipairs(auraParticles) do
+		if p and p.Parent then p:Destroy() end
+	end
+	auraParticles = {}
+
+	local sound = workspace:FindFirstChild("SoulMasterAudio")
+	if sound then sound:Destroy() end
+	soundRef = nil
+
+	humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer
+
+	notify("🌀 Deactivated", "Soul Master mode off", 2)
+end
+
+local function activateSoulMaster()
+	if _G._soulMasterActive then return end
+	_G._soulMasterActive = true
+
+	mainBtn.Text = "🔥 ACTIVE"
+	mainBtn.BackgroundColor3 = Color3.fromRGB(40, 180, 40)
+	statusLabel.Text = "🔥 Soul Master ACTIVE"
+
+	notify("🔥 SOUL MASTER", "Activating...", 2)
+	setHellSky()
+	hideDisplayName()
+	scaleAvatar()
+	createBodyAura()
+	updateSoulRings()
+	createWingedAura()
+	createEnergySword()
+	startMeteorRain()
+	setupAudio()
+	startUpdateLoop()
+	notify("✅ SOUL MASTER", "Fully activated!", 3)
+end
+
+local function deactivateSoulMaster()
+	if not _G._soulMasterActive then return end
+	_G._soulMasterActive = false
+
+	mainBtn.Text = "🔥 ACTIVATE"
+	mainBtn.BackgroundColor3 = Color3.fromRGB(180, 30, 30)
+	statusLabel.Text = "🌀 Press to activate"
+
+	cleanup()
+end
+
+mainBtn.MouseButton1Click:Connect(function()
+	if _G._soulMasterActive then
+		deactivateSoulMaster()
+	else
+		activateSoulMaster()
+	end
+end)
+
+-- Volume buttons
+volUpBtn.MouseButton1Click:Connect(function()
+	if soundRef then
+		soundRef.Volume = math.min(soundRef.Volume + 0.1, 2)
+		volLabel.Text = "VOL " .. string.format("%.1f", soundRef.Volume)
+	end
+end)
+
+volDownBtn.MouseButton1Click:Connect(function()
+	if soundRef then
+		soundRef.Volume = math.max(soundRef.Volume - 0.1, 0)
+		volLabel.Text = "VOL " .. string.format("%.1f", soundRef.Volume)
+	end
+end)
+
+UserInputService.InputBegan:Connect(function(input, gpe)
+	if gpe then return end
+	if input.KeyCode == Enum.KeyCode.F1 then
+		mainBtn.MouseButton1Click:Fire()
+	elseif input.KeyCode == Enum.KeyCode.Equals then
+		volUpBtn.MouseButton1Click:Fire()
+	elseif input.KeyCode == Enum.KeyCode.Minus then
+		volDownBtn.MouseButton1Click:Fire()
 	end
 end)
 
@@ -585,13 +843,34 @@ player.CharacterAdded:Connect(function(newChar)
 	humanoid = character:WaitForChild("Humanoid")
 	rootPart = character:WaitForChild("HumanoidRootPart")
 
-	humanoid.WalkSpeed = state.autoWalkSpeed
-	humanoid.JumpPower = state.jumpPower
+	if _G._soulMasterActive then
+		task.wait(0.5)
+		hideDisplayName()
+		local hDesc = Instance.new("HumanoidDescription")
+		hDesc.BodyHeightScale = CONFIG.ScaleTarget.Y
+		hDesc.BodyWidthScale = CONFIG.ScaleTarget.X
+		hDesc.BodyDepthScale = CONFIG.ScaleTarget.Z
+		hDesc.HeadScale = CONFIG.ScaleTarget.X * 0.8
+		humanoid:ApplyDescription(hDesc)
 
-	statusLabel.Text = "Status: Character respawned"
+		for _, ring in ipairs(soulRingParts) do ring:Destroy() end
+		soulRingParts = {}
+		updateSoulRings()
+
+		for _, w in ipairs(wingParts) do w.part:Destroy() end
+		wingParts = {}
+		createWingedAura()
+
+		for _, s in ipairs(swordParts) do s.part:Destroy() end
+		swordParts = {}
+		createEnergySword()
+
+		notify("🔄 Respawned", "Soul Master re-applied", 2)
+	end
 end)
 
-humanoid.WalkSpeed = state.autoWalkSpeed
-humanoid.JumpPower = state.jumpPower
-statusLabel.Text = "Status: Ready - F5 Record | F6 Play | F7 Rollback | F8 AutoWalk"
-frameCountLabel.Text = "Frames: 0"
+-- ============================================================
+-- INIT
+-- ============================================================
+notify("🌀 Soul Master Loaded", "Tap 🔥 button to activate", 5)
+print("AldoVz")
