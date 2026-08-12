@@ -272,6 +272,41 @@ local centerCorner = Instance.new("UICorner")
 centerCorner.CornerRadius = UDim.new(1,0)
 centerCorner.Parent = btnWLock
 
+-- === FITUR SAKLAR MODE DELAY ===
+local isDelayMode = false
+
+local btnToggleDelay = Instance.new("TextButton")
+btnToggleDelay.Name = "ToggleDelay"
+btnToggleDelay.Position = UDim2.new(0, 0, -0.2, 0) 
+btnToggleDelay.Size = UDim2.new(1, 0, 0.15, 0)
+btnToggleDelay.Text = "MODE: KELINCAHAN"
+btnToggleDelay.BackgroundColor3 = Color3.fromRGB(70, 200, 100)
+btnToggleDelay.BackgroundTransparency = 0.15
+btnToggleDelay.TextColor3 = Color3.fromRGB(255, 255, 255)
+btnToggleDelay.Font = Enum.Font.GothamBold
+btnToggleDelay.TextSize = 16
+btnToggleDelay.AutoButtonColor = false
+btnToggleDelay.BorderSizePixel = 0
+btnToggleDelay.ZIndex = 12
+btnToggleDelay.Parent = mainFrame
+
+local toggleCorner = Instance.new("UICorner")
+toggleCorner.CornerRadius = UDim.new(0, 8)
+toggleCorner.Parent = btnToggleDelay
+
+connect(btnToggleDelay.Activated, function()
+	if destroyed then return end
+	isDelayMode = not isDelayMode
+	if isDelayMode then
+		btnToggleDelay.Text = "MODE: DELAY (JEJAK)"
+		btnToggleDelay.BackgroundColor3 = Color3.fromRGB(220, 120, 40)
+	else
+		btnToggleDelay.Text = "MODE: KELINCAHAN"
+		btnToggleDelay.BackgroundColor3 = Color3.fromRGB(70, 200, 100)
+	end
+end)
+-- ===============================
+
 local touchZone = Instance.new("Frame")
 touchZone.Name = "TouchZone"
 touchZone.Size = UDim2.new(1, 0, 1, 0)
@@ -314,7 +349,7 @@ local function updateMovementFromPosition(pos)
 		moveState.Right = true 
 	end
 
-	-- Update warna SEMUA tombol secara instan tanpa delay/jejak
+	-- Update warna SEMUA tombol secara instan
 	setButtonVisual(btnUp, moveState.Forward)
 	setButtonVisual(btnDown, moveState.Backward)
 	setButtonVisual(btnLeft, moveState.Left)
@@ -356,16 +391,26 @@ local function stopTouch(input)
 		end
 
 		activeTouchId = nil
-		moveState.Forward = false
-		moveState.Backward = false
-		moveState.Left = false
-		moveState.Right = false
 
-		-- Matikan semua warna tombol seketika saat jari diangkat
-		setButtonVisual(btnUp, false)
-		setButtonVisual(btnDown, false)
-		setButtonVisual(btnLeft, false)
-		setButtonVisual(btnRight, false)
+		local function turnOffMovement()
+			if activeTouchId == nil then
+				moveState.Forward = false
+				moveState.Backward = false
+				moveState.Left = false
+				moveState.Right = false
+
+				setButtonVisual(btnUp, false)
+				setButtonVisual(btnDown, false)
+				setButtonVisual(btnLeft, false)
+				setButtonVisual(btnRight, false)
+			end
+		end
+
+		if isDelayMode then
+			task.delay(0.25, turnOffMovement)
+		else
+			turnOffMovement()
+		end
 	end
 end
 
