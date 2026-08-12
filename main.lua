@@ -1,4 +1,4 @@
-local Players = game:GetService("Players")
+Local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local HttpService = game:GetService("HttpService")
@@ -217,7 +217,6 @@ mainFrame.Size = UDim2.fromOffset(300, 300)
 mainFrame.Position = UDim2.new(0, 18, 1, -330)
 mainFrame.BackgroundTransparency = 1
 mainFrame.BorderSizePixel = 0
-mainFrame.ZIndex = 50
 mainFrame.Parent = screenGui
 
 local function createButton(name, position, size, text, zIndex, bgColor)
@@ -235,7 +234,7 @@ local function createButton(name, position, size, text, zIndex, bgColor)
 	button.Active = true
 	button.Selectable = true
 	button.BorderSizePixel = 0
-	button.ZIndex = zIndex or 60
+	button.ZIndex = zIndex or 10
 	button.Parent = mainFrame
 
 	buttonDefaults[button] = button.BackgroundColor3
@@ -247,10 +246,10 @@ local function createButton(name, position, size, text, zIndex, bgColor)
 	return button
 end
 
-local btnUp = createButton("Up", UDim2.new(.33,0,0,0), UDim2.new(.34,0,.34,0), "▲", 60, MAIN_BUTTON_COLOR)
-local btnDown = createButton("Down", UDim2.new(.33,0,.66,0), UDim2.new(.34,0,.34,0), "▼", 60, MAIN_BUTTON_COLOR)
-local btnLeft = createButton("Left", UDim2.new(0,0,.33,0), UDim2.new(.34,0,.34,0), "◀", 60, MAIN_BUTTON_COLOR)
-local btnRight = createButton("Right", UDim2.new(.66,0,.33,0), UDim2.new(.34,0,.34,0), "▶", 60, MAIN_BUTTON_COLOR)
+local btnUp = createButton("Up", UDim2.new(.33,0,0,0), UDim2.new(.34,0,.34,0), "▲", 10, MAIN_BUTTON_COLOR)
+local btnDown = createButton("Down", UDim2.new(.33,0,.66,0), UDim2.new(.34,0,.34,0), "▼", 10, MAIN_BUTTON_COLOR)
+local btnLeft = createButton("Left", UDim2.new(0,0,.33,0), UDim2.new(.34,0,.34,0), "◀", 10, MAIN_BUTTON_COLOR)
+local btnRight = createButton("Right", UDim2.new(.66,0,.33,0), UDim2.new(.34,0,.34,0), "▶", 10, MAIN_BUTTON_COLOR)
 
 btnWLock = Instance.new("TextButton")
 btnWLock.Name = "WLock"
@@ -266,13 +265,14 @@ btnWLock.AutoButtonColor = false
 btnWLock.Active = true
 btnWLock.Selectable = true
 btnWLock.BorderSizePixel = 0
-btnWLock.ZIndex = 65
+btnWLock.ZIndex = 12
 btnWLock.Parent = mainFrame
 
 local centerCorner = Instance.new("UICorner")
 centerCorner.CornerRadius = UDim.new(1,0)
 centerCorner.Parent = btnWLock
 
+-- === SAKLAR MODE DELAY ===
 local isDelayMode = false
 
 local btnToggleDelay = Instance.new("TextButton")
@@ -287,7 +287,7 @@ btnToggleDelay.Font = Enum.Font.GothamBold
 btnToggleDelay.TextSize = 16
 btnToggleDelay.AutoButtonColor = false
 btnToggleDelay.BorderSizePixel = 0
-btnToggleDelay.ZIndex = 70
+btnToggleDelay.ZIndex = 12
 btnToggleDelay.Parent = mainFrame
 
 local toggleCorner = Instance.new("UICorner")
@@ -305,41 +305,37 @@ connect(btnToggleDelay.Activated, function()
 		btnToggleDelay.BackgroundColor3 = Color3.fromRGB(70, 200, 100)
 	end
 end)
+-- ===============================
 
--- Perbaikan Total: Menggunakan event sentuh langsung yang stabil untuk Mobile
-local function setupDirectTouch(button, stateKey)
-	connect(button.MouseButton1Down, function()
+-- Sistem Tombol Independen (Anti Bentrok / Anti Nyala Bersamaan jika tidak ditekan)
+local activeTouches = {}
+
+local function setupButtonEvents(button, stateKey)
+	connect(button.InputBegan, function(input)
 		if destroyed then return end
-		moveState[stateKey] = true
-		setButtonVisual(button, true)
+		if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+			activeTouches[input] = stateKey
+			moveState[stateKey] = true
+			setButtonVisual(button, true)
+		end
 	end)
 
-	connect(button.MouseButton1Up, function()
-		if destroyed then return end
-		moveState[stateKey] = false
-		setButtonVisual(button, false)
-	end)
-
-	connect(button.TouchStarted, function()
-		if destroyed then return end
-		moveState[stateKey] = true
-		setButtonVisual(button, true)
-	end)
-
-	local function releaseTouch()
-		if destroyed then return end
-		moveState[stateKey] = false
-		setButtonVisual(button, false)
+	local function release(input)
+		if activeTouches[input] == stateKey then
+			activeTouches[input] = nil
+			moveState[stateKey] = false
+			setButtonVisual(button, false)
+		end
 	end
 
-	connect(button.TouchEnded, releaseTouch)
-	connect(button.TouchCancel, releaseTouch)
+	connect(button.InputEnded, release)
+	connect(button.TouchCancel, release)
 end
 
-setupDirectTouch(btnUp, "Forward")
-setupDirectTouch(btnDown, "Backward")
-setupDirectTouch(btnLeft, "Left")
-setupDirectTouch(btnRight, "Right")
+setupButtonEvents(btnUp, "Forward")
+setupButtonEvents(btnDown, "Backward")
+setupButtonEvents(btnLeft, "Left")
+setupButtonEvents(btnRight, "Right")
 
 connect(btnWLock.Activated, function()
 	if destroyed then return end
