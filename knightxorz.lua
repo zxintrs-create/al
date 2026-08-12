@@ -1,542 +1,799 @@
 local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
+local HttpService = game:GetService("HttpService")
+local Selection = game:GetService("Selection")
+local InsertService = game:GetService("InsertService")
+local MarketplaceService = game:GetService("MarketplaceService")
+local SoundService = game:GetService("SoundService")
+local RunService = game:GetService("RunService")
 
 local player = Players.LocalPlayer
-local character = player.Character or player.CharacterAdded:Wait()
-local humanoid = character:WaitForChild("Humanoid")
-local rootPart = character:WaitForChild("HumanoidRootPart")
+local playerGui = player:WaitForChild("PlayerGui")
 
-local state = {
-	isRecording = false,
-	isPlaying = false,
-	isAutoWalk = false,
-	autoWalkSpeed = 16,
-	recordedFrames = {},
-	safePoints = {},
-	playbackIndex = 1,
-	playbackStartTime = 0,
-	lastSafePosition = nil,
-	lastSafeRotation = nil,
-	speedMultiplier = 1,
-	jumpPower = 50,
-	fallMultiplier = 1,
-	rotateSpeed = 5,
-}
-
-local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "AnimRecorderGUI"
-screenGui.ResetOnSpawn = false
-screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-
-local function makeFrame(name, parent, size, pos, color)
-	local f = Instance.new("Frame")
-	f.Name = name
-	f.Size = size or UDim2.new(0, 200, 0, 30)
-	f.Position = pos or UDim2.new(0, 10, 0, 10)
-	f.BackgroundColor3 = color or Color3.fromRGB(30, 30, 30)
-	f.BackgroundTransparency = 0.15
-	f.BorderSizePixel = 0
-	f.Parent = parent
-	return f
+if _G._MapStudioLiteCleanup then
+	pcall(_G._MapStudioLiteCleanup)
 end
 
-local function makeButton(name, parent, text, pos, size, color)
-	local b = Instance.new("TextButton")
-	b.Name = name
-	b.Size = size or UDim2.new(0, 180, 0, 28)
-	b.Position = pos or UDim2.new(0, 10, 0, 5)
-	b.Text = text
-	b.TextColor3 = Color3.fromRGB(255, 255, 255)
-	b.TextSize = 14
-	b.Font = Enum.Font.GothamBold
-	b.BackgroundColor3 = color or Color3.fromRGB(60, 60, 60)
-	b.BorderSizePixel = 0
-	b.Parent = parent
-	return b
+local connections = {}
+local destroyed = false
+
+local function connect(sig, cb)
+	local c
+	pcall(function() c = sig:Connect(cb) end)
+	if c then table.insert(connections, c) end
+	return c
 end
 
-local function makeLabel(name, parent, text, pos, size)
-	local l = Instance.new("TextLabel")
-	l.Name = name
-	l.Size = size or UDim2.new(0, 180, 0, 20)
-	l.Position = pos or UDim2.new(0, 10, 0, 5)
-	l.Text = text
-	l.TextColor3 = Color3.fromRGB(200, 200, 200)
-	l.TextSize = 12
-	l.Font = Enum.Font.Gotham
-	l.BackgroundTransparency = 1
-	l.BorderSizePixel = 0
-	l.TextXAlignment = Enum.TextXAlignment.Left
-	l.Parent = parent
-	return l
+local function cleanup()
+	destroyed = true
+	for _, c in ipairs(connections) do
+		pcall(function() c:Disconnect() end)
+	end
+	table.clear(connections)
+	local sg = playerGui:FindFirstChild("MapStudioLite")
+	if sg then sg:Destroy() end
 end
 
-local function makeSlider(name, parent, pos, minVal, maxVal, defaultVal)
-	local container = makeFrame(name .. "Cont", parent, UDim2.new(0, 180, 0, 36), Color3.fromRGB(40,40,40))
-	container.Position = pos
-	local label = makeLabel(name .. "Label", container, name .. ": " .. tostring(defaultVal), UDim2.new(0, 5, 0, 2), UDim2.new(0, 170, 0, 14))
-	local slider = Instance.new("TextBox")
-	slider.Name = name .. "Slider"
-	slider.Size = UDim2.new(0, 170, 0, 16)
-	slider.Position = UDim2.new(0, 5, 0, 17)
-	slider.Text = tostring(defaultVal)
-	slider.TextColor3 = Color3.fromRGB(255,255,255)
-	slider.TextSize = 12
-	slider.Font = Enum.Font.Gotham
-	slider.BackgroundColor3 = Color3.fromRGB(60,60,60)
-	slider.BorderSizePixel = 0
-	slider.ClearTextOnFocus = false
-	slider.Parent = container
-	return container, label, slider
-end
+_G._MapStudioLiteCleanup = cleanup
 
--- MAIN WINDOW
-local mainWindow = makeFrame("MainWindow", screenGui, UDim2.new(0, 220, 0, 520), UDim2.new(0, 15, 0, 50), Color3.fromRGB(25, 25, 35))
-mainWindow.Active = true
-mainWindow.Draggable = true
-mainWindow.Visible = true
+-- ============================================================
+-- GUI
+-- ============================================================
+local sg = Instance.new("ScreenGui")
+sg.Name = "MapStudioLite"
+sg.ResetOnSpawn = false
+sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+sg.DisplayOrder = 100
+sg.Parent = playerGui
 
--- TOGGLE MENU BUTTON (VISIBILITAS)
-local toggleBtn = Instance.new("TextButton")
-toggleBtn.Name = "OpenMenuButton"
-toggleBtn.Size = UDim2.new(0, 45, 0, 45)
-toggleBtn.Position = UDim2.new(0, 15, 0, 5)
-toggleBtn.Text = "MENU"
-toggleBtn.Font = Enum.Font.GothamBold
-toggleBtn.TextSize = 11
-toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-toggleBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 50)
-toggleBtn.BorderSizePixel = 0
-toggleBtn.Parent = screenGui
+-- Main Frame
+local main = Instance.new("Frame")
+main.Name = "MainFrame"
+main.Size = UDim2.fromOffset(500, 300)
+main.Position = UDim2.new(0.5, -250, 0.5, -150)
+main.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+main.BorderSizePixel = 0
+main.Visible = false
+main.Parent = sg
 
-local corner = Instance.new("UICorner")
-corner.CornerRadius = UDim.new(0, 8)
-corner.Parent = toggleBtn
+local mainCorner = Instance.new("UICorner")
+mainCorner.CornerRadius = UDim.new(0, 12)
+mainCorner.Parent = main
 
-toggleBtn.MouseButton1Click:Connect(function()
-	mainWindow.Visible = not mainWindow.Visible
-end)
+-- Stroke
+local mainStroke = Instance.new("UIStroke")
+mainStroke.Color = Color3.fromRGB(60, 120, 255)
+mainStroke.Thickness = 2
+mainStroke.Transparency = 0.3
+mainStroke.Parent = main
 
-local title = makeLabel("Title", mainWindow, "ANIM RECORDER v2", UDim2.new(0, 10, 0, 5), UDim2.new(0, 200, 0, 22))
-title.TextSize = 16
+-- Title bar
+local titleBar = Instance.new("Frame")
+titleBar.Name = "TitleBar"
+titleBar.Size = UDim2.new(1, 0, 0, 36)
+titleBar.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
+titleBar.BorderSizePixel = 0
+titleBar.Parent = main
+
+local titleBarCorner = Instance.new("UICorner")
+titleBarCorner.CornerRadius = UDim.new(0, 12)
+titleBarCorner.Parent = titleBar
+
+local titleBarInner = Instance.new("UICorner")
+titleBarInner.CornerRadius = UDim.new(0, 12)
+titleBarInner.Parent = main
+
+-- Fix top corners
+local titleCover = Instance.new("Frame")
+titleCover.Size = UDim2.new(1, 0, 0, 12)
+titleCover.Position = UDim2.new(0, 0, 0, 24)
+titleCover.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
+titleCover.BorderSizePixel = 0
+titleCover.Parent = main
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, -40, 1, 0)
+title.Position = UDim2.fromOffset(10, 0)
+title.Text = "📦 MAP STUDIO LITE"
+title.TextColor3 = Color3.fromRGB(200, 200, 255)
 title.Font = Enum.Font.GothamBold
-title.TextColor3 = Color3.fromRGB(100, 200, 255)
+title.TextSize = 15
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.BackgroundTransparency = 1
+title.Parent = titleBar
 
-local yOff = 32
+-- Close button
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.fromOffset(30, 30)
+closeBtn.Position = UDim2.new(1, -34, 0, 3)
+closeBtn.Text = "✕"
+closeBtn.TextColor3 = Color3.fromRGB(255, 100, 100)
+closeBtn.TextSize = 18
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.BackgroundColor3 = Color3.fromRGB(60, 40, 40)
+closeBtn.BackgroundTransparency = 0.5
+closeBtn.BorderSizePixel = 0
+closeBtn.Parent = titleBar
+local closeCorner = Instance.new("UICorner")
+closeCorner.CornerRadius = UDim.new(0, 8)
+closeCorner.Parent = closeBtn
 
-local btnRecord = makeButton("BtnRecord", mainWindow, "● RECORD", UDim2.new(0, 10, 0, yOff), UDim2.new(0, 90, 0, 28), Color3.fromRGB(180, 40, 40))
-local btnPlay = makeButton("BtnPlay", mainWindow, "▶ PLAY", UDim2.new(0, 110, 0, yOff), UDim2.new(0, 90, 0, 28), Color3.fromRGB(40, 120, 40))
-yOff = yOff + 34
+-- Tab buttons
+local tabFrame = Instance.new("Frame")
+tabFrame.Name = "TabFrame"
+tabFrame.Size = UDim2.new(1, 0, 0, 32)
+tabFrame.Position = UDim2.new(0, 0, 0, 36)
+tabFrame.BackgroundTransparency = 1
+tabFrame.Parent = main
 
-local btnStop = makeButton("BtnStop", mainWindow, "■ STOP", UDim2.new(0, 10, 0, yOff), UDim2.new(0, 90, 0, 28), Color3.fromRGB(100, 100, 100))
-local btnRollback = makeButton("BtnRollback", mainWindow, "↩ ROLLBACK", UDim2.new(0, 110, 0, yOff), UDim2.new(0, 90, 0, 28), Color3.fromRGB(40, 80, 160))
-yOff = yOff + 34
+local tabs = {"TOOLS", "NOTES", "AUDIO", "TERRAIN"}
+local tabButtons = {}
+local tabPanels = {}
+local activeTab = 1
 
-local btnClear = makeButton("BtnClear", mainWindow, "✕ CLEAR ALL", UDim2.new(0, 10, 0, yOff), UDim2.new(0, 180, 0, 24), Color3.fromRGB(80, 40, 40))
-yOff = yOff + 30
+for i, name in ipairs(tabs) do
+	local btn = Instance.new("TextButton")
+	btn.Name = "Tab_" .. name
+	btn.Size = UDim2.new(0.25, -2, 1, -4)
+	btn.Position = UDim2.new((i - 1) * 0.25, 1, 0, 2)
+	btn.Text = name
+	btn.TextColor3 = Color3.fromRGB(180, 180, 200)
+	btn.TextSize = 12
+	btn.Font = Enum.Font.GothamBold
+	btn.BackgroundColor3 = Color3.fromRGB(45, 45, 60)
+	btn.BackgroundTransparency = 0.3
+	btn.BorderSizePixel = 0
+	btn.Parent = tabFrame
+	local btnCorner = Instance.new("UICorner")
+	btnCorner.CornerRadius = UDim.new(0, 6)
+	btnCorner.Parent = btn
+	tabButtons[i] = btn
 
-local sep1 = makeFrame("Sep1", mainWindow, UDim2.new(0, 200, 0, 1), UDim2.new(0, 10, 0, yOff), Color3.fromRGB(80, 80, 100))
-yOff = yOff + 8
-
-local btnAutoWalk = makeButton("BtnAutoWalk", mainWindow, "◇ AUTO WALK OFF", UDim2.new(0, 10, 0, yOff), UDim2.new(0, 180, 0, 26), Color3.fromRGB(60, 60, 80))
-yOff = yOff + 30
-
-local speedCont, speedLabel, speedSlider = makeSlider("Speed", mainWindow, UDim2.new(0, 10, 0, yOff), 1, 200, 16)
-yOff = yOff + 40
-
-local jumpCont, jumpLabel, jumpSlider = makeSlider("JumpPower", mainWindow, UDim2.new(0, 10, 0, yOff), 10, 200, 50)
-yOff = yOff + 40
-
-local fallCont, fallLabel, fallSlider = makeSlider("FallMult", mainWindow, UDim2.new(0, 10, 0, yOff), 0.5, 10, 1)
-yOff = yOff + 40
-
-local rotCont, rotLabel, rotSlider = makeSlider("RotSpeed", mainWindow, UDim2.new(0, 10, 0, yOff), 0.5, 20, 5)
-yOff = yOff + 40
-
-local sep2 = makeFrame("Sep2", mainWindow, UDim2.new(0, 200, 0, 1), UDim2.new(0, 10, 0, yOff), Color3.fromRGB(80, 80, 100))
-yOff = yOff + 8
-
-local statusLabel = makeLabel("Status", mainWindow, "Status: Idle", UDim2.new(0, 10, 0, yOff), UDim2.new(0, 200, 0, 16))
-statusLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
-yOff = yOff + 18
-
-local frameCountLabel = makeLabel("FrameCount", mainWindow, "Frames: 0", UDim2.new(0, 10, 0, yOff), UDim2.new(0, 200, 0, 16))
-yOff = yOff + 18
-
-local btnToggleLine = makeButton("BtnToggleLine", mainWindow, "◉ VISUAL LINE ON", UDim2.new(0, 10, 0, yOff), UDim2.new(0, 180, 0, 24), Color3.fromRGB(60, 80, 60))
-local showVisualLine = true
-
-screenGui.Parent = player:WaitForChild("PlayerGui")
-
-local pathFolder = workspace:FindFirstChild("VisualPathLines") or Instance.new("Folder")
-pathFolder.Name = "VisualPathLines"
-pathFolder.Parent = workspace
-
-local function createPathSegment(p1, p2, color)
-	local dist = (p2 - p1).Magnitude
-	if dist < 0.1 then return end
-
-	local mid = (p1 + p2) / 2
-	local part = Instance.new("Part")
-	part.Name = "PathSegment"
-	part.Size = Vector3.new(0.2, 0.2, dist)
-	part.CFrame = CFrame.lookAt(mid, p2)
-	part.Anchored = true
-	part.CanCollide = false
-	part.CanQuery = false
-	part.Material = Enum.Material.Neon
-	part.Color = color or Color3.fromRGB(0, 200, 255)
-	part.Transparency = 0.3
-	part.Parent = pathFolder
-	return part
-end
-
-local function clearVisualPath()
-	pathFolder:ClearAllChildren()
-end
-
-local function rebuildVisualPath()
-	clearVisualPath()
-	if not showVisualLine or #state.recordedFrames < 2 then return end
-
-	for i = 1, #state.recordedFrames - 1 do
-		local f1 = state.recordedFrames[i]
-		local f2 = state.recordedFrames[i + 1]
-		local t = i / #state.recordedFrames
-		local c = Color3.new(0.2 + 0.8 * t, 0.5 + 0.5 * (1 - t), 0.8)
-		createPathSegment(f1.pos, f2.pos, c)
-	end
-
-	local startMarker = Instance.new("Part")
-	startMarker.Name = "StartMarker"
-	startMarker.Size = Vector3.new(0.8, 0.8, 0.8)
-	startMarker.Shape = Enum.PartType.Ball
-	startMarker.Anchored = true
-	startMarker.CanCollide = false
-	startMarker.Color = Color3.fromRGB(0, 255, 100)
-	startMarker.Material = Enum.Material.Neon
-	startMarker.CFrame = CFrame.new(state.recordedFrames[1].pos)
-	startMarker.Parent = pathFolder
-
-	local endMarker = Instance.new("Part")
-	endMarker.Name = "EndMarker"
-	endMarker.Size = Vector3.new(0.8, 0.8, 0.8)
-	endMarker.Shape = Enum.PartType.Ball
-	endMarker.Anchored = true
-	endMarker.CanCollide = false
-	endMarker.Color = Color3.fromRGB(255, 50, 50)
-	endMarker.Material = Enum.Material.Neon
-	endMarker.CFrame = CFrame.new(state.recordedFrames[#state.recordedFrames].pos)
-	endMarker.Parent = pathFolder
-end
-
-local function isFalling()
-	if not character or not rootPart then return false end
-	local rayParams = RaycastParams.new()
-	rayParams.FilterType = Enum.RaycastFilterType.Exclude
-	rayParams.FilterDescendantsInstances = {character, pathFolder}
-
-	local result = workspace:Raycast(rootPart.Position, Vector3.new(0, -6, 0), rayParams)
-	return result == nil
-end
-
-local function updateSafePoint()
-	if not isFalling() and rootPart then
-		state.lastSafePosition = rootPart.Position
-		state.lastSafeRotation = rootPart.Orientation
-		table.insert(state.safePoints, {
-			pos = rootPart.Position,
-			rot = rootPart.Orientation
-		})
-		if #state.safePoints > 20 then
-			table.remove(state.safePoints, 1)
+	connect(btn.Activated, function()
+		activeTab = i
+		for j, tb in ipairs(tabButtons) do
+			tb.BackgroundColor3 = (j == i) and Color3.fromRGB(60, 80, 160) or Color3.fromRGB(45, 45, 60)
+			tb.TextColor3 = (j == i) and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(180, 180, 200)
 		end
-	end
-end
-
-local function rollbackToSafe()
-	if state.lastSafePosition and rootPart and humanoid then
-		humanoid:MoveTo(state.lastSafePosition)
-		statusLabel.Text = "Status: Walking to safe point..."
-		local conn
-		conn = humanoid.MoveToFinished:Connect(function()
-			statusLabel.Text = "Status: Rollbacked to safe point"
-			conn:Disconnect()
-		end)
-	else
-		statusLabel.Text = "Status: No safe point!"
-	end
-end
-
-local function recordFrame()
-	if not rootPart then return end
-	table.insert(state.recordedFrames, {
-		pos = rootPart.Position,
-		rot = rootPart.Orientation,
-		time = tick()
-	})
-	frameCountLabel.Text = "Frames: " .. #state.recordedFrames
-	
-	if showVisualLine and #state.recordedFrames >= 2 then
-		local f1 = state.recordedFrames[#state.recordedFrames - 1]
-		local f2 = state.recordedFrames[#state.recordedFrames]
-		createPathSegment(f1.pos, f2.pos, Color3.fromRGB(0, 200, 255))
-	end
-end
-
-local function startPlayback()
-	if #state.recordedFrames < 2 then
-		statusLabel.Text = "Status: Not enough frames!"
-		return
-	end
-
-	state.isPlaying = true
-	btnPlay.Text = "⏸ PLAYING"
-	btnPlay.BackgroundColor3 = Color3.fromRGB(200, 150, 40)
-	
-	local firstFrame = state.recordedFrames[1]
-	
-	-- Jalan secara natural ke titik awal tanpa Teleport (0% TP)
-	if (rootPart.Position - firstFrame.pos).Magnitude > 3 then
-		statusLabel.Text = "Status: Walking to start position..."
-		humanoid:MoveTo(firstFrame.pos)
-		humanoid.MoveToFinished:Wait()
-	end
-
-	statusLabel.Text = "Status: Playing..."
-	state.playbackStartTime = tick()
-	
-	local playbackConn
-	playbackConn = RunService.Heartbeat:Connect(function(dt)
-		if not state.isPlaying or not rootPart or not humanoid then
-			playbackConn:Disconnect()
-			return
-		end
-
-		local elapsed = tick() - state.playbackStartTime
-		local totalDuration = state.recordedFrames[#state.recordedFrames].time - state.recordedFrames[1].time
-		if totalDuration <= 0 then totalDuration = 0.1 end
-
-		local progress = math.clamp(elapsed / totalDuration, 0, 1)
-		local targetIndex = math.clamp(math.floor(progress * (#state.recordedFrames - 1)) + 1, 1, #state.recordedFrames - 1)
-
-		local f1 = state.recordedFrames[targetIndex]
-		local f2 = state.recordedFrames[targetIndex + 1]
-		
-		local segDuration = f2.time - f1.time
-		if segDuration <= 0 then segDuration = 0.016 end
-		
-		local segElapsed = elapsed - (f1.time - state.recordedFrames[1].time)
-		local segProgress = math.clamp(segElapsed / segDuration, 0, 1)
-		
-		-- Smooth 120 FPS Lerp Position & Rotation
-		local targetPos = f1.pos:Lerp(f2.pos, segProgress)
-		local targetRotY = f1.rot.Y + (f2.rot.Y - f1.rot.Y) * segProgress
-		
-		-- Menggunakan Humanoid MoveTo agar karakter tetap beranimasi natural 100%
-		humanoid:MoveTo(targetPos)
-		rootPart.CFrame = rootPart.CFrame:Lerp(CFrame.new(rootPart.Position) * CFrame.Angles(0, math.rad(targetRotY), 0), dt * 15)
-
-		if isFalling() then
-			statusLabel.Text = "Status: Fall detected, rolling back..."
-			state.isPlaying = false
-			btnPlay.Text = "▶ PLAY"
-			btnPlay.BackgroundColor3 = Color3.fromRGB(40, 120, 40)
-			playbackConn:Disconnect()
-			rollbackToSafe()
-			return
-		end
-
-		if progress >= 1 then
-			state.isPlaying = false
-			btnPlay.Text = "▶ PLAY"
-			btnPlay.BackgroundColor3 = Color3.fromRGB(40, 120, 40)
-			statusLabel.Text = "Status: Playback complete"
-			playbackConn:Disconnect()
+		for j, panel in ipairs(tabPanels) do
+			if panel then panel.Visible = (j == i) end
 		end
 	end)
 end
 
-local function stopPlayback()
-	state.isPlaying = false
-	btnPlay.Text = "▶ PLAY"
-	btnPlay.BackgroundColor3 = Color3.fromRGB(40, 120, 40)
-	statusLabel.Text = "Status: Stopped"
-	if humanoid then humanoid:MoveTo(rootPart.Position) end
+-- Content area
+local content = Instance.new("Frame")
+content.Name = "Content"
+content.Size = UDim2.new(1, -10, 1, -78)
+content.Position = UDim2.new(0, 5, 0, 72)
+content.BackgroundTransparency = 1
+content.Parent = main
+
+-- ============================================================
+-- TAB 1: TOOLS
+-- ============================================================
+local toolsPanel = Instance.new("ScrollingFrame")
+toolsPanel.Name = "ToolsPanel"
+toolsPanel.Size = UDim2.new(1, 0, 1, 0)
+toolsPanel.BackgroundTransparency = 1
+toolsPanel.BorderSizePixel = 0
+toolsPanel.ScrollBarThickness = 6
+toolsPanel.CanvasSize = UDim2.new(0, 0, 0, 0)
+toolsPanel.Parent = content
+tabPanels[1] = toolsPanel
+
+local toolsLayout = Instance.new("UIListLayout")
+toolsLayout.Padding = UDim.new(0, 6)
+toolsLayout.Parent = toolsPanel
+
+local function makeToolsHeader(text)
+	local h = Instance.new("TextLabel")
+	h.Size = UDim2.new(1, -10, 0, 24)
+	h.Text = text
+	h.TextColor3 = Color3.fromRGB(100, 150, 255)
+	h.Font = Enum.Font.GothamBold
+	h.TextSize = 13
+	h.TextXAlignment = Enum.TextXAlignment.Left
+	h.BackgroundTransparency = 1
+	h.Parent = toolsPanel
+	return h
 end
 
-local function stopRecording()
-	state.isRecording = false
-	btnRecord.Text = "● RECORD"
-	btnRecord.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
-	statusLabel.Text = "Status: Recorded " .. #state.recordedFrames .. " frames"
+local function makeToolsButton(text, color, callback)
+	local btn = Instance.new("TextButton")
+	btn.Size = UDim2.new(1, -10, 0, 30)
+	btn.Text = text
+	btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	btn.TextSize = 13
+	btn.Font = Enum.Font.Gotham
+	btn.BackgroundColor3 = color or Color3.fromRGB(55, 55, 75)
+	btn.BackgroundTransparency = 0.2
+	btn.BorderSizePixel = 0
+	btn.Parent = toolsPanel
+	local btnCorner = Instance.new("UICorner")
+	btnCorner.CornerRadius = UDim.new(0, 6)
+	btnCorner.Parent = btn
+	connect(btn.Activated, callback)
+	return btn
 end
 
-btnRecord.MouseButton1Click:Connect(function()
-	if state.isPlaying then return end
-	state.isRecording = not state.isRecording
+local function makeToolsInput(placeholder, callback)
+	local frame = Instance.new("Frame")
+	frame.Size = UDim2.new(1, -10, 0, 34)
+	frame.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
+	frame.BackgroundTransparency = 0.3
+	frame.BorderSizePixel = 0
+	frame.Parent = toolsPanel
+	local frameCorner = Instance.new("UICorner")
+	frameCorner.CornerRadius = UDim.new(0, 6)
+	frameCorner.Parent = frame
 
-	if state.isRecording then
-		state.recordedFrames = {}
-		clearVisualPath()
+	local box = Instance.new("TextBox")
+	box.Size = UDim2.new(1, -40, 1, 0)
+	box.Position = UDim2.fromOffset(8, 0)
+	box.PlaceholderText = placeholder
+	box.PlaceholderColor3 = Color3.fromRGB(120, 120, 140)
+	box.Text = ""
+	box.TextColor3 = Color3.fromRGB(255, 255, 255)
+	box.TextSize = 13
+	box.Font = Enum.Font.Gotham
+	box.BackgroundTransparency = 1
+	box.BorderSizePixel = 0
+	box.ClearTextOnFocus = false
+	box.Parent = frame
 
-		btnRecord.Text = "● RECORDING..."
-		btnRecord.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
-		statusLabel.Text = "Status: Recording..."
-		frameCountLabel.Text = "Frames: 0"
+	local goBtn = Instance.new("TextButton")
+	goBtn.Size = UDim2.fromOffset(30, 26)
+	goBtn.Position = UDim2.new(1, -34, 0, 4)
+	goBtn.Text = "→"
+	goBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	goBtn.TextSize = 14
+	goBtn.Font = Enum.Font.GothamBold
+	goBtn.BackgroundColor3 = Color3.fromRGB(60, 80, 160)
+	goBtn.BackgroundTransparency = 0.3
+	goBtn.BorderSizePixel = 0
+	goBtn.Parent = frame
+	local goCorner = Instance.new("UICorner")
+	goCorner.CornerRadius = UDim.new(0, 5)
+	goCorner.Parent = goBtn
 
-		local recordConn
-		recordConn = RunService.Heartbeat:Connect(function()
-			if not state.isRecording or not rootPart then
-				recordConn:Disconnect()
-				return
+	connect(goBtn.Activated, function()
+		callback(box.Text)
+	end)
+	connect(box.FocusLost, function(enter)
+		if enter then callback(box.Text) end
+	end)
+
+	return box
+end
+
+-- Search Toolbox
+makeToolsHeader("🔍 TOOLBOX SEARCH")
+local searchBox = makeToolsInput("Search model ID...", function(query)
+	local id = tonumber(query:match("%d+"))
+	if id then
+		pcall(function()
+			local model = InsertService:LoadAsset(id)
+			if model then
+				local cloned = model:GetChildren()
+				for _, obj in ipairs(cloned) do
+					obj.Parent = workspace
+				end
+				game:GetService("StarterGui"):SetCore("SendNotification", {
+					Title = "✅ Imported",
+					Text = "Asset " .. id .. " loaded",
+					Duration = 2
+				})
 			end
-			recordFrame()
-			updateSafePoint()
 		end)
-	else
-		stopRecording()
-		rebuildVisualPath()
 	end
 end)
 
-btnPlay.MouseButton1Click:Connect(function()
-	if state.isRecording then return end
-	if state.isPlaying then
-		stopPlayback()
-	else
-		startPlayback()
-	end
+-- Auto Create
+makeToolsHeader("⚡ QUICK ACTIONS")
+makeToolsButton("📦 Auto Create Part", Color3.fromRGB(50, 70, 120), function()
+	local p = Instance.new("Part")
+	p.Name = "AutoPart"
+	p.Size = Vector3.new(4, 1, 4)
+	p.Color = Color3.fromRGB(200, 150, 100)
+	p.Material = Enum.Material.SmoothPlastic
+	p.Anchored = false
+	p.Position = (workspace.CurrentCamera and workspace.CurrentCamera.CFrame.Position) or Vector3.new(0, 5, 0)
+	p.Parent = workspace
+	Selection:Set({p})
 end)
 
-btnStop.MouseButton1Click:Connect(function()
-	if state.isRecording then stopRecording() end
-	if state.isPlaying then stopPlayback() end
-	statusLabel.Text = "Status: Idle"
-end)
-
-btnRollback.MouseButton1Click:Connect(function()
-	if state.isPlaying then stopPlayback() end
-	rollbackToSafe()
-end)
-
-btnClear.MouseButton1Click:Connect(function()
-	state.recordedFrames = {}
-	state.safePoints = {}
-	state.lastSafePosition = nil
-	state.lastSafeRotation = nil
-	clearVisualPath()
-	frameCountLabel.Text = "Frames: 0"
-	statusLabel.Text = "Status: Cleared"
-	if state.isPlaying then stopPlayback() end
-	if state.isRecording then stopRecording() end
-end)
-
-btnAutoWalk.MouseButton1Click:Connect(function()
-	state.isAutoWalk = not state.isAutoWalk
-	if state.isAutoWalk then
-		btnAutoWalk.Text = "◆ AUTO WALK ON"
-		btnAutoWalk.BackgroundColor3 = Color3.fromRGB(40, 120, 40)
-		humanoid.WalkSpeed = state.autoWalkSpeed
-		humanoid.AutoRotate = true
-		
-		local lookCF = rootPart.CFrame * CFrame.new(0, 0, -50)
-		humanoid:MoveTo(lookCF.Position)
-	else
-		btnAutoWalk.Text = "◇ AUTO WALK OFF"
-		btnAutoWalk.BackgroundColor3 = Color3.fromRGB(60, 60, 80)
-		humanoid:MoveTo(rootPart.Position)
-	end
-end)
-
-btnToggleLine.MouseButton1Click:Connect(function()
-	showVisualLine = not showVisualLine
-	if showVisualLine then
-		btnToggleLine.Text = "◉ VISUAL LINE ON"
-		btnToggleLine.BackgroundColor3 = Color3.fromRGB(60, 80, 60)
-		rebuildVisualPath()
-	else
-		btnToggleLine.Text = "○ VISUAL LINE OFF"
-		btnToggleLine.BackgroundColor3 = Color3.fromRGB(80, 60, 60)
-		clearVisualPath()
-	end
-end)
-
-speedSlider.FocusLost:Connect(function()
-	local val = tonumber(speedSlider.Text) or 16
-	val = math.clamp(val, 1, 200)
-	state.autoWalkSpeed = val
-	speedLabel.Text = "Speed: " .. val
-	if humanoid then humanoid.WalkSpeed = val end
-end)
-
-jumpSlider.FocusLost:Connect(function()
-	local val = tonumber(jumpSlider.Text) or 50
-	val = math.clamp(val, 10, 200)
-	state.jumpPower = val
-	jumpLabel.Text = "JumpPower: " .. val
-	if humanoid then humanoid.JumpPower = val end
-end)
-
-fallSlider.FocusLost:Connect(function()
-	local val = tonumber(fallSlider.Text) or 1
-	val = math.clamp(val, 0.5, 10)
-	state.fallMultiplier = val
-	fallLabel.Text = "FallMult: " .. val
-end)
-
-rotSlider.FocusLost:Connect(function()
-	local val = tonumber(rotSlider.Text) or 5
-	val = math.clamp(val, 0.5, 20)
-	state.rotateSpeed = val
-	rotLabel.Text = "RotSpeed: " .. val
-end)
-
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-	if gameProcessed then return end
-
-	if input.KeyCode == Enum.KeyCode.F5 then
-		btnRecord.MouseButton1Click:Fire()
-	elseif input.KeyCode == Enum.KeyCode.F6 then
-		btnPlay.MouseButton1Click:Fire()
-	elseif input.KeyCode == Enum.KeyCode.F7 then
-		btnRollback.MouseButton1Click:Fire()
-	elseif input.KeyCode == Enum.KeyCode.F8 then
-		btnAutoWalk.MouseButton1Click:Fire()
-	elseif input.KeyCode == Enum.KeyCode.F9 then
-		btnStop.MouseButton1Click:Fire()
-	elseif input.KeyCode == Enum.KeyCode.F10 then
-		btnToggleLine.MouseButton1Click:Fire()
-	end
-end)
-
-RunService.Heartbeat:Connect(function()
-	if not rootPart or not humanoid then return end
-	
-	if not isFalling() then
-		updateSafePoint()
-	elseif not state.isPlaying and not state.isRecording then
-		if rootPart.AssemblyLinearVelocity.Y < -30 then
-			statusLabel.Text = "Status: Falling! Press F7 to rollback"
+makeToolsButton("🔓 UnGroup Selection", Color3.fromRGB(120, 60, 60), function()
+	local sel = Selection:Get()
+	for _, obj in ipairs(sel) do
+		if obj:IsA("Model") then
+			local children = obj:GetChildren()
+			for _, child in ipairs(children) do
+				child.Parent = workspace
+			end
+			obj:Destroy()
 		end
 	end
 end)
 
-player.CharacterAdded:Connect(function(newChar)
-	character = newChar
-	humanoid = character:WaitForChild("Humanoid")
-	rootPart = character:WaitForChild("HumanoidRootPart")
-
-	humanoid.WalkSpeed = state.autoWalkSpeed
-	humanoid.JumpPower = state.jumpPower
-	statusLabel.Text = "Status: Character respawned"
+-- Map ID Tools
+makeToolsHeader("🗺️ MAP ID TOOLS")
+makeToolsButton("📋 Copy Map ID", Color3.fromRGB(50, 100, 80), function()
+	local mapId = game.PlaceId
+	setclipboard(tostring(mapId))
+	game:GetService("StarterGui"):SetCore("SendNotification", {
+		Title = "📋 Copied",
+		Text = "Map ID: " .. mapId,
+		Duration = 2
+	})
 end)
 
-humanoid.WalkSpeed = state.autoWalkSpeed
-humanoid.JumpPower = state.jumpPower
-statusLabel.Text = "Status: Ready - F5 Record | F6 Play | F7 Rollback | F8 AutoWalk"
-frameCountLabel.Text = "Frames: 0"
+makeToolsButton("📋 Copy Map ID (Explorer)", Color3.fromRGB(50, 100, 120), function()
+	local sel = Selection:Get()
+	for _, obj in ipairs(sel) do
+		if obj:IsA("Instance") then
+			setclipboard(tostring(obj:GetDebugId(8)))
+			break
+		end
+	end
+end)
 
-print("AldoVz")
+local pasteBox = makeToolsInput("Paste Map ID Explorer...", function(query)
+	if query and #query > 0 then
+		-- try to find by debug id
+		for _, v in ipairs(workspace:GetDescendants()) do
+			local success, match = pcall(function()
+				return v:GetDebugId(8):find(query)
+			end)
+			if success and match then
+				Selection:Set({v})
+				break
+			end
+		end
+	end
+end)
+
+-- AI Script
+makeToolsHeader("🤖 AI CREATE SCRIPT")
+local aiBox = makeToolsInput("Describe script...", function(prompt)
+	if prompt and #prompt > 0 then
+		local s = Instance.new("Script")
+		s.Name = "AIScript_" .. math.random(1000, 9999)
+		s.Source = string.format("--[[\n  AI Generated Script\n  Prompt: %s\n]]\n\nlocal Players = game:GetService(\"Players\")\nlocal player = Players.LocalPlayer\n\nprint(\"Script loaded: %s\")\n\n-- Generated by Map Studio Lite AI\n-- Modify as needed\n", prompt, prompt)
+		s.Parent = workspace
+		Selection:Set({s})
+		game:GetService("StarterGui"):SetCore("SendNotification", {
+			Title = "🤖 Script Created",
+			Text = s.Name .. " added to workspace",
+			Duration = 2
+		})
+	end
+end)
+
+-- Update canvas size
+connect(toolsLayout:GetPropertyChangedSignal("AbsoluteContentSize"), function()
+	toolsPanel.CanvasSize = UDim2.new(0, 0, 0, toolsLayout.AbsoluteContentSize.Y + 10)
+end)
+
+-- ============================================================
+-- TAB 2: NOTES
+-- ============================================================
+local notesPanel = Instance.new("ScrollingFrame")
+notesPanel.Name = "NotesPanel"
+notesPanel.Size = UDim2.new(1, 0, 1, 0)
+notesPanel.BackgroundTransparency = 1
+notesPanel.BorderSizePixel = 0
+notesPanel.ScrollBarThickness = 6
+notesPanel.CanvasSize = UDim2.new(0, 0, 0, 0)
+notesPanel.Visible = false
+notesPanel.Parent = content
+tabPanels[2] = notesPanel
+
+local notesLayout = Instance.new("UIListLayout")
+notesLayout.Padding = UDim.new(0, 6)
+notesLayout.Parent = notesPanel
+
+local notes = {}
+local noteFrames = {}
+
+local function loadNotes()
+	local success, data = pcall(function()
+		return readfile("MapStudio_Notes.json")
+	end)
+	if success and data and #data > 0 then
+		local ok, decoded = pcall(function()
+			return HttpService:JSONDecode(data)
+		end)
+		if ok and type(decoded) == "table" then
+			notes = decoded
+		end
+	end
+end
+
+local function saveNotes()
+	local success, encoded = pcall(function()
+		return HttpService:JSONEncode(notes)
+	end)
+	if success then
+		pcall(function()
+			writefile("MapStudio_Notes.json", encoded)
+		end)
+	end
+end
+
+local function refreshNotesUI()
+	for _, f in ipairs(noteFrames) do
+		if f and f.Parent then f:Destroy() end
+	end
+	table.clear(noteFrames)
+
+	for i, note in ipairs(notes) do
+		local frame = Instance.new("Frame")
+		frame.Size = UDim2.new(1, -10, 0, 80)
+		frame.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
+		frame.BackgroundTransparency = 0.3
+		frame.BorderSizePixel = 0
+		frame.Parent = notesPanel
+		local frameCorner = Instance.new("UICorner")
+		frameCorner.CornerRadius = UDim.new(0, 6)
+		frameCorner.Parent = frame
+		table.insert(noteFrames, frame)
+
+		local titleL = Instance.new("TextLabel")
+		titleL.Size = UDim2.new(1, -50, 0, 20)
+		titleL.Position = UDim2.fromOffset(6, 4)
+		titleL.Text = note.title or "Note " .. i
+		titleL.TextColor3 = Color3.fromRGB(200, 200, 255)
+		titleL.Font = Enum.Font.GothamBold
+		titleL.TextSize = 13
+		titleL.TextXAlignment = Enum.TextXAlignment.Left
+		titleL.BackgroundTransparency = 1
+		titleL.Parent = frame
+
+		local bodyL = Instance.new("TextLabel")
+		bodyL.Size = UDim2.new(1, -12, 0, 40)
+		bodyL.Position = UDim2.fromOffset(6, 24)
+		bodyL.Text = note.body or ""
+		bodyL.TextColor3 = Color3.fromRGB(180, 180, 200)
+		bodyL.Font = Enum.Font.Gotham
+		bodyL.TextSize = 11
+		bodyL.TextXAlignment = Enum.TextXAlignment.Left
+		bodyL.TextYAlignment = Enum.TextYAlignment.Top
+		bodyL.BackgroundTransparency = 1
+		bodyL.TextWrapped = true
+		bodyL.Parent = frame
+
+		local delBtn = Instance.new("TextButton")
+		delBtn.Size = UDim2.fromOffset(24, 24)
+		delBtn.Position = UDim2.new(1, -30, 0, 4)
+		delBtn.Text = "✕"
+		delBtn.TextColor3 = Color3.fromRGB(255, 100, 100)
+		delBtn.TextSize = 12
+		delBtn.Font = Enum.Font.GothamBold
+		delBtn.BackgroundColor3 = Color3.fromRGB(60, 30, 30)
+		delBtn.BackgroundTransparency = 0.5
+		delBtn.BorderSizePixel = 0
+		delBtn.Parent = frame
+		local delCorner = Instance.new("UICorner")
+		delCorner.CornerRadius = UDim.new(0, 4)
+		delCorner.Parent = delBtn
+		connect(delBtn.Activated, function()
+			table.remove(notes, i)
+			saveNotes()
+			refreshNotesUI()
+		end)
+	end
+
+	notesPanel.CanvasSize = UDim2.new(0, 0, 0, #notes * 86 + 50)
+end
+
+-- Add note input
+local addNoteFrame = Instance.new("Frame")
+addNoteFrame.Size = UDim2.new(1, -10, 0, 90)
+addNoteFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 50)
+addNoteFrame.BackgroundTransparency = 0.3
+addNoteFrame.BorderSizePixel = 0
+addNoteFrame.Parent = notesPanel
+local addNoteCorner = Instance.new("UICorner")
+addNoteCorner.CornerRadius = UDim.new(0, 6)
+addNoteCorner.Parent = addNoteFrame
+
+local noteTitleBox = Instance.new("TextBox")
+noteTitleBox.Size = UDim2.new(1, -16, 0, 24)
+noteTitleBox.Position = UDim2.fromOffset(8, 4)
+noteTitleBox.PlaceholderText = "Note title..."
+noteTitleBox.PlaceholderColor3 = Color3.fromRGB(120, 120, 140)
+noteTitleBox.Text = ""
+noteTitleBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+noteTitleBox.TextSize = 13
+noteTitleBox.Font = Enum.Font.GothamBold
+noteTitleBox.BackgroundColor3 = Color3.fromRGB(50, 50, 65)
+noteTitleBox.BackgroundTransparency = 0.3
+noteTitleBox.BorderSizePixel = 0
+noteTitleBox.ClearTextOnFocus = false
+noteTitleBox.Parent = addNoteFrame
+local ntCorner = Instance.new("UICorner")
+ntCorner.CornerRadius = UDim.new(0, 4)
+ntCorner.Parent = noteTitleBox
+
+local noteBodyBox = Instance.new("TextBox")
+noteBodyBox.Size = UDim2.new(1, -16, 0, 28)
+noteBodyBox.Position = UDim2.fromOffset(8, 32)
+noteBodyBox.PlaceholderText = "Note content..."
+noteBodyBox.PlaceholderColor3 = Color3.fromRGB(120, 120, 140)
+noteBodyBox.Text = ""
+noteBodyBox.TextColor3 = Color3.fromRGB(200, 200, 200)
+noteBodyBox.TextSize = 11
+noteBodyBox.Font = Enum.Font.Gotham
+noteBodyBox.BackgroundColor3 = Color3.fromRGB(50, 50, 65)
+noteBodyBox.BackgroundTransparency = 0.3
+noteBodyBox.BorderSizePixel = 0
+noteBodyBox.ClearTextOnFocus = false
+noteBodyBox.TextWrapped = true
+noteBodyBox.Parent = addNoteFrame
+local nbCorner = Instance.new("UICorner")
+nbCorner.CornerRadius = UDim.new(0, 4)
+nbCorner.Parent = noteBodyBox
+
+local addNoteBtn = Instance.new("TextButton")
+addNoteBtn.Size = UDim2.new(1, -16, 0, 22)
+addNoteBtn.Position = UDim2.fromOffset(8, 64)
+addNoteBtn.Text = "➕ ADD NOTE"
+addNoteBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+addNoteBtn.TextSize = 12
+addNoteBtn.Font = Enum.Font.GothamBold
+addNoteBtn.BackgroundColor3 = Color3.fromRGB(50, 120, 80)
+addNoteBtn.BackgroundTransparency = 0.2
+addNoteBtn.BorderSizePixel = 0
+addNoteBtn.Parent = addNoteFrame
+local addBtnCorner = Instance.new("UICorner")
+addBtnCorner.CornerRadius = UDim.new(0, 4)
+addBtnCorner.Parent = addNoteBtn
+
+connect(addNoteBtn.Activated, function()
+	local title = noteTitleBox.Text
+	local body = noteBodyBox.Text
+	if #title > 0 or #body > 0 then
+		table.insert(notes, {title = title, body = body})
+		saveNotes()
+		refreshNotesUI()
+		noteTitleBox.Text = ""
+		noteBodyBox.Text = ""
+	end
+end)
+
+loadNotes()
+refreshNotesUI()
+
+-- ============================================================
+-- TAB 3: AUDIO
+-- ============================================================
+local audioPanel = Instance.new("ScrollingFrame")
+audioPanel.Name = "AudioPanel"
+audioPanel.Size = UDim2.new(1, 0, 1, 0)
+audioPanel.BackgroundTransparency = 1
+audioPanel.BorderSizePixel = 0
+audioPanel.ScrollBarThickness = 6
+audioPanel.CanvasSize = UDim2.new(0, 0, 0, 0)
+audioPanel.Visible = false
+audioPanel.Parent = content
+tabPanels[3] = audioPanel
+
+local audioLayout = Instance.new("UIListLayout")
+audioLayout.Padding = UDim.new(0, 6)
+audioLayout.Parent = audioPanel
+
+makeToolsHeader("🎵 AUDIO TOOLS")
+local audioIdBox = makeToolsInput("Search Audio ID...", function(query)
+	local id = tonumber(query:match("%d+"))
+	if id then
+		setclipboard("rbxassetid://" .. id)
+		game:GetService("StarterGui"):SetCore("SendNotification", {
+			Title = "📋 Copied",
+			Text = "rbxassetid://" .. id,
+			Duration = 2
+		})
+	end
+end)
+
+makeToolsButton("▶️ Play Test Sound", Color3.fromRGB(80, 60, 120), function()
+	local id = tonumber(audioIdBox.Text:match("%d+"))
+	if id then
+		local old = workspace:FindFirstChild("TestSound")
+		if old then old:Destroy() end
+		local s = Instance.new("Sound")
+		s.Name = "TestSound"
+		s.SoundId = "rbxassetid://" .. id
+		s.Volume = 0.5
+		s.Parent = workspace
+		s:Play()
+		game:GetService("StarterGui"):SetCore("SendNotification", {
+			Title = "▶️ Playing",
+			Text = "Sound ID: " .. id,
+			Duration = 2
+		})
+	end
+end)
+
+makeToolsButton("⏹️ Stop Sound", Color3.fromRGB(100, 50, 50), function()
+	local s = workspace:FindFirstChild("TestSound")
+	if s then s:Stop() s:Destroy() end
+end)
+
+makeToolsButton("📋 Copy ID Music", Color3.fromRGB(50, 80, 100), function()
+	local s = workspace:FindFirstChild("TestSound")
+	if s and s.SoundId then
+		local id = s.SoundId:match("%d+")
+		if id then
+			setclipboard(id)
+			game:GetService("StarterGui"):SetCore("SendNotification", {
+				Title = "📋 Copied",
+				Text = "ID: " .. id,
+				Duration = 2
+			})
+		end
+	end
+end)
+
+-- Audio ID list
+makeToolsHeader("📋 COMMON AUDIO IDS")
+local commonAudio = {
+	{"Epic Theme", "138004082589684"},
+	{"Sad Violin", "1837548907"},
+	{"Sword Fight", "138004082589684"},
+	{"Rain", "166900177"},
+	{"Wind", "151220103"},
+	{"Thunder", "138004082589684"},
+	{"Clock Tick", "9120387532"},
+	{"Coin", "119223313"},
+	{"Jump", "123710580"},
+	{"Explosion", "141224111"},
+}
+
+for _, item in ipairs(commonAudio) do
+	local btn = makeToolsButton(item[1] .. " (" .. item[2] .. ")", Color3.fromRGB(50, 50, 65), function()
+		setclipboard("rbxassetid://" .. item[2])
+		audioIdBox.Text = item[2]
+		game:GetService("StarterGui"):SetCore("SendNotification", {
+			Title = "📋 Copied",
+			Text = "rbxassetid://" .. item[2],
+			Duration = 2
+		})
+	end)
+end
+
+connect(audioLayout:GetPropertyChangedSignal("AbsoluteContentSize"), function()
+	audioPanel.CanvasSize = UDim2.new(0, 0, 0, audioLayout.AbsoluteContentSize.Y + 10)
+end)
+
+-- ============================================================
+-- TAB 4: TERRAIN
+-- ============================================================
+local terrainPanel = Instance.new("ScrollingFrame")
+terrainPanel.Name = "TerrainPanel"
+terrainPanel.Size = UDim2.new(1, 0, 1, 0)
+terrainPanel.BackgroundTransparency = 1
+terrainPanel.BorderSizePixel = 0
+terrainPanel.ScrollBarThickness = 6
+terrainPanel.CanvasSize = UDim2.new(0, 0, 0, 0)
+terrainPanel.Visible = false
+terrainPanel.Parent = content
+tabPanels[4] = terrainPanel
+
+local terrainLayout = Instance.new("UIListLayout")
+terrainLayout.Padding = UDim.new(0, 6)
+terrainLayout.Parent = terrainPanel
+
+makeToolsHeader("⛰️ TERRAIN STUDIO LITE")
+
+local terrain = workspace:FindFirstChildOfClass("Terrain")
+
+makeToolsButton("🏔️ Fill Region (Grass)", Color3.fromRGB(50, 100, 50), function()
+	if not terrain then return end
+	local region = Region3.new(Vector3.new(-256, -10, -256), Vector3.new(256, 10, 256))
+	terrain:FillRegion(region, 4, Enum.Material.Grass)
+end)
+
+makeToolsButton("🏖️ Fill Region (Sand)", Color3.fromRGB(100, 90, 50), function()
+	if not terrain then return end
+	local region = Region3.new(Vector3.new(-256, -10, -256), Vector3.new(256, 10, 256))
+	terrain:FillRegion(region, 4, Enum.Material.Sand)
+end)
+
+makeToolsButton("🌊 Fill Region (Water)", Color3.fromRGB(30, 60, 120), function()
+	if not terrain then return end
+	local region = Region3.new(Vector3.new(-256, -5, -256), Vector3.new(256, 5, 256))
+	terrain:FillRegion(region, 4, Enum.Material.Water)
+end)
+
+makeToolsButton("🪨 Add Rocks (Sphere)", Color3.fromRGB(70, 60, 50), function()
+	if not terrain then return end
+	local pos = (workspace.CurrentCamera and workspace.CurrentCamera.CFrame.Position) or Vector3.new(0, 5, 0)
+	terrain:FillBall(pos + Vector3.new(0, -5, 0), 8, Enum.Material.Slate)
+end)
+
+makeToolsButton("🗑️ Clear Terrain", Color3.fromRGB(100, 40, 40), function()
+	if not terrain then return end
+	terrain:Clear()
+end)
+
+makeToolsButton("📏 Auto Create Flat Terrain", Color3.fromRGB(50, 70, 100), function()
+	if not terrain then return end
+	local region = Region3.new(Vector3.new(-256, -5, -256), Vector3.new(256, 5, 256))
+	terrain:FillRegion(region, 4, Enum.Material.Grass)
+	game:GetService("StarterGui"):SetCore("SendNotification", {
+		Title = "✅ Terrain Created",
+		Text = "Flat grass terrain generated",
+		Duration = 2
+	})
+end)
+
+connect(terrainLayout:GetPropertyChangedSignal("AbsoluteContentSize"), function()
+	terrainPanel.CanvasSize = UDim2.new(0, 0, 0, terrainLayout.AbsoluteContentSize.Y + 10)
+end)
+
+-- ============================================================
+-- TOGGLE MENU
+-- ============================================================
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Name = "ToggleBtn"
+toggleBtn.Size = UDim2.fromOffset(50, 50)
+toggleBtn.Position = UDim2.new(0, 12, 1, -62)
+toggleBtn.Text = "📦"
+toggleBtn.TextSize = 22
+toggleBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
+toggleBtn.BackgroundTransparency = 0.15
+toggleBtn.BorderSizePixel = 0
+toggleBtn.Parent = sg
+local toggleCorner = Instance.new("UICorner")
+toggleCorner.CornerRadius = UDim.new(0, 12)
+toggleCorner.Parent = toggleBtn
+
+connect(toggleBtn.Activated, function()
+	main.Visible = not main.Visible
+end)
+
+connect(closeBtn.Activated, function()
+	main.Visible = false
+end)
+
+-- Keyboard shortcut
+connect(UserInputService.InputBegan, function(input, gp)
+	if gp or destroyed then return end
+	if input.KeyCode == Enum.KeyCode.F2 then
+		main.Visible = not main.Visible
+	end
+end)
+
+-- Make draggable
+local dragging = false
+local dragStart = nil
+local frameStart = nil
+
+connect(titleBar.InputBegan, function(input)
+	if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+		dragging = true
+		dragStart = input.Position
+		frameStart = main.Position
+	end
+end)
+
+connect(UserInputService.InputChanged, function(input)
+	if dragging and (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement) then
+		local delta = input.Position - dragStart
+		main.Position = UDim2.new(frameStart.X.Scale, frameStart.X.Offset + delta.X, frameStart.Y.Scale, frameStart.Y.Offset + delta.Y)
+	end
+end)
+
+connect(UserInputService.InputEnded, function(input)
+	if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+		dragging = false
+	end
+end)
+
+-- Set tab 1 active by default
+tabButtons[1].BackgroundColor3 = Color3.fromRGB(60, 80, 160)
+tabButtons[1].TextColor3 = Color3.fromRGB(255, 255, 255)
+
+print("hai")
