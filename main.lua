@@ -336,7 +336,6 @@ local function updateMovementFromPosition(pos)
 
 	local threshold = 0.15 
 
-	-- Mengizinkan 2 tombol menyala bersamaan (misal Forward + Right untuk diagonal) tapi memblokir 3 arah sekaligus
 	if deltaY < -threshold then 
 		moveState.Forward = true 
 	elseif deltaY > threshold then 
@@ -349,7 +348,6 @@ local function updateMovementFromPosition(pos)
 		moveState.Right = true 
 	end
 
-	-- Update warna tombol secara instan
 	setButtonVisual(btnUp, moveState.Forward)
 	setButtonVisual(btnDown, moveState.Backward)
 	setButtonVisual(btnLeft, moveState.Left)
@@ -406,17 +404,17 @@ local function stopTouch(input)
 			end
 		end
 
+		-- Langsung matikan delay jika lompat/di udara agar tidak ada jeda patah-patah/berhenti saat nge-combo jump
 		local isJumpingOrInAir = false
 		if humanoid and humanoid.Parent then
 			pcall(function()
 				local currentState = humanoid:GetState()
-				if currentState == Enum.HumanoidStateType.Freefall or currentState == Enum.HumanoidStateType.Jumping then
+				if currentState == Enum.HumanoidStateType.Freefall or currentState == Enum.HumanoidStateType.Jumping or currentState == Enum.HumanoidStateType.Climbing or currentState == Enum.HumanoidStateType.Swimming then
 					isJumpingOrInAir = true
 				end
 			end)
 		end
 
-		-- Jika Mode Delay aktif dan di tanah, beri jeda (delay) agar ada efek jejak & momentum
 		if isDelayMode and not isJumpingOrInAir then
 			task.delay(0.25, turnOffMovement)
 		else
