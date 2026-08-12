@@ -1,8 +1,3 @@
---[[
-  👾 AldoVz Hub
-  Menu Kiri | Infinite Yield | Shiftlock | Notes | Control | Spectate
---]]
-
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
@@ -41,9 +36,6 @@ end
 
 _G._AldoVzHubCleanup = cleanup
 
--- ============================================================
--- SAVE SYSTEM
--- ============================================================
 local SAVE_FILE = "AldoVzHub_Config.json"
 local NOTES_FILE = "AldoVzHub_Notes.json"
 
@@ -89,19 +81,13 @@ end
 loadConfig()
 loadNotes()
 
--- ============================================================
--- GUI
--- ============================================================
 local sg = Instance.new("ScreenGui")
 sg.Name = "AldoVzHub"
 sg.ResetOnSpawn = false
 sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 sg.DisplayOrder = 999999
 sg.Parent = playerGui
-
--- ============================================================
--- LEFT SIDE MENU (Fixed position top-left below roblox logo area)
--- ============================================================
+=
 local leftPanel = Instance.new("Frame")
 leftPanel.Name = "LeftPanel"
 leftPanel.Size = UDim2.new(0, 180, 1, 0)
@@ -123,7 +109,6 @@ leftStroke.Thickness = 1.5
 leftStroke.Transparency = 0.5
 leftStroke.Parent = leftPanel
 
--- Title bar with ping/fps
 local titleBar = Instance.new("Frame")
 titleBar.Name = "TitleBar"
 titleBar.Size = UDim2.new(1, 0, 0, 50)
@@ -200,9 +185,6 @@ connect(cmdBox.FocusLost, function(enter)
   end
 end)
 
--- ============================================================
--- MENU BUTTONS (UIScrollingButton style)
--- ============================================================
 local menuBtnFrame = Instance.new("Frame")
 menuBtnFrame.Name = "MenuButtons"
 menuBtnFrame.Size = UDim2.new(1, 0, 1, -90)
@@ -258,9 +240,6 @@ end
 
 menuScroll.CanvasSize = UDim2.new(0, 0, 0, #menuNames * 36 + 10)
 
--- ============================================================
--- RIGHT SIDE MAIN AREA
--- ============================================================
 local rightPanel = Instance.new("Frame")
 rightPanel.Name = "RightPanel"
 rightPanel.Size = UDim2.new(1, -180, 1, 0)
@@ -286,9 +265,6 @@ contentFrame.Parent = rightPanel
 
 local menuPanels = {}
 
--- ============================================================
--- PANEL 1: MAIN (Walk Speed, Jump, Shift Lock)
--- ============================================================
 local mainPanel = Instance.new("Frame")
 mainPanel.Name = "MainPanel"
 mainPanel.Size = UDim2.new(1, 0, 1, 0)
@@ -445,7 +421,6 @@ mSlider("Jump Power", 10, 200, config.jumpPower, function(v)
   saveConfig()
 end)
 
--- Shift Lock toggle
 mHeader("🔒 SHIFT LOCK")
 local slFrame = Instance.new("Frame")
 slFrame.Size = UDim2.new(1, -10, 0, 34)
@@ -495,9 +470,6 @@ connect(slBtn.Activated, function()
   saveConfig()
 end)
 
--- ============================================================
--- PANEL 2: NOTE
--- ============================================================
 local notePanel = Instance.new("Frame")
 notePanel.Name = "NotePanel"
 notePanel.Size = UDim2.new(1, 0, 1, 0)
@@ -604,7 +576,6 @@ local function refreshNotes()
   noteScroll.CanvasSize = UDim2.new(0, 0, 0, #notes * 64 + 60)
 end
 
--- Add note input
 local noteInputFrame = Instance.new("Frame")
 noteInputFrame.Size = UDim2.new(1, 0, 0, 44)
 noteInputFrame.Position = UDim2.new(0, 0, 1, -44)
@@ -681,9 +652,6 @@ end)
 
 refreshNotes()
 
--- ============================================================
--- PANEL 3: CONTROL (WASD off, Air Control)
--- ============================================================
 local controlPanel = Instance.new("Frame")
 controlPanel.Name = "ControlPanel"
 controlPanel.Size = UDim2.new(1, 0, 1, 0)
@@ -720,7 +688,6 @@ end
 
 cHeader("🎮 CONTROLLER SETTINGS")
 
--- WASD toggle
 local wasdFrame = Instance.new("Frame")
 wasdFrame.Size = UDim2.new(1, -10, 0, 34)
 wasdFrame.BackgroundColor3 = Color3.fromRGB(22, 18, 40)
@@ -772,7 +739,6 @@ connect(wasdBtn.Activated, function()
   saveConfig()
 end)
 
--- Air Control slider
 cHeader("🌪️ AIR CONTROL")
 local acFrame = Instance.new("Frame")
 acFrame.Size = UDim2.new(1, -10, 0, 44)
@@ -876,9 +842,6 @@ end)
 
 controlScroll.CanvasSize = UDim2.new(0, 0, 0, 200)
 
--- ============================================================
--- PANEL 4: PLAYER (Spectate)
--- ============================================================
 local playerPanel = Instance.new("Frame")
 playerPanel.Name = "PlayerPanel"
 playerPanel.Size = UDim2.new(1, 0, 1, 0)
@@ -960,7 +923,6 @@ end
 
 refreshPlayerList()
 
--- Refresh player list when players change
 connect(Players.PlayerAdded, refreshPlayerList)
 connect(Players.PlayerRemoving, refreshPlayerList)
 connect(Players.LocalPlayer.CharacterAdded, function()
@@ -974,9 +936,6 @@ connect(Players.LocalPlayer.CharacterAdded, function()
   end
 end)
 
--- ============================================================
--- FPS / PING LOOP
--- ============================================================
 local fc = 0
 local ft = 0
 local checkSpeed = 0
@@ -995,14 +954,11 @@ connect(RunService.RenderStepped, function(dt)
   end
 end)
 
--- ============================================================
--- SETTING SHIFTLOCK/JUMP with arrow controls
--- ============================================================
 local settingMode = "JUMP"
 local settingVal = 50
 
 local function updateSettingDisplay()
-  -- Update UI when needed
+
 end
 
 connect(UserInputService.InputBegan, function(input, gp)
@@ -1036,13 +992,9 @@ connect(UserInputService.InputBegan, function(input, gp)
   end
 end)
 
--- ============================================================
--- INIT
--- ============================================================
 menuButtons[1].BackgroundColor3 = Color3.fromRGB(80, 40, 160)
 menuButtons[1].TextColor3 = Color3.fromRGB(255, 255, 255)
 
--- Apply saved config on character
 local function applyConfig(char)
   if not char then return end
   local hum = char:FindFirstChild("Humanoid")
@@ -1058,4 +1010,4 @@ end
 
 connect(player.CharacterAdded, applyConfig)
 
-print("[AldoVzHub] Loaded - Menu Kiri + Infinite Yield + All Features")
+print("[AVz")
