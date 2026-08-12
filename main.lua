@@ -306,7 +306,8 @@ connect(btnToggleDelay.Activated, function()
 	end
 end)
 
-local function setupButtonEvents(button, stateKey)
+-- Perbaikan Total: Menggunakan event sentuh langsung yang stabil untuk Mobile
+local function setupDirectTouch(button, stateKey)
 	connect(button.MouseButton1Down, function()
 		if destroyed then return end
 		moveState[stateKey] = true
@@ -325,20 +326,20 @@ local function setupButtonEvents(button, stateKey)
 		setButtonVisual(button, true)
 	end)
 
-	local function release()
+	local function releaseTouch()
 		if destroyed then return end
 		moveState[stateKey] = false
 		setButtonVisual(button, false)
 	end
 
-	connect(button.TouchEnded, release)
-	connect(button.TouchCancel, release)
+	connect(button.TouchEnded, releaseTouch)
+	connect(button.TouchCancel, releaseTouch)
 end
 
-setupButtonEvents(btnUp, "Forward")
-setupButtonEvents(btnDown, "Backward")
-setupButtonEvents(btnLeft, "Left")
-setupButtonEvents(btnRight, "Right")
+setupDirectTouch(btnUp, "Forward")
+setupDirectTouch(btnDown, "Backward")
+setupDirectTouch(btnLeft, "Left")
+setupDirectTouch(btnRight, "Right")
 
 connect(btnWLock.Activated, function()
 	if destroyed then return end
