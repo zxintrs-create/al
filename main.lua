@@ -272,7 +272,6 @@ local centerCorner = Instance.new("UICorner")
 centerCorner.CornerRadius = UDim.new(1,0)
 centerCorner.Parent = btnWLock
 
--- SAKLAR MODE DELAY
 local isDelayMode = false
 
 local btnToggleDelay = Instance.new("TextButton")
@@ -306,24 +305,28 @@ connect(btnToggleDelay.Activated, function()
 	end
 end)
 
--- Sistem Pengaman Jari (Mencegah gesekan sentuhan memicu tombol ganda)
-local activeTouchMap = {}
+local activeTouches = {}
 
-local function setupStrictButton(button, stateKey)
+local function isPointInsideGui(guiObject, absPosition)
+	local pos = guiObject.AbsolutePosition
+	local size = guiObject.AbsoluteSize
+	return absPosition.X >= pos.X and absPosition.X <= pos.X + size.X and
+	       absPosition.Y >= pos.Y and absPosition.Y <= pos.Y + size.Y
+end
+
+local function setupPreciseButton(button, stateKey)
 	connect(button.InputBegan, function(input)
 		if destroyed then return end
 		if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-			if not activeTouchMap[button] then
-				activeTouchMap[button] = input
-				moveState[stateKey] = true
-				setButtonVisual(button, true)
-			end
+			activeTouches[input] = stateKey
+			moveState[stateKey] = true
+			setButtonVisual(button, true)
 		end
 	end)
 
 	local function releaseInput(input)
-		if activeTouchMap[button] == input then
-			activeTouchMap[button] = nil
+		if activeTouches[input] == stateKey then
+			activeTouches[input] = nil
 			moveState[stateKey] = false
 			setButtonVisual(button, false)
 		end
@@ -333,10 +336,30 @@ local function setupStrictButton(button, stateKey)
 	connect(button.TouchCancel, releaseInput)
 end
 
-setupStrictButton(btnUp, "Forward")
-setupStrictButton(btnDown, "Backward")
-setupStrictButton(btnLeft, "Left")
-setupStrictButton(btnRight, "Right")
+setupPreciseButton(btnUp, "Forward")
+setupPreciseButton(btnDown, "Backward")
+setupPreciseButton(btnLeft, "Left")
+setupPreciseButton(btnRight, "Right")
+
+connect(UserInputService.InputChanged, function(input)
+	if destroyed then return end
+	if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement then
+		local stateKey = activeTouches[input]
+		if stateKey then
+			local currentButton = nil
+			if stateKey == "Forward" then currentButton = btnUp
+			elseif stateKey == "Backward" then currentButton = btnDown
+			elseif stateKey == "Left" then currentButton = btnLeft
+			elseif stateKey == "Right" then currentButton = btnRight end
+
+			if currentButton and not isPointInsideGui(currentButton, input.Position) then
+				activeTouches[input] = nil
+				moveState[stateKey] = false
+				setButtonVisual(currentButton, false)
+			end
+		end
+	end
+end)
 
 connect(btnWLock.Activated, function()
 	if destroyed then return end
