@@ -19,7 +19,6 @@ local defaultConfig = {
 }
 
 local config = {}
-
 for k, v in pairs(defaultConfig) do
 	config[k] = v
 end
@@ -27,7 +26,6 @@ end
 local function saveConfig()
 	pcall(function()
 		local data = HttpService:JSONEncode(config)
-
 		if writefile then
 			writefile(CONFIG_FILE, data)
 		end
@@ -39,13 +37,8 @@ local function loadConfig()
 		if readfile and isfile and isfile(CONFIG_FILE) then
 			local raw = readfile(CONFIG_FILE)
 			local decoded = HttpService:JSONDecode(raw)
-
-			if type(decoded) == "table" then
-				for k, v in pairs(decoded) do
-					if defaultConfig[k] ~= nil and type(v) == type(defaultConfig[k]) then
-						config[k] = v
-					end
-				end
+			for k, v in pairs(decoded) do
+				config[k] = v
 			end
 		end
 	end)
@@ -76,15 +69,12 @@ _G.ShiftLocked = false
 
 local function connect(signal, callback)
 	local c
-
 	pcall(function()
 		c = signal:Connect(callback)
 	end)
-
 	if c then
 		table.insert(connections, c)
 	end
-
 	return c
 end
 
@@ -94,13 +84,11 @@ local function disconnectAll()
 			connections[i]:Disconnect()
 		end)
 	end
-
 	table.clear(connections)
 end
 
 local function destroyGui(name)
 	local obj = playerGui:FindFirstChild(name)
-
 	if obj then
 		pcall(function()
 			obj:Destroy()
@@ -114,9 +102,7 @@ _G.DeltaMobileControlsCleanup = function()
 	end
 
 	destroyed = true
-
 	disconnectAll()
-
 	destroyGui("DeltaMobileControls")
 	destroyGui("DeltaMobileErgo")
 end
@@ -258,7 +244,6 @@ mainFrame.Parent = screenGui
 
 local function createButton(name, position, size, text, zIndex, bgColor)
 	local button = Instance.new("TextButton")
-
 	button.Name = name
 	button.Position = position
 	button.Size = size
@@ -342,7 +327,6 @@ centerCorner.CornerRadius = UDim.new(1, 0)
 centerCorner.Parent = btnWLock
 
 local isDelayMode = false
-local delayDirection = nil
 
 local btnToggleDelay = Instance.new("TextButton")
 btnToggleDelay.Name = "ToggleDelay"
@@ -370,10 +354,6 @@ connect(btnToggleDelay.Activated, function()
 
 	isDelayMode = not isDelayMode
 
-	smoothX = 0
-	smoothZ = 0
-	delayDirection = nil
-
 	if isDelayMode then
 		btnToggleDelay.Text = "MODE: DELAY (JEJAK)"
 		btnToggleDelay.BackgroundColor3 = Color3.fromRGB(220, 120, 40)
@@ -395,15 +375,26 @@ local activeTouchId = nil
 local touchStartPos = nil
 local touchStartTime = 0
 
-local smoothX = 0
-local smoothZ = 0
+local smoothX, smoothZ = 0, 0
 
-local function getDirectionFromPosition(pos)
+local function resetDirectionState()
+	moveState.Forward = false
+	moveState.Backward = false
+	moveState.Left = false
+	moveState.Right = false
+
+	setButtonVisual(btnUp, false)
+	setButtonVisual(btnDown, false)
+	setButtonVisual(btnLeft, false)
+	setButtonVisual(btnRight, false)
+end
+
+local function updateMovementFromPosition(pos)
 	local absPos = touchZone.AbsolutePosition
 	local absSize = touchZone.AbsoluteSize
 
 	if absSize.X <= 0 or absSize.Y <= 0 then
-		return nil, 0, 0
+		return
 	end
 
 	local centerX = absPos.X + (absSize.X / 2)
@@ -412,74 +403,34 @@ local function getDirectionFromPosition(pos)
 	local deltaX = (pos.X - centerX) / (absSize.X / 2)
 	local deltaY = (pos.Y - centerY) / (absSize.Y / 2)
 
+	local newForward = false
+	local newBackward = false
+	local newLeft = false
+	local newRight = false
+
 	local threshold = 0.15
 
-	if math.abs(deltaX) <= threshold and math.abs(deltaY) <= threshold then
-		return nil, 0, 0
+	if deltaY < -threshold then
+		newForward = true
+	elseif deltaY > threshold then
+		newBackward = true
 	end
 
-	if isDelayMode then
-		if math.abs(deltaY) >= math.abs(deltaX) then
-			if deltaY < -threshold then
-				return "Forward", 0, 1
-			elseif deltaY > threshold then
-				return "Backward", 0, -1
-			end
-		else
-			if deltaX < -threshold then
-				return "Left", -1, 0
-			elseif deltaX > threshold then
-				return "Right", 1, 0
-			end
-		end
-	else
-		local x = 0
-		local z = 0
-
-		if deltaY < -threshold then
-			z = 1
-		elseif deltaY > threshold then
-			z = -1
-		end
-
-		if deltaX < -threshold then
-			x = -1
-		elseif deltaX > threshold then
-			x = 1
-		end
-
-		if x == 0 and z == 0 then
-			return nil, 0, 0
-		end
-
-		return "Free", x, z
+	if deltaX < -threshold then
+		newLeft = true
+	elseif deltaX > threshold then
+		newRight = true
 	end
 
-	return nil, 0, 0
-end
+	moveState.Forward = newForward
+	moveState.Backward = newBackward
+	moveState.Left = newLeft
+	moveState.Right = newRight
 
-local function updateMovementFromPosition(pos)
-	local direction, targetX, targetZ = getDirectionFromPosition(pos)
-
-	moveState.Forward = direction == "Forward"
-	moveState.Backward = direction == "Backward"
-	moveState.Left = direction == "Left"
-	moveState.Right = direction == "Right"
-
-	if isDelayMode then
-		if direction ~= delayDirection then
-			delayDirection = direction
-			smoothX = 0
-			smoothZ = 0
-		end
-	else
-		delayDirection = nil
-	end
-
-	setButtonVisual(btnUp, moveState.Forward)
-	setButtonVisual(btnDown, moveState.Backward)
-	setButtonVisual(btnLeft, moveState.Left)
-	setButtonVisual(btnRight, moveState.Right)
+	setButtonVisual(btnUp, newForward)
+	setButtonVisual(btnDown, newBackward)
+	setButtonVisual(btnLeft, newLeft)
+	setButtonVisual(btnRight, newRight)
 end
 
 connect(touchZone.InputBegan, function(input)
@@ -495,6 +446,7 @@ connect(touchZone.InputBegan, function(input)
 			touchStartPos = input.Position
 			touchStartTime = tick()
 
+			resetDirectionState()
 			updateMovementFromPosition(input.Position)
 		end
 	end
@@ -510,85 +462,51 @@ connect(touchZone.InputChanged, function(input)
 	end
 end)
 
-local function stopTouch(input)
+local function finishTouch(input)
 	if input ~= activeTouchId then
 		return
 	end
 
-	local holdTime = tick() - touchStartTime
-	local dist = 0
+	local currentStartPos = touchStartPos
+	local currentStartTime = touchStartTime
 
-	if touchStartPos then
-		dist = (input.Position - touchStartPos).Magnitude
-	end
+	activeTouchId = nil
+	touchStartPos = nil
+	touchStartTime = 0
 
-	if holdTime < 0.3 and dist < 30 then
-		local absPos = touchZone.AbsolutePosition
-		local absSize = touchZone.AbsoluteSize
+	if currentStartPos then
+		local holdTime = tick() - currentStartTime
+		local dist = (input.Position - currentStartPos).Magnitude
 
-		if absSize.X > 0 and absSize.Y > 0 then
-			local relX = (input.Position.X - absPos.X) / absSize.X
-			local relY = (input.Position.Y - absPos.Y) / absSize.Y
+		if holdTime < 0.3 and dist < 30 then
+			local relX = (input.Position.X - touchZone.AbsolutePosition.X) / touchZone.AbsoluteSize.X
+			local relY = (input.Position.Y - touchZone.AbsolutePosition.Y) / touchZone.AbsoluteSize.Y
 
-			if relX > 0.33
-				and relX < 0.66
-				and relY > 0.33
-				and relY < 0.66 then
-
+			if relX > 0.33 and relX < 0.66 and relY > 0.33 and relY < 0.66 then
 				moveState.WLock = not moveState.WLock
 				updateWLock()
 			end
 		end
 	end
 
-	activeTouchId = nil
-	touchStartPos = nil
-	touchStartTime = 0
+	resetDirectionState()
 
-	moveState.Forward = false
-	moveState.Backward = false
-	moveState.Left = false
-	moveState.Right = false
-
-	setButtonVisual(btnUp, false)
-	setButtonVisual(btnDown, false)
-	setButtonVisual(btnLeft, false)
-	setButtonVisual(btnRight, false)
-
-	if isDelayMode then
-		delayDirection = nil
-	else
-		smoothX = 0
-		smoothZ = 0
+	if not isDelayMode then
+		smoothX, smoothZ = 0, 0
 	end
 end
 
-connect(touchZone.InputEnded, stopTouch)
+connect(touchZone.InputEnded, finishTouch)
 
 connect(UserInputService.InputEnded, function(input)
-	if input ~= activeTouchId then
-		return
+	if input == activeTouchId then
+		finishTouch(input)
 	end
+end)
 
-	activeTouchId = nil
-	touchStartPos = nil
-	touchStartTime = 0
-
-	moveState.Forward = false
-	moveState.Backward = false
-	moveState.Left = false
-	moveState.Right = false
-
-	setButtonVisual(btnUp, false)
-	setButtonVisual(btnDown, false)
-	setButtonVisual(btnLeft, false)
-	setButtonVisual(btnRight, false)
-
-	delayDirection = nil
-
-	if not isDelayMode then
-		smoothX = 0
-		smoothZ = 0
+connect(UserInputService.TouchEnded, function(input)
+	if input == activeTouchId then
+		finishTouch(input)
 	end
 end)
 
@@ -601,7 +519,6 @@ local function updateCameraVectors()
 	end
 
 	local camera = workspace.CurrentCamera
-
 	if not camera then
 		return
 	end
@@ -612,76 +529,47 @@ local function updateCameraVectors()
 	local forward = Vector3.new(look.X, 0, look.Z)
 	local side = Vector3.new(right.X, 0, right.Z)
 
-	if forward.Magnitude > 0.001 then
+	if forward.Magnitude > .001 then
 		cachedForward = forward.Unit
 	end
 
-	if side.Magnitude > 0.001 then
+	if side.Magnitude > .001 then
 		cachedSide = side.Unit
 	end
 end
 
 local function getMoveVector()
-	local targetX = 0
-	local targetZ = 0
+	local targetX, targetZ = 0, 0
 
-	if isDelayMode then
-		if delayDirection == "Forward" then
-			targetZ = 1
-		elseif delayDirection == "Backward" then
-			targetZ = -1
-		elseif delayDirection == "Left" then
-			targetX = -1
-		elseif delayDirection == "Right" then
-			targetX = 1
-		end
-	else
-		if moveState.Forward then
-			targetZ += 1
-		end
-
-		if moveState.Backward then
-			targetZ -= 1
-		end
-
-		if moveState.Left then
-			targetX -= 1
-		end
-
-		if moveState.Right then
-			targetX += 1
-		end
+	if moveState.Forward then
+		targetZ += 1
 	end
 
-	if targetX == 0 and targetZ == 0 then
-		if moveState.WLock then
-			if isDelayMode then
-				smoothX = 0
-				smoothZ = 0
-			end
+	if moveState.Backward then
+		targetZ -= 1
+	end
 
-			return cachedForward
-		end
+	if moveState.Left then
+		targetX -= 1
+	end
 
-		if not isDelayMode then
-			smoothX = 0
-			smoothZ = 0
-		end
+	if moveState.Right then
+		targetX += 1
+	end
 
+	if targetX == 0 and targetZ == 0 and not moveState.WLock and not isDelayMode then
+		smoothX, smoothZ = 0, 0
 		return Vector3.zero
 	end
 
-	if isDelayMode then
-		local delaySpeed = 0.15
-
-		smoothX = smoothX + (targetX - smoothX) * delaySpeed
-		smoothZ = smoothZ + (targetZ - smoothZ) * delaySpeed
-	else
-		local normalSpeed = 0.95
-
-		smoothX = smoothX + (targetX - smoothX) * normalSpeed
-		smoothZ = smoothZ + (targetZ - smoothZ) * normalSpeed
+	if targetX == 0 and targetZ == 0 and moveState.WLock then
+		return cachedForward
 	end
+
+	local lerpSpeed = isDelayMode and 0.15 or 0.95
+
+	smoothX = smoothX + (targetX - smoothX) * lerpSpeed
+	smoothZ = smoothZ + (targetZ - smoothZ) * lerpSpeed
 
 	if math.abs(smoothX) < 0.01 then
 		smoothX = 0
@@ -701,7 +589,7 @@ local function getMoveVector()
 
 	local movement = cachedSide * smoothX + cachedForward * smoothZ
 
-	if movement.Magnitude < 0.001 then
+	if movement.Magnitude < .001 then
 		return Vector3.zero
 	end
 
@@ -724,7 +612,6 @@ connect(RunService.RenderStepped, function()
 	end
 
 	updateCameraVectors()
-
 	currentHumanoid:Move(getMoveVector(), false)
 
 	if _G.ShiftLocked then
@@ -733,10 +620,7 @@ connect(RunService.RenderStepped, function()
 
 		if camera and rootPart then
 			local _, y, _ = camera.CFrame:ToOrientation()
-
-			rootPart.CFrame =
-				CFrame.new(rootPart.Position) *
-				CFrame.Angles(0, y, 0)
+			rootPart.CFrame = CFrame.new(rootPart.Position) * CFrame.Angles(0, y, 0)
 		end
 
 		currentHumanoid.AutoRotate = false
@@ -760,7 +644,6 @@ gui.Parent = playerGui
 
 local function makeButton(parent, name, position, sizeValue, text, bg, zIndex)
 	local button = Instance.new("TextButton")
-
 	button.Name = name
 	button.Position = position
 	button.Size = sizeValue
@@ -847,10 +730,7 @@ sensLabel.ZIndex = 42
 sensLabel.Parent = cameraSection
 
 local function applySensitivity()
-	sensLabel.Text =
-		"Multiplier: " ..
-		string.format("%.1f", config.Sensitivity) ..
-		"x"
+	sensLabel.Text = "Multiplier: " .. string.format("%.1f", config.Sensitivity) .. "x"
 
 	pcall(function()
 		UserSettings().GameSettings.MouseSensitivity = config.Sensitivity
@@ -858,12 +738,7 @@ local function applySensitivity()
 end
 
 local function updateSensitivity(amount)
-	config.Sensitivity = math.clamp(
-		config.Sensitivity + amount,
-		0.1,
-		10
-	)
-
+	config.Sensitivity = math.clamp(config.Sensitivity + amount, 0.1, 10)
 	applySensitivity()
 end
 
@@ -1024,7 +899,6 @@ local function getJump()
 	if jumpButton
 		and jumpButton.Parent
 		and jumpButton:IsDescendantOf(playerGui) then
-
 		return jumpButton
 	end
 
@@ -1066,17 +940,8 @@ local function updateJump()
 
 	pcall(function()
 		jump.AnchorPoint = Vector2.new(.5, .5)
-		jump.Position = UDim2.new(
-			config.JumpX,
-			0,
-			config.JumpY,
-			0
-		)
-
-		jump.Size = UDim2.fromOffset(
-			pixelSize,
-			pixelSize
-		)
+		jump.Position = UDim2.new(config.JumpX, 0, config.JumpY, 0)
+		jump.Size = UDim2.fromOffset(pixelSize, pixelSize)
 	end)
 end
 
@@ -1086,13 +951,7 @@ local function updateShiftLockPosition()
 		config.ShiftY = math.clamp(config.ShiftY, .02, .98)
 		config.ShiftSize = math.clamp(config.ShiftSize, 20, 100)
 
-		btnShiftLock.Position = UDim2.new(
-			config.ShiftX,
-			0,
-			config.ShiftY,
-			0
-		)
-
+		btnShiftLock.Position = UDim2.new(config.ShiftX, 0, config.ShiftY, 0)
 		btnShiftLock.Size = UDim2.fromOffset(
 			config.ShiftSize,
 			config.ShiftSize
@@ -1156,10 +1015,6 @@ bindHoldButton(moveLeft, -step, 0)
 bindHoldButton(moveRight, step, 0)
 
 connect(RunService.RenderStepped, function()
-	if destroyed then
-		return
-	end
-
 	if holding[moveUp] then
 		applyMoveStep(0, -step)
 	end
@@ -1221,12 +1076,10 @@ connect(center.Activated, function()
 	if targetSettingMode == "JUMP" then
 		config.JumpX = defaultConfig.JumpX
 		config.JumpY = defaultConfig.JumpY
-
 		updateJump()
 	else
 		config.ShiftX = defaultConfig.ShiftX
 		config.ShiftY = defaultConfig.ShiftY
-
 		updateShiftLockPosition()
 	end
 end)
@@ -1287,19 +1140,11 @@ local function refreshJump()
 	end
 
 	task.defer(function()
-		if destroyed then
-			return
-		end
-
 		updateJump()
 		updateShiftLockPosition()
 	end)
 
 	task.delay(0.2, function()
-		if destroyed then
-			return
-		end
-
 		updateJump()
 		updateShiftLockPosition()
 	end)
@@ -1312,10 +1157,11 @@ connect(player.CharacterAdded, function(newCharacter)
 
 	clearMovement()
 
+	activeTouchId = nil
+	touchStartPos = nil
+	touchStartTime = 0
 	smoothX = 0
 	smoothZ = 0
-	delayDirection = nil
-	activeTouchId = nil
 
 	character = newCharacter
 	humanoid = newCharacter:WaitForChild("Humanoid", 10)
