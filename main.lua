@@ -272,7 +272,7 @@ local centerCorner = Instance.new("UICorner")
 centerCorner.CornerRadius = UDim.new(1,0)
 centerCorner.Parent = btnWLock
 
--- === SAKLAR MODE DELAY ===
+-- SAKLAR MODE DELAY
 local isDelayMode = false
 
 local btnToggleDelay = Instance.new("TextButton")
@@ -305,37 +305,38 @@ connect(btnToggleDelay.Activated, function()
 		btnToggleDelay.BackgroundColor3 = Color3.fromRGB(70, 200, 100)
 	end
 end)
--- ===============================
 
--- Sistem Tombol Independen (Anti Bentrok / Anti Nyala Bersamaan jika tidak ditekan)
-local activeTouches = {}
+-- Sistem Pengaman Jari (Mencegah gesekan sentuhan memicu tombol ganda)
+local activeTouchMap = {}
 
-local function setupButtonEvents(button, stateKey)
+local function setupStrictButton(button, stateKey)
 	connect(button.InputBegan, function(input)
 		if destroyed then return end
 		if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-			activeTouches[input] = stateKey
-			moveState[stateKey] = true
-			setButtonVisual(button, true)
+			if not activeTouchMap[button] then
+				activeTouchMap[button] = input
+				moveState[stateKey] = true
+				setButtonVisual(button, true)
+			end
 		end
 	end)
 
-	local function release(input)
-		if activeTouches[input] == stateKey then
-			activeTouches[input] = nil
+	local function releaseInput(input)
+		if activeTouchMap[button] == input then
+			activeTouchMap[button] = nil
 			moveState[stateKey] = false
 			setButtonVisual(button, false)
 		end
 	end
 
-	connect(button.InputEnded, release)
-	connect(button.TouchCancel, release)
+	connect(button.InputEnded, releaseInput)
+	connect(button.TouchCancel, releaseInput)
 end
 
-setupButtonEvents(btnUp, "Forward")
-setupButtonEvents(btnDown, "Backward")
-setupButtonEvents(btnLeft, "Left")
-setupButtonEvents(btnRight, "Right")
+setupStrictButton(btnUp, "Forward")
+setupStrictButton(btnDown, "Backward")
+setupStrictButton(btnLeft, "Left")
+setupStrictButton(btnRight, "Right")
 
 connect(btnWLock.Activated, function()
 	if destroyed then return end
