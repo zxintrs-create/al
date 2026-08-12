@@ -231,8 +231,8 @@ local function createButton(name, position, size, text, zIndex, bgColor)
 	button.Font = Enum.Font.GothamBold
 	button.TextSize = 28
 	button.AutoButtonColor = false
-	button.Active = true
-	button.Selectable = true
+	button.Active = false
+	button.Selectable = false
 	button.BorderSizePixel = 0
 	button.ZIndex = zIndex or 10
 	button.Parent = mainFrame
@@ -262,8 +262,8 @@ btnWLock.TextColor3 = BUTTON_TEXT_COLOR
 btnWLock.Font = Enum.Font.GothamBold
 btnWLock.TextSize = 28
 btnWLock.AutoButtonColor = false
-btnWLock.Active = true
-btnWLock.Selectable = true
+btnWLock.Active = false
+btnWLock.Selectable = false
 btnWLock.BorderSizePixel = 0
 btnWLock.ZIndex = 12
 btnWLock.Parent = mainFrame
@@ -272,6 +272,7 @@ local centerCorner = Instance.new("UICorner")
 centerCorner.CornerRadius = UDim.new(1,0)
 centerCorner.Parent = btnWLock
 
+-- === FITUR SAKLAR MODE DELAY & KELINCAHAN (KEMBALI KE TOUCHZONE ASLI) ===
 local isDelayMode = false
 
 local btnToggleDelay = Instance.new("TextButton")
@@ -304,48 +305,132 @@ connect(btnToggleDelay.Activated, function()
 		btnToggleDelay.BackgroundColor3 = Color3.fromRGB(70, 200, 100)
 	end
 end)
+-- ===============================
 
--- Perbaikan Sistem Tombol Independen dengan Validasi State Angkat Jari yang Akurat
-local function setupIndependentButton(button, stateKey)
-	local activeInput = nil
+local touchZone = Instance.new("Frame")
+touchZone.Name = "TouchZone"
+touchZone.Size = UDim2.new(1, 0, 1, 0)
+touchZone.BackgroundTransparency = 1
+touchZone.ZIndex = 50
+touchZone.Active = true
+touchZone.Parent = mainFrame
 
-	connect(button.InputBegan, function(input)
-		if destroyed then return end
-		if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-			activeInput = input
-			moveState[stateKey] = true
-			setButtonVisual(button, true)
-		end
-	end)
+local activeTouchId = nil
+local touchStartPos = nil
+local touchStartTime = 0
 
-	local function release(input)
-		if activeInput and (input == activeInput or input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1) then
-			activeInput = nil
-			moveState[stateKey] = false
-			setButtonVisual(button, false)
-		end
+local smoothX, smoothZ = 0, 0
+
+local function updateMovementFromPosition(pos)
+	local absPos = touchZone.AbsolutePosition
+	local absSize = touchZone.AbsoluteSize
+	
+	local centerX = absPos.X + (absSize.X / 2)
+	local centerY = absPos.Y + (absSize.Y / 2)
+	
+	local deltaX = (pos.X - centerX) / (absSize.X / 2)
+	local deltaY = (pos.Y - centerY) / (absSize.Y / 2)
+
+	moveState.Forward = false
+	moveState.Backward = false
+	moveState.Left = false
+	moveState.Right = false
+
+	local threshold = 0.15 
+
+	if deltaY < -threshold then 
+		moveState.Forward = true 
+	elseif deltaY > threshold then 
+		moveState.Backward = true 
+	end
+	
+	if deltaX < -threshold then 
+		moveState.Left = true 
+	elseif deltaX > threshold then 
+		moveState.Right = true 
 	end
 
-	connect(button.InputEnded, release)
-	connect(button.TouchCancel, release)
-	connect(button.MouseLeave, function()
-		if activeInput then
-			activeInput = nil
-			moveState[stateKey] = false
-			setButtonVisual(button, false)
-		end
-	end)
+	setButtonVisual(btnUp, moveState.Forward)
+	setButtonVisual(btnDown, moveState.Backward)
+	setButtonVisual(btnLeft, moveState.Left)
+	setButtonVisual(btnRight, moveState.Right)
 end
 
-setupIndependentButton(btnUp, "Forward")
-setupIndependentButton(btnDown, "Backward")
-setupIndependentButton(btnLeft, "Left")
-setupIndependentButton(btnRight, "Right")
-
-connect(btnWLock.Activated, function()
+connect(touchZone.InputBegan, function(input)
 	if destroyed then return end
-	moveState.WLock = not moveState.WLock
-	updateWLock()
+	if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+		if activeTouchId == nil then
+			activeTouchId = input
+			touchStartPos = input.Position
+			touchStartTime = tick()
+			updateMovementFromPosition(input.Position)
+		end
+	end
+end)
+
+connect(touchZone.InputChanged, function(input)
+	if destroyed then return end
+	if input == activeTouchId then
+		updateMovementFromPosition(input.Position)
+	end
+end)
+
+local function stopTouch(input)
+	if input == activeTouchId then
+		local holdTime = tick() - touchStartTime
+		local dist = (input.Position - touchStartPos).Magnitude
+
+		if holdTime < 0.3 and dist < 30 then
+			local relX = (input.Position.X - touchZone.AbsolutePosition.X) / touchZone.AbsoluteSize.X
+			local relY = (input.Position.Y - touchZone.AbsolutePosition.Y) / touchZone.AbsoluteSize.Y
+
+			if relX > 0.33 and relX < 0.66 and relY > 0.33 and relY < 0.66 then
+				moveState.WLock = not moveState.WLock
+				updateWLock()
+			end
+		end
+
+		activeTouchId = nil
+
+		local function turnOffMovement()
+			if activeTouchId == nil then
+				moveState.Forward = false
+				moveState.Backward = false
+				moveState.Left = false
+				moveState.Right = false
+
+				setButtonVisual(btnUp, false)
+				setButtonVisual(btnDown, false)
+				setButtonVisual(btnLeft, false)
+				setButtonVisual(btnRight, false)
+			end
+		end
+
+		if not isDelayMode then
+			turnOffMovement()
+		end
+	end
+end
+
+connect(touchZone.InputEnded, stopTouch)
+connect(UserInputService.InputEnded, function(input)
+	if input == activeTouchId then
+		-- PERBAIKAN UTAMA: Pastikan jari di Mode Delay juga membersihkan state dan berhenti total saat dilepas (tidak terus menekan)
+		activeTouchId = nil
+		if isDelayMode then
+			moveState.Forward = false
+			moveState.Backward = false
+			moveState.Left = false
+			moveState.Right = false
+			setButtonVisual(btnUp, false)
+			setButtonVisual(btnDown, false)
+			setButtonVisual(btnLeft, false)
+			setButtonVisual(btnRight, false)
+			smoothX, smoothZ = 0, 0
+		else
+			stopTouch(input)
+		end
+	end
 end)
 
 local cachedForward = Vector3.new(0,0,-1)
@@ -366,8 +451,6 @@ local function updateCameraVectors()
 	if side.Magnitude > .001 then cachedSide = side.Unit end
 end
 
-local smoothX, smoothZ = 0, 0
-
 local function getMoveVector()
 	local targetX, targetZ = 0, 0
 
@@ -376,7 +459,6 @@ local function getMoveVector()
 	if moveState.Left then targetX -= 1 end
 	if moveState.Right then targetX += 1 end
 
-	-- Jika Kelincahan aktif dan tidak ada tombol yang ditekan, matikan momentum secara instan
 	if targetX == 0 and targetZ == 0 and not moveState.WLock and not isDelayMode then
 		smoothX, smoothZ = 0, 0
 		return Vector3.zero
@@ -386,8 +468,8 @@ local function getMoveVector()
 		return cachedForward
 	end
 
-	-- Penyesuaian Lerp untuk Mode Kelincahan vs Mode Delay (Jejak)
-	local lerpSpeed = isDelayMode and 0.15 or 0.85
+	-- PERBAIKAN AIR CONTROL: Nilai Lerp diperbesar secara optimal untuk Mode Kelincahan agar gerakan melompat / air control terasa cepat & responsif penuh
+	local lerpSpeed = isDelayMode and 0.12 or 0.85
 	smoothX = smoothX + (targetX - smoothX) * lerpSpeed
 	smoothZ = smoothZ + (targetZ - smoothZ) * lerpSpeed
 
