@@ -217,6 +217,7 @@ mainFrame.Size = UDim2.fromOffset(300, 300)
 mainFrame.Position = UDim2.new(0, 18, 1, -330)
 mainFrame.BackgroundTransparency = 1
 mainFrame.BorderSizePixel = 0
+mainFrame.ZIndex = 50
 mainFrame.Parent = screenGui
 
 local function createButton(name, position, size, text, zIndex, bgColor)
@@ -234,7 +235,7 @@ local function createButton(name, position, size, text, zIndex, bgColor)
 	button.Active = true
 	button.Selectable = true
 	button.BorderSizePixel = 0
-	button.ZIndex = zIndex or 10
+	button.ZIndex = zIndex or 60
 	button.Parent = mainFrame
 
 	buttonDefaults[button] = button.BackgroundColor3
@@ -246,10 +247,10 @@ local function createButton(name, position, size, text, zIndex, bgColor)
 	return button
 end
 
-local btnUp = createButton("Up", UDim2.new(.33,0,0,0), UDim2.new(.34,0,.34,0), "▲", 10, MAIN_BUTTON_COLOR)
-local btnDown = createButton("Down", UDim2.new(.33,0,.66,0), UDim2.new(.34,0,.34,0), "▼", 10, MAIN_BUTTON_COLOR)
-local btnLeft = createButton("Left", UDim2.new(0,0,.33,0), UDim2.new(.34,0,.34,0), "◀", 10, MAIN_BUTTON_COLOR)
-local btnRight = createButton("Right", UDim2.new(.66,0,.33,0), UDim2.new(.34,0,.34,0), "▶", 10, MAIN_BUTTON_COLOR)
+local btnUp = createButton("Up", UDim2.new(.33,0,0,0), UDim2.new(.34,0,.34,0), "▲", 60, MAIN_BUTTON_COLOR)
+local btnDown = createButton("Down", UDim2.new(.33,0,.66,0), UDim2.new(.34,0,.34,0), "▼", 60, MAIN_BUTTON_COLOR)
+local btnLeft = createButton("Left", UDim2.new(0,0,.33,0), UDim2.new(.34,0,.34,0), "◀", 60, MAIN_BUTTON_COLOR)
+local btnRight = createButton("Right", UDim2.new(.66,0,.33,0), UDim2.new(.34,0,.34,0), "▶", 60, MAIN_BUTTON_COLOR)
 
 btnWLock = Instance.new("TextButton")
 btnWLock.Name = "WLock"
@@ -265,7 +266,7 @@ btnWLock.AutoButtonColor = false
 btnWLock.Active = true
 btnWLock.Selectable = true
 btnWLock.BorderSizePixel = 0
-btnWLock.ZIndex = 12
+btnWLock.ZIndex = 65
 btnWLock.Parent = mainFrame
 
 local centerCorner = Instance.new("UICorner")
@@ -286,7 +287,7 @@ btnToggleDelay.Font = Enum.Font.GothamBold
 btnToggleDelay.TextSize = 16
 btnToggleDelay.AutoButtonColor = false
 btnToggleDelay.BorderSizePixel = 0
-btnToggleDelay.ZIndex = 12
+btnToggleDelay.ZIndex = 70
 btnToggleDelay.Parent = mainFrame
 
 local toggleCorner = Instance.new("UICorner")
@@ -305,61 +306,39 @@ connect(btnToggleDelay.Activated, function()
 	end
 end)
 
-local activeTouches = {}
-
-local function isPointInsideGui(guiObject, absPosition)
-	local pos = guiObject.AbsolutePosition
-	local size = guiObject.AbsoluteSize
-	return absPosition.X >= pos.X and absPosition.X <= pos.X + size.X and
-	       absPosition.Y >= pos.Y and absPosition.Y <= pos.Y + size.Y
-end
-
-local function setupPreciseButton(button, stateKey)
-	connect(button.InputBegan, function(input)
+local function setupButtonEvents(button, stateKey)
+	connect(button.MouseButton1Down, function()
 		if destroyed then return end
-		if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-			activeTouches[input] = stateKey
-			moveState[stateKey] = true
-			setButtonVisual(button, true)
-		end
+		moveState[stateKey] = true
+		setButtonVisual(button, true)
 	end)
 
-	local function releaseInput(input)
-		if activeTouches[input] == stateKey then
-			activeTouches[input] = nil
-			moveState[stateKey] = false
-			setButtonVisual(button, false)
-		end
+	connect(button.MouseButton1Up, function()
+		if destroyed then return end
+		moveState[stateKey] = false
+		setButtonVisual(button, false)
+	end)
+
+	connect(button.TouchStarted, function()
+		if destroyed then return end
+		moveState[stateKey] = true
+		setButtonVisual(button, true)
+	end)
+
+	local function release()
+		if destroyed then return end
+		moveState[stateKey] = false
+		setButtonVisual(button, false)
 	end
 
-	connect(button.InputEnded, releaseInput)
-	connect(button.TouchCancel, releaseInput)
+	connect(button.TouchEnded, release)
+	connect(button.TouchCancel, release)
 end
 
-setupPreciseButton(btnUp, "Forward")
-setupPreciseButton(btnDown, "Backward")
-setupPreciseButton(btnLeft, "Left")
-setupPreciseButton(btnRight, "Right")
-
-connect(UserInputService.InputChanged, function(input)
-	if destroyed then return end
-	if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement then
-		local stateKey = activeTouches[input]
-		if stateKey then
-			local currentButton = nil
-			if stateKey == "Forward" then currentButton = btnUp
-			elseif stateKey == "Backward" then currentButton = btnDown
-			elseif stateKey == "Left" then currentButton = btnLeft
-			elseif stateKey == "Right" then currentButton = btnRight end
-
-			if currentButton and not isPointInsideGui(currentButton, input.Position) then
-				activeTouches[input] = nil
-				moveState[stateKey] = false
-				setButtonVisual(currentButton, false)
-			end
-		end
-	end
-end)
+setupButtonEvents(btnUp, "Forward")
+setupButtonEvents(btnDown, "Backward")
+setupButtonEvents(btnLeft, "Left")
+setupButtonEvents(btnRight, "Right")
 
 connect(btnWLock.Activated, function()
 	if destroyed then return end
