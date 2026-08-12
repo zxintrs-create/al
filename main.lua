@@ -406,7 +406,18 @@ local function stopTouch(input)
 			end
 		end
 
-		if isDelayMode then
+		-- Deteksi apakah karakter sedang di udara untuk mengamankan Air Control
+		local isJumpingOrInAir = false
+		if humanoid and humanoid.Parent then
+			pcall(function()
+				local currentState = humanoid:GetState()
+				if currentState == Enum.HumanoidStateType.Freefall or currentState == Enum.HumanoidStateType.Jumping then
+					isJumpingOrInAir = true
+				end
+			end)
+		end
+
+		if isDelayMode and not isJumpingOrInAir then
 			task.delay(0.25, turnOffMovement)
 		else
 			turnOffMovement()
