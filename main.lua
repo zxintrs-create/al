@@ -305,7 +305,7 @@ connect(btnToggleDelay.Activated, function()
 	end
 end)
 
--- Sistem Tombol Independen Aman (Anti Stuck & Anti Bentrok)
+-- Perbaikan Sistem Tombol Independen dengan Validasi State Angkat Jari yang Akurat
 local function setupIndependentButton(button, stateKey)
 	local activeInput = nil
 
@@ -319,7 +319,7 @@ local function setupIndependentButton(button, stateKey)
 	end)
 
 	local function release(input)
-		if input == activeInput or input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+		if activeInput and (input == activeInput or input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1) then
 			activeInput = nil
 			moveState[stateKey] = false
 			setButtonVisual(button, false)
@@ -376,6 +376,7 @@ local function getMoveVector()
 	if moveState.Left then targetX -= 1 end
 	if moveState.Right then targetX += 1 end
 
+	-- Jika Kelincahan aktif dan tidak ada tombol yang ditekan, matikan momentum secara instan
 	if targetX == 0 and targetZ == 0 and not moveState.WLock and not isDelayMode then
 		smoothX, smoothZ = 0, 0
 		return Vector3.zero
@@ -385,7 +386,8 @@ local function getMoveVector()
 		return cachedForward
 	end
 
-	local lerpSpeed = isDelayMode and 0.15 or 0.6
+	-- Penyesuaian Lerp untuk Mode Kelincahan vs Mode Delay (Jejak)
+	local lerpSpeed = isDelayMode and 0.15 or 0.85
 	smoothX = smoothX + (targetX - smoothX) * lerpSpeed
 	smoothZ = smoothZ + (targetZ - smoothZ) * lerpSpeed
 
