@@ -319,6 +319,9 @@ local activeTouchId = nil
 local touchStartPos = nil
 local touchStartTime = 0
 
+-- Variabel pelacak momentum/delay mentah agar transisi lompat & belok tidak patah-patah
+local smoothX, smoothZ = 0, 0
+
 local function updateMovementFromPosition(pos)
 	local absPos = touchZone.AbsolutePosition
 	local absSize = touchZone.AbsoluteSize
@@ -404,22 +407,10 @@ local function stopTouch(input)
 			end
 		end
 
-		-- Langsung matikan delay jika lompat/di udara agar tidak ada jeda patah-patah/berhenti saat nge-combo jump
-		local isJumpingOrInAir = false
-		if humanoid and humanoid.Parent then
-			pcall(function()
-				local currentState = humanoid:GetState()
-				if currentState == Enum.HumanoidStateType.Freefall or currentState == Enum.HumanoidStateType.Jumping or currentState == Enum.HumanoidStateType.Climbing or currentState == Enum.HumanoidStateType.Swimming then
-					isJumpingOrInAir = true
-				end
-			end)
-		end
-
-		if isDelayMode and not isJumpingOrInAir then
-			task.delay(0.25, turnOffMovement)
-		else
+		if not isDelayMode then
 			turnOffMovement()
 		end
+		-- Jika delay aktif, kita biarkan variabel interpolasi (lerp) yang meredakan gerakannya secara mulus tanpa menghentikan pergerakan/combo lompat secara mendadak.
 	end
 end
 
@@ -449,19 +440,36 @@ local function updateCameraVectors()
 end
 
 local function getMoveVector()
-	local x, z = 0, 0
+	local targetX, targetZ = 0, 0
 
-	if moveState.Forward then z += 1 end
-	if moveState.Backward then z -= 1 end
-	if moveState.Left then x -= 1 end
-	if moveState.Right then x += 1 end
+	if moveState.Forward then targetZ += 1 end
+	if moveState.Backward then targetZ -= 1 end
+	if moveState.Left then targetX -= 1 end
+	if moveState.Right then targetX += 1 end
 
-	if x == 0 and z == 0 then
+	if targetX == 0 and targetZ == 0 and not moveState.WLock and not isDelayMode then
+		smoothX, smoothZ = 0, 0
+		return Vector3.zero
+	end
+
+	if targetX == 0 and targetZ == 0 and moveState.WLock then
+		return cachedForward
+	end
+
+	-- Sistem Lerp (Interpolasi Momentum Halus) agar tidak ada jeda patah/berhenti saat tombol dilepas atau dikombinasikan dengan lompatan
+	local lerpSpeed = isDelayMode and 0.12 or 0.5 -- Semakin kecil nilainya, semakin terasa efek 'jejak' licinnya
+	smoothX = smoothX + (targetX - smoothX) * lerpSpeed
+	smoothZ = smoothZ + (targetZ - smoothZ) * lerpSpeed
+
+	if math.abs(smoothX) < 0.01 then smoothX = 0 end
+	if math.abs(smoothZ) < 0.01 then smoothZ = 0 end
+
+	if smoothX == 0 and smoothZ == 0 then
 		if moveState.WLock then return cachedForward end
 		return Vector3.zero
 	end
 
-	local movement = cachedSide * x + cachedForward * z
+	local movement = cachedSide * smoothX + cachedForward * smoothZ
 	if movement.Magnitude < .001 then return Vector3.zero end
 
 	return movement.Unit
@@ -823,6 +831,7 @@ local function refreshJump()
 		updateJump()
 		updateShiftLockPosition()
 	end)
+
 end
 
 connect(player.CharacterAdded, function(newCharacter)
