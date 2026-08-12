@@ -336,7 +336,7 @@ local function updateMovementFromPosition(pos)
 
 	local threshold = 0.15 
 
-	-- Mencegah bentrok 3 arah / arah berlawanan (Maksimal 2 arah aktif)
+	-- Mengizinkan 2 tombol menyala bersamaan (misal Forward + Right untuk diagonal) tapi memblokir 3 arah sekaligus
 	if deltaY < -threshold then 
 		moveState.Forward = true 
 	elseif deltaY > threshold then 
@@ -349,7 +349,7 @@ local function updateMovementFromPosition(pos)
 		moveState.Right = true 
 	end
 
-	-- Update warna SEMUA tombol secara instan
+	-- Update warna tombol secara instan
 	setButtonVisual(btnUp, moveState.Forward)
 	setButtonVisual(btnDown, moveState.Backward)
 	setButtonVisual(btnLeft, moveState.Left)
@@ -406,7 +406,6 @@ local function stopTouch(input)
 			end
 		end
 
-		-- Deteksi apakah karakter sedang di udara untuk mengamankan Air Control
 		local isJumpingOrInAir = false
 		if humanoid and humanoid.Parent then
 			pcall(function()
@@ -417,6 +416,7 @@ local function stopTouch(input)
 			end)
 		end
 
+		-- Jika Mode Delay aktif dan di tanah, beri jeda (delay) agar ada efek jejak & momentum
 		if isDelayMode and not isJumpingOrInAir then
 			task.delay(0.25, turnOffMovement)
 		else
