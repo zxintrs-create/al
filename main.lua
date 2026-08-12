@@ -272,7 +272,6 @@ local centerCorner = Instance.new("UICorner")
 centerCorner.CornerRadius = UDim.new(1,0)
 centerCorner.Parent = btnWLock
 
--- === FITUR SAKLAR MODE DELAY & KELINCAHAN (KEMBALI KE TOUCHZONE ASLI) ===
 local isDelayMode = false
 
 local btnToggleDelay = Instance.new("TextButton")
@@ -305,7 +304,6 @@ connect(btnToggleDelay.Activated, function()
 		btnToggleDelay.BackgroundColor3 = Color3.fromRGB(70, 200, 100)
 	end
 end)
--- ===============================
 
 local touchZone = Instance.new("Frame")
 touchZone.Name = "TouchZone"
@@ -392,22 +390,18 @@ local function stopTouch(input)
 
 		activeTouchId = nil
 
-		local function turnOffMovement()
-			if activeTouchId == nil then
-				moveState.Forward = false
-				moveState.Backward = false
-				moveState.Left = false
-				moveState.Right = false
+		moveState.Forward = false
+		moveState.Backward = false
+		moveState.Left = false
+		moveState.Right = false
 
-				setButtonVisual(btnUp, false)
-				setButtonVisual(btnDown, false)
-				setButtonVisual(btnLeft, false)
-				setButtonVisual(btnRight, false)
-			end
-		end
+		setButtonVisual(btnUp, false)
+		setButtonVisual(btnDown, false)
+		setButtonVisual(btnLeft, false)
+		setButtonVisual(btnRight, false)
 
 		if not isDelayMode then
-			turnOffMovement()
+			smoothX, smoothZ = 0, 0
 		end
 	end
 end
@@ -415,20 +409,17 @@ end
 connect(touchZone.InputEnded, stopTouch)
 connect(UserInputService.InputEnded, function(input)
 	if input == activeTouchId then
-		-- PERBAIKAN UTAMA: Pastikan jari di Mode Delay juga membersihkan state dan berhenti total saat dilepas (tidak terus menekan)
 		activeTouchId = nil
-		if isDelayMode then
-			moveState.Forward = false
-			moveState.Backward = false
-			moveState.Left = false
-			moveState.Right = false
-			setButtonVisual(btnUp, false)
-			setButtonVisual(btnDown, false)
-			setButtonVisual(btnLeft, false)
-			setButtonVisual(btnRight, false)
+		moveState.Forward = false
+		moveState.Backward = false
+		moveState.Left = false
+		moveState.Right = false
+		setButtonVisual(btnUp, false)
+		setButtonVisual(btnDown, false)
+		setButtonVisual(btnLeft, false)
+		setButtonVisual(btnRight, false)
+		if not isDelayMode then
 			smoothX, smoothZ = 0, 0
-		else
-			stopTouch(input)
 		end
 	end
 end)
@@ -468,8 +459,7 @@ local function getMoveVector()
 		return cachedForward
 	end
 
-	-- PERBAIKAN AIR CONTROL: Nilai Lerp diperbesar secara optimal untuk Mode Kelincahan agar gerakan melompat / air control terasa cepat & responsif penuh
-	local lerpSpeed = isDelayMode and 0.12 or 0.85
+	local lerpSpeed = isDelayMode and 0.15 or 0.95
 	smoothX = smoothX + (targetX - smoothX) * lerpSpeed
 	smoothZ = smoothZ + (targetZ - smoothZ) * lerpSpeed
 
