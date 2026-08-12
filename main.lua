@@ -19,11 +19,15 @@ local defaultConfig = {
 }
 
 local config = {}
-for k, v in pairs(defaultConfig) do config[k] = v end
+
+for k, v in pairs(defaultConfig) do
+	config[k] = v
+end
 
 local function saveConfig()
 	pcall(function()
 		local data = HttpService:JSONEncode(config)
+
 		if writefile then
 			writefile(CONFIG_FILE, data)
 		end
@@ -35,8 +39,13 @@ local function loadConfig()
 		if readfile and isfile and isfile(CONFIG_FILE) then
 			local raw = readfile(CONFIG_FILE)
 			local decoded = HttpService:JSONDecode(raw)
-			for k, v in pairs(decoded) do
-				config[k] = v
+
+			if type(decoded) == "table" then
+				for k, v in pairs(decoded) do
+					if defaultConfig[k] ~= nil and type(v) == type(defaultConfig[k]) then
+						config[k] = v
+					end
+				end
 			end
 		end
 	end)
@@ -67,31 +76,47 @@ _G.ShiftLocked = false
 
 local function connect(signal, callback)
 	local c
+
 	pcall(function()
 		c = signal:Connect(callback)
 	end)
-	if c then table.insert(connections, c) end
+
+	if c then
+		table.insert(connections, c)
+	end
+
 	return c
 end
 
 local function disconnectAll()
 	for i = 1, #connections do
-		pcall(function() connections[i]:Disconnect() end)
+		pcall(function()
+			connections[i]:Disconnect()
+		end)
 	end
+
 	table.clear(connections)
 end
 
 local function destroyGui(name)
 	local obj = playerGui:FindFirstChild(name)
+
 	if obj then
-		pcall(function() obj:Destroy() end)
+		pcall(function()
+			obj:Destroy()
+		end)
 	end
 end
 
 _G.DeltaMobileControlsCleanup = function()
-	if destroyed then return end
+	if destroyed then
+		return
+	end
+
 	destroyed = true
+
 	disconnectAll()
+
 	destroyGui("DeltaMobileControls")
 	destroyGui("DeltaMobileErgo")
 end
@@ -113,8 +138,12 @@ local moveState = {
 local buttonDefaults = {}
 
 local function setButtonVisual(button, pressed)
-	if not button or not button.Parent then return end
+	if not button or not button.Parent then
+		return
+	end
+
 	local normalColor = buttonDefaults[button]
+
 	if pressed then
 		button.BackgroundColor3 = PRESSED_COLOR
 	elseif normalColor then
@@ -123,7 +152,10 @@ local function setButtonVisual(button, pressed)
 end
 
 local function updateWLock()
-	if destroyed or not btnWLock or not btnWLock.Parent then return end
+	if destroyed or not btnWLock or not btnWLock.Parent then
+		return
+	end
+
 	btnWLock.BackgroundColor3 = moveState.WLock and WLOCK_ON_COLOR or WLOCK_OFF_COLOR
 end
 
@@ -150,7 +182,10 @@ crosshairCorner.CornerRadius = UDim.new(1, 0)
 crosshairCorner.Parent = crosshair
 
 local function toggleShiftLock()
-	if destroyed then return end
+	if destroyed then
+		return
+	end
+
 	_G.ShiftLocked = not _G.ShiftLocked
 
 	if btnShiftLock and btnShiftLock.Parent then
@@ -171,6 +206,7 @@ local function resetMovementVisuals()
 			button.BackgroundColor3 = color
 		end
 	end
+
 	updateWLock()
 end
 
@@ -180,6 +216,7 @@ local function clearMovement()
 	moveState.Left = false
 	moveState.Right = false
 	moveState.WLock = false
+
 	resetMovementVisuals()
 end
 
@@ -221,6 +258,7 @@ mainFrame.Parent = screenGui
 
 local function createButton(name, position, size, text, zIndex, bgColor)
 	local button = Instance.new("TextButton")
+
 	button.Name = name
 	button.Position = position
 	button.Size = size
@@ -246,15 +284,46 @@ local function createButton(name, position, size, text, zIndex, bgColor)
 	return button
 end
 
-local btnUp = createButton("Up", UDim2.new(.33,0,0,0), UDim2.new(.34,0,.34,0), "▲", 10, MAIN_BUTTON_COLOR)
-local btnDown = createButton("Down", UDim2.new(.33,0,.66,0), UDim2.new(.34,0,.34,0), "▼", 10, MAIN_BUTTON_COLOR)
-local btnLeft = createButton("Left", UDim2.new(0,0,.33,0), UDim2.new(.34,0,.34,0), "◀", 10, MAIN_BUTTON_COLOR)
-local btnRight = createButton("Right", UDim2.new(.66,0,.33,0), UDim2.new(.34,0,.34,0), "▶", 10, MAIN_BUTTON_COLOR)
+local btnUp = createButton(
+	"Up",
+	UDim2.new(.33, 0, 0, 0),
+	UDim2.new(.34, 0, .34, 0),
+	"▲",
+	10,
+	MAIN_BUTTON_COLOR
+)
+
+local btnDown = createButton(
+	"Down",
+	UDim2.new(.33, 0, .66, 0),
+	UDim2.new(.34, 0, .34, 0),
+	"▼",
+	10,
+	MAIN_BUTTON_COLOR
+)
+
+local btnLeft = createButton(
+	"Left",
+	UDim2.new(0, 0, .33, 0),
+	UDim2.new(.34, 0, .34, 0),
+	"◀",
+	10,
+	MAIN_BUTTON_COLOR
+)
+
+local btnRight = createButton(
+	"Right",
+	UDim2.new(.66, 0, .33, 0),
+	UDim2.new(.34, 0, .34, 0),
+	"▶",
+	10,
+	MAIN_BUTTON_COLOR
+)
 
 btnWLock = Instance.new("TextButton")
 btnWLock.Name = "WLock"
-btnWLock.Position = UDim2.new(.33,0,.33,0)
-btnWLock.Size = UDim2.new(.34,0,.34,0)
+btnWLock.Position = UDim2.new(.33, 0, .33, 0)
+btnWLock.Size = UDim2.new(.34, 0, .34, 0)
 btnWLock.Text = "W"
 btnWLock.BackgroundColor3 = WLOCK_OFF_COLOR
 btnWLock.BackgroundTransparency = BUTTON_TRANSPARENCY
@@ -269,14 +338,15 @@ btnWLock.ZIndex = 12
 btnWLock.Parent = mainFrame
 
 local centerCorner = Instance.new("UICorner")
-centerCorner.CornerRadius = UDim.new(1,0)
+centerCorner.CornerRadius = UDim.new(1, 0)
 centerCorner.Parent = btnWLock
 
 local isDelayMode = false
+local delayDirection = nil
 
 local btnToggleDelay = Instance.new("TextButton")
 btnToggleDelay.Name = "ToggleDelay"
-btnToggleDelay.Position = UDim2.new(0, 0, -0.2, 0) 
+btnToggleDelay.Position = UDim2.new(0, 0, -0.2, 0)
 btnToggleDelay.Size = UDim2.new(1, 0, 0.15, 0)
 btnToggleDelay.Text = "MODE: KELINCAHAN"
 btnToggleDelay.BackgroundColor3 = Color3.fromRGB(70, 200, 100)
@@ -294,8 +364,16 @@ toggleCorner.CornerRadius = UDim.new(0, 8)
 toggleCorner.Parent = btnToggleDelay
 
 connect(btnToggleDelay.Activated, function()
-	if destroyed then return end
+	if destroyed then
+		return
+	end
+
 	isDelayMode = not isDelayMode
+
+	smoothX = 0
+	smoothZ = 0
+	delayDirection = nil
+
 	if isDelayMode then
 		btnToggleDelay.Text = "MODE: DELAY (JEJAK)"
 		btnToggleDelay.BackgroundColor3 = Color3.fromRGB(220, 120, 40)
@@ -317,35 +395,85 @@ local activeTouchId = nil
 local touchStartPos = nil
 local touchStartTime = 0
 
-local smoothX, smoothZ = 0, 0
+local smoothX = 0
+local smoothZ = 0
 
-local function updateMovementFromPosition(pos)
+local function getDirectionFromPosition(pos)
 	local absPos = touchZone.AbsolutePosition
 	local absSize = touchZone.AbsoluteSize
-	
+
+	if absSize.X <= 0 or absSize.Y <= 0 then
+		return nil, 0, 0
+	end
+
 	local centerX = absPos.X + (absSize.X / 2)
 	local centerY = absPos.Y + (absSize.Y / 2)
-	
+
 	local deltaX = (pos.X - centerX) / (absSize.X / 2)
 	local deltaY = (pos.Y - centerY) / (absSize.Y / 2)
 
-	moveState.Forward = false
-	moveState.Backward = false
-	moveState.Left = false
-	moveState.Right = false
+	local threshold = 0.15
 
-	local threshold = 0.15 
-
-	if deltaY < -threshold then 
-		moveState.Forward = true 
-	elseif deltaY > threshold then 
-		moveState.Backward = true 
+	if math.abs(deltaX) <= threshold and math.abs(deltaY) <= threshold then
+		return nil, 0, 0
 	end
-	
-	if deltaX < -threshold then 
-		moveState.Left = true 
-	elseif deltaX > threshold then 
-		moveState.Right = true 
+
+	if isDelayMode then
+		if math.abs(deltaY) >= math.abs(deltaX) then
+			if deltaY < -threshold then
+				return "Forward", 0, 1
+			elseif deltaY > threshold then
+				return "Backward", 0, -1
+			end
+		else
+			if deltaX < -threshold then
+				return "Left", -1, 0
+			elseif deltaX > threshold then
+				return "Right", 1, 0
+			end
+		end
+	else
+		local x = 0
+		local z = 0
+
+		if deltaY < -threshold then
+			z = 1
+		elseif deltaY > threshold then
+			z = -1
+		end
+
+		if deltaX < -threshold then
+			x = -1
+		elseif deltaX > threshold then
+			x = 1
+		end
+
+		if x == 0 and z == 0 then
+			return nil, 0, 0
+		end
+
+		return "Free", x, z
+	end
+
+	return nil, 0, 0
+end
+
+local function updateMovementFromPosition(pos)
+	local direction, targetX, targetZ = getDirectionFromPosition(pos)
+
+	moveState.Forward = direction == "Forward"
+	moveState.Backward = direction == "Backward"
+	moveState.Left = direction == "Left"
+	moveState.Right = direction == "Right"
+
+	if isDelayMode then
+		if direction ~= delayDirection then
+			delayDirection = direction
+			smoothX = 0
+			smoothZ = 0
+		end
+	else
+		delayDirection = nil
 	end
 
 	setButtonVisual(btnUp, moveState.Forward)
@@ -355,82 +483,128 @@ local function updateMovementFromPosition(pos)
 end
 
 connect(touchZone.InputBegan, function(input)
-	if destroyed then return end
-	if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+	if destroyed then
+		return
+	end
+
+	if input.UserInputType == Enum.UserInputType.Touch
+		or input.UserInputType == Enum.UserInputType.MouseButton1 then
+
 		if activeTouchId == nil then
 			activeTouchId = input
 			touchStartPos = input.Position
 			touchStartTime = tick()
+
 			updateMovementFromPosition(input.Position)
 		end
 	end
 end)
 
 connect(touchZone.InputChanged, function(input)
-	if destroyed then return end
+	if destroyed then
+		return
+	end
+
 	if input == activeTouchId then
 		updateMovementFromPosition(input.Position)
 	end
 end)
 
 local function stopTouch(input)
-	if input == activeTouchId then
-		local holdTime = tick() - touchStartTime
-		local dist = (input.Position - touchStartPos).Magnitude
+	if input ~= activeTouchId then
+		return
+	end
 
-		if holdTime < 0.3 and dist < 30 then
-			local relX = (input.Position.X - touchZone.AbsolutePosition.X) / touchZone.AbsoluteSize.X
-			local relY = (input.Position.Y - touchZone.AbsolutePosition.Y) / touchZone.AbsoluteSize.Y
+	local holdTime = tick() - touchStartTime
+	local dist = 0
 
-			if relX > 0.33 and relX < 0.66 and relY > 0.33 and relY < 0.66 then
+	if touchStartPos then
+		dist = (input.Position - touchStartPos).Magnitude
+	end
+
+	if holdTime < 0.3 and dist < 30 then
+		local absPos = touchZone.AbsolutePosition
+		local absSize = touchZone.AbsoluteSize
+
+		if absSize.X > 0 and absSize.Y > 0 then
+			local relX = (input.Position.X - absPos.X) / absSize.X
+			local relY = (input.Position.Y - absPos.Y) / absSize.Y
+
+			if relX > 0.33
+				and relX < 0.66
+				and relY > 0.33
+				and relY < 0.66 then
+
 				moveState.WLock = not moveState.WLock
 				updateWLock()
 			end
 		end
+	end
 
-		activeTouchId = nil
+	activeTouchId = nil
+	touchStartPos = nil
+	touchStartTime = 0
 
-		moveState.Forward = false
-		moveState.Backward = false
-		moveState.Left = false
-		moveState.Right = false
+	moveState.Forward = false
+	moveState.Backward = false
+	moveState.Left = false
+	moveState.Right = false
 
-		setButtonVisual(btnUp, false)
-		setButtonVisual(btnDown, false)
-		setButtonVisual(btnLeft, false)
-		setButtonVisual(btnRight, false)
+	setButtonVisual(btnUp, false)
+	setButtonVisual(btnDown, false)
+	setButtonVisual(btnLeft, false)
+	setButtonVisual(btnRight, false)
 
-		if not isDelayMode then
-			smoothX, smoothZ = 0, 0
-		end
+	if isDelayMode then
+		delayDirection = nil
+	else
+		smoothX = 0
+		smoothZ = 0
 	end
 end
 
 connect(touchZone.InputEnded, stopTouch)
+
 connect(UserInputService.InputEnded, function(input)
-	if input == activeTouchId then
-		activeTouchId = nil
-		moveState.Forward = false
-		moveState.Backward = false
-		moveState.Left = false
-		moveState.Right = false
-		setButtonVisual(btnUp, false)
-		setButtonVisual(btnDown, false)
-		setButtonVisual(btnLeft, false)
-		setButtonVisual(btnRight, false)
-		if not isDelayMode then
-			smoothX, smoothZ = 0, 0
-		end
+	if input ~= activeTouchId then
+		return
+	end
+
+	activeTouchId = nil
+	touchStartPos = nil
+	touchStartTime = 0
+
+	moveState.Forward = false
+	moveState.Backward = false
+	moveState.Left = false
+	moveState.Right = false
+
+	setButtonVisual(btnUp, false)
+	setButtonVisual(btnDown, false)
+	setButtonVisual(btnLeft, false)
+	setButtonVisual(btnRight, false)
+
+	delayDirection = nil
+
+	if not isDelayMode then
+		smoothX = 0
+		smoothZ = 0
 	end
 end)
 
-local cachedForward = Vector3.new(0,0,-1)
-local cachedSide = Vector3.new(1,0,0)
+local cachedForward = Vector3.new(0, 0, -1)
+local cachedSide = Vector3.new(1, 0, 0)
 
 local function updateCameraVectors()
-	if destroyed then return end
+	if destroyed then
+		return
+	end
+
 	local camera = workspace.CurrentCamera
-	if not camera then return end
+
+	if not camera then
+		return
+	end
 
 	local look = camera.CFrame.LookVector
 	local right = camera.CFrame.RightVector
@@ -438,56 +612,119 @@ local function updateCameraVectors()
 	local forward = Vector3.new(look.X, 0, look.Z)
 	local side = Vector3.new(right.X, 0, right.Z)
 
-	if forward.Magnitude > .001 then cachedForward = forward.Unit end
-	if side.Magnitude > .001 then cachedSide = side.Unit end
+	if forward.Magnitude > 0.001 then
+		cachedForward = forward.Unit
+	end
+
+	if side.Magnitude > 0.001 then
+		cachedSide = side.Unit
+	end
 end
 
 local function getMoveVector()
-	local targetX, targetZ = 0, 0
+	local targetX = 0
+	local targetZ = 0
 
-	if moveState.Forward then targetZ += 1 end
-	if moveState.Backward then targetZ -= 1 end
-	if moveState.Left then targetX -= 1 end
-	if moveState.Right then targetX += 1 end
+	if isDelayMode then
+		if delayDirection == "Forward" then
+			targetZ = 1
+		elseif delayDirection == "Backward" then
+			targetZ = -1
+		elseif delayDirection == "Left" then
+			targetX = -1
+		elseif delayDirection == "Right" then
+			targetX = 1
+		end
+	else
+		if moveState.Forward then
+			targetZ += 1
+		end
 
-	if targetX == 0 and targetZ == 0 and not moveState.WLock and not isDelayMode then
-		smoothX, smoothZ = 0, 0
+		if moveState.Backward then
+			targetZ -= 1
+		end
+
+		if moveState.Left then
+			targetX -= 1
+		end
+
+		if moveState.Right then
+			targetX += 1
+		end
+	end
+
+	if targetX == 0 and targetZ == 0 then
+		if moveState.WLock then
+			if isDelayMode then
+				smoothX = 0
+				smoothZ = 0
+			end
+
+			return cachedForward
+		end
+
+		if not isDelayMode then
+			smoothX = 0
+			smoothZ = 0
+		end
+
 		return Vector3.zero
 	end
 
-	if targetX == 0 and targetZ == 0 and moveState.WLock then
-		return cachedForward
+	if isDelayMode then
+		local delaySpeed = 0.15
+
+		smoothX = smoothX + (targetX - smoothX) * delaySpeed
+		smoothZ = smoothZ + (targetZ - smoothZ) * delaySpeed
+	else
+		local normalSpeed = 0.95
+
+		smoothX = smoothX + (targetX - smoothX) * normalSpeed
+		smoothZ = smoothZ + (targetZ - smoothZ) * normalSpeed
 	end
 
-	local lerpSpeed = isDelayMode and 0.15 or 0.95
-	smoothX = smoothX + (targetX - smoothX) * lerpSpeed
-	smoothZ = smoothZ + (targetZ - smoothZ) * lerpSpeed
+	if math.abs(smoothX) < 0.01 then
+		smoothX = 0
+	end
 
-	if math.abs(smoothX) < 0.01 then smoothX = 0 end
-	if math.abs(smoothZ) < 0.01 then smoothZ = 0 end
+	if math.abs(smoothZ) < 0.01 then
+		smoothZ = 0
+	end
 
 	if smoothX == 0 and smoothZ == 0 then
-		if moveState.WLock then return cachedForward end
+		if moveState.WLock then
+			return cachedForward
+		end
+
 		return Vector3.zero
 	end
 
 	local movement = cachedSide * smoothX + cachedForward * smoothZ
-	if movement.Magnitude < .001 then return Vector3.zero end
+
+	if movement.Magnitude < 0.001 then
+		return Vector3.zero
+	end
 
 	return movement.Unit
 end
 
 connect(RunService.RenderStepped, function()
-	if destroyed then return end
+	if destroyed then
+		return
+	end
 
 	local currentCharacter = character
 	local currentHumanoid = humanoid
 
-	if not currentCharacter or not currentCharacter.Parent or not currentHumanoid or currentHumanoid.Health <= 0 then
+	if not currentCharacter
+		or not currentCharacter.Parent
+		or not currentHumanoid
+		or currentHumanoid.Health <= 0 then
 		return
 	end
 
 	updateCameraVectors()
+
 	currentHumanoid:Move(getMoveVector(), false)
 
 	if _G.ShiftLocked then
@@ -496,7 +733,10 @@ connect(RunService.RenderStepped, function()
 
 		if camera and rootPart then
 			local _, y, _ = camera.CFrame:ToOrientation()
-			rootPart.CFrame = CFrame.new(rootPart.Position) * CFrame.Angles(0, y, 0)
+
+			rootPart.CFrame =
+				CFrame.new(rootPart.Position) *
+				CFrame.Angles(0, y, 0)
 		end
 
 		currentHumanoid.AutoRotate = false
@@ -520,6 +760,7 @@ gui.Parent = playerGui
 
 local function makeButton(parent, name, position, sizeValue, text, bg, zIndex)
 	local button = Instance.new("TextButton")
+
 	button.Name = name
 	button.Position = position
 	button.Size = sizeValue
@@ -543,7 +784,15 @@ local function makeButton(parent, name, position, sizeValue, text, bg, zIndex)
 	return button
 end
 
-local menu = makeButton(gui, "OpenMenu", UDim2.new(1, -72, 1, -72), UDim2.fromOffset(60, 60), "⚙", Color3.fromRGB(245, 245, 245), 100)
+local menu = makeButton(
+	gui,
+	"OpenMenu",
+	UDim2.new(1, -72, 1, -72),
+	UDim2.fromOffset(60, 60),
+	"⚙",
+	Color3.fromRGB(245, 245, 245),
+	100
+)
 
 local menuCorner = Instance.new("UICorner")
 menuCorner.CornerRadius = UDim.new(1, 0)
@@ -598,7 +847,10 @@ sensLabel.ZIndex = 42
 sensLabel.Parent = cameraSection
 
 local function applySensitivity()
-	sensLabel.Text = "Multiplier: " .. string.format("%.1f", config.Sensitivity) .. "x"
+	sensLabel.Text =
+		"Multiplier: " ..
+		string.format("%.1f", config.Sensitivity) ..
+		"x"
 
 	pcall(function()
 		UserSettings().GameSettings.MouseSensitivity = config.Sensitivity
@@ -606,13 +858,44 @@ local function applySensitivity()
 end
 
 local function updateSensitivity(amount)
-	config.Sensitivity = math.clamp(config.Sensitivity + amount, 0.1, 10)
+	config.Sensitivity = math.clamp(
+		config.Sensitivity + amount,
+		0.1,
+		10
+	)
+
 	applySensitivity()
 end
 
-local sensMinus = makeButton(cameraSection, "Minus", UDim2.new(.06, 0, 0, 85), UDim2.fromOffset(76, 42), "-", nil, 43)
-local sensReset = makeButton(cameraSection, "Reset", UDim2.new(.5, -42, 0, 85), UDim2.fromOffset(84, 42), "RESET", nil, 43)
-local sensPlus = makeButton(cameraSection, "Plus", UDim2.new(.94, -76, 0, 85), UDim2.fromOffset(76, 42), "+", nil, 43)
+local sensMinus = makeButton(
+	cameraSection,
+	"Minus",
+	UDim2.new(.06, 0, 0, 85),
+	UDim2.fromOffset(76, 42),
+	"-",
+	nil,
+	43
+)
+
+local sensReset = makeButton(
+	cameraSection,
+	"Reset",
+	UDim2.new(.5, -42, 0, 85),
+	UDim2.fromOffset(84, 42),
+	"RESET",
+	nil,
+	43
+)
+
+local sensPlus = makeButton(
+	cameraSection,
+	"Plus",
+	UDim2.new(.94, -76, 0, 85),
+	UDim2.fromOffset(76, 42),
+	"+",
+	nil,
+	43
+)
 
 connect(sensMinus.Activated, function()
 	updateSensitivity(-0.1)
@@ -641,7 +924,16 @@ local jumpCorner = Instance.new("UICorner")
 jumpCorner.CornerRadius = UDim.new(0, 12)
 jumpCorner.Parent = jumpSection
 
-local modeSwitchBtn = makeButton(jumpSection, "ToggleTargetMode", UDim2.new(.05, 0, 0, 10), UDim2.new(.9, 0, 0, 36), "TARGET: JUMP BUTTON", Color3.fromRGB(70, 150, 255), 43)
+local modeSwitchBtn = makeButton(
+	jumpSection,
+	"ToggleTargetMode",
+	UDim2.new(.05, 0, 0, 10),
+	UDim2.new(.9, 0, 0, 36),
+	"TARGET: JUMP BUTTON",
+	Color3.fromRGB(70, 150, 255),
+	43
+)
+
 modeSwitchBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 
 connect(modeSwitchBtn.Activated, function()
@@ -656,18 +948,83 @@ connect(modeSwitchBtn.Activated, function()
 	end
 end)
 
-local moveUp = makeButton(jumpSection, "MoveUp", UDim2.new(.5, -34, 0, 55), UDim2.fromOffset(68, 46), "↑", nil, 43)
-local moveLeft = makeButton(jumpSection, "MoveLeft", UDim2.new(.10, 0, 0, 102), UDim2.fromOffset(68, 46), "←", nil, 43)
-local moveRight = makeButton(jumpSection, "MoveRight", UDim2.new(.90, -68, 0, 102), UDim2.fromOffset(68, 46), "→", nil, 43)
-local moveDown = makeButton(jumpSection, "MoveDown", UDim2.new(.5, -34, 0, 149), UDim2.fromOffset(68, 46), "↓", nil, 43)
-local sizePlus = makeButton(jumpSection, "SizePlus", UDim2.new(.06, 0, 0, 207), UDim2.fromOffset(88, 34), "SIZE +", nil, 43)
-local sizeMinus = makeButton(jumpSection, "SizeMinus", UDim2.new(.94, -88, 0, 207), UDim2.fromOffset(88, 34), "SIZE -", nil, 43)
-local center = makeButton(jumpSection, "Center", UDim2.new(.5, -44, 0, 207), UDim2.fromOffset(88, 34), "RESET", nil, 43)
+local moveUp = makeButton(
+	jumpSection,
+	"MoveUp",
+	UDim2.new(.5, -34, 0, 55),
+	UDim2.fromOffset(68, 46),
+	"↑",
+	nil,
+	43
+)
+
+local moveLeft = makeButton(
+	jumpSection,
+	"MoveLeft",
+	UDim2.new(.10, 0, 0, 102),
+	UDim2.fromOffset(68, 46),
+	"←",
+	nil,
+	43
+)
+
+local moveRight = makeButton(
+	jumpSection,
+	"MoveRight",
+	UDim2.new(.90, -68, 0, 102),
+	UDim2.fromOffset(68, 46),
+	"→",
+	nil,
+	43
+)
+
+local moveDown = makeButton(
+	jumpSection,
+	"MoveDown",
+	UDim2.new(.5, -34, 0, 149),
+	UDim2.fromOffset(68, 46),
+	"↓",
+	nil,
+	43
+)
+
+local sizePlus = makeButton(
+	jumpSection,
+	"SizePlus",
+	UDim2.new(.06, 0, 0, 207),
+	UDim2.fromOffset(88, 34),
+	"SIZE +",
+	nil,
+	43
+)
+
+local sizeMinus = makeButton(
+	jumpSection,
+	"SizeMinus",
+	UDim2.new(.94, -88, 0, 207),
+	UDim2.fromOffset(88, 34),
+	"SIZE -",
+	nil,
+	43
+)
+
+local center = makeButton(
+	jumpSection,
+	"Center",
+	UDim2.new(.5, -44, 0, 207),
+	UDim2.fromOffset(88, 34),
+	"RESET",
+	nil,
+	43
+)
 
 local jumpButton = nil
 
 local function getJump()
-	if jumpButton and jumpButton.Parent and jumpButton:IsDescendantOf(playerGui) then
+	if jumpButton
+		and jumpButton.Parent
+		and jumpButton:IsDescendantOf(playerGui) then
+
 		return jumpButton
 	end
 
@@ -681,27 +1038,45 @@ local function getJump()
 end
 
 local function updateJump()
-	if destroyed then return end
+	if destroyed then
+		return
+	end
 
 	local jump = getJump()
 	local camera = workspace.CurrentCamera
 
-	if not jump or not camera then return end
+	if not jump or not camera then
+		return
+	end
 
 	local viewport = camera.ViewportSize
 
-	if viewport.X <= 0 or viewport.Y <= 0 then return end
+	if viewport.X <= 0 or viewport.Y <= 0 then
+		return
+	end
 
 	config.JumpX = math.clamp(config.JumpX, .05, .95)
 	config.JumpY = math.clamp(config.JumpY, .05, .95)
 	config.JumpSize = math.clamp(config.JumpSize, .05, .50)
 
-	local pixelSize = math.max(40, math.floor(viewport.Y * config.JumpSize))
+	local pixelSize = math.max(
+		40,
+		math.floor(viewport.Y * config.JumpSize)
+	)
 
 	pcall(function()
 		jump.AnchorPoint = Vector2.new(.5, .5)
-		jump.Position = UDim2.new(config.JumpX, 0, config.JumpY, 0)
-		jump.Size = UDim2.fromOffset(pixelSize, pixelSize)
+		jump.Position = UDim2.new(
+			config.JumpX,
+			0,
+			config.JumpY,
+			0
+		)
+
+		jump.Size = UDim2.fromOffset(
+			pixelSize,
+			pixelSize
+		)
 	end)
 end
 
@@ -711,19 +1086,48 @@ local function updateShiftLockPosition()
 		config.ShiftY = math.clamp(config.ShiftY, .02, .98)
 		config.ShiftSize = math.clamp(config.ShiftSize, 20, 100)
 
-		btnShiftLock.Position = UDim2.new(config.ShiftX, 0, config.ShiftY, 0)
-		btnShiftLock.Size = UDim2.fromOffset(config.ShiftSize, config.ShiftSize)
+		btnShiftLock.Position = UDim2.new(
+			config.ShiftX,
+			0,
+			config.ShiftY,
+			0
+		)
+
+		btnShiftLock.Size = UDim2.fromOffset(
+			config.ShiftSize,
+			config.ShiftSize
+		)
 	end
 end
 
 local function applyMoveStep(dx, dy)
 	if targetSettingMode == "JUMP" then
-		config.JumpX = math.clamp(config.JumpX + dx, .05, .95)
-		config.JumpY = math.clamp(config.JumpY + dy, .05, .95)
+		config.JumpX = math.clamp(
+			config.JumpX + dx,
+			.05,
+			.95
+		)
+
+		config.JumpY = math.clamp(
+			config.JumpY + dy,
+			.05,
+			.95
+		)
+
 		updateJump()
 	else
-		config.ShiftX = math.clamp(config.ShiftX + dx, .02, .98)
-		config.ShiftY = math.clamp(config.ShiftY + dy, .02, .98)
+		config.ShiftX = math.clamp(
+			config.ShiftX + dx,
+			.02,
+			.98
+		)
+
+		config.ShiftY = math.clamp(
+			config.ShiftY + dy,
+			.02,
+			.98
+		)
+
 		updateShiftLockPosition()
 	end
 end
@@ -752,44 +1156,100 @@ bindHoldButton(moveLeft, -step, 0)
 bindHoldButton(moveRight, step, 0)
 
 connect(RunService.RenderStepped, function()
-	if holding[moveUp] then applyMoveStep(0, -step) end
-	if holding[moveDown] then applyMoveStep(0, step) end
-	if holding[moveLeft] then applyMoveStep(-step, 0) end
-	if holding[moveRight] then applyMoveStep(step, 0) end
+	if destroyed then
+		return
+	end
+
+	if holding[moveUp] then
+		applyMoveStep(0, -step)
+	end
+
+	if holding[moveDown] then
+		applyMoveStep(0, step)
+	end
+
+	if holding[moveLeft] then
+		applyMoveStep(-step, 0)
+	end
+
+	if holding[moveRight] then
+		applyMoveStep(step, 0)
+	end
 end)
 
 connect(sizePlus.Activated, function()
 	if targetSettingMode == "JUMP" then
-		config.JumpSize = math.clamp(config.JumpSize + .05, .05, .50)
+		config.JumpSize = math.clamp(
+			config.JumpSize + .05,
+			.05,
+			.50
+		)
+
 		updateJump()
 	else
-		config.ShiftSize = math.clamp(config.ShiftSize + 5, 20, 100)
+		config.ShiftSize = math.clamp(
+			config.ShiftSize + 5,
+			20,
+			100
+		)
+
 		updateShiftLockPosition()
 	end
 end)
 
 connect(sizeMinus.Activated, function()
 	if targetSettingMode == "JUMP" then
-		config.JumpSize = math.clamp(config.JumpSize - .05, .05, .50)
+		config.JumpSize = math.clamp(
+			config.JumpSize - .05,
+			.05,
+			.50
+		)
+
 		updateJump()
 	else
-		config.ShiftSize = math.clamp(config.ShiftSize - 5, 20, 100)
+		config.ShiftSize = math.clamp(
+			config.ShiftSize - 5,
+			20,
+			100
+		)
+
 		updateShiftLockPosition()
 	end
 end)
 
 connect(center.Activated, function()
 	if targetSettingMode == "JUMP" then
-		config.JumpX, config.JumpY = defaultConfig.JumpX, defaultConfig.JumpY
+		config.JumpX = defaultConfig.JumpX
+		config.JumpY = defaultConfig.JumpY
+
 		updateJump()
 	else
-		config.ShiftX, config.ShiftY = defaultConfig.ShiftX, defaultConfig.ShiftY
+		config.ShiftX = defaultConfig.ShiftX
+		config.ShiftY = defaultConfig.ShiftY
+
 		updateShiftLockPosition()
 	end
 end)
 
-local btnSaveConfig = makeButton(settings, "SaveConfig", UDim2.new(0.05, 0, 1, -45), UDim2.fromOffset(130, 38), "SAVE", Color3.fromRGB(70, 200, 100), 43)
-local btnClose = makeButton(settings, "Close", UDim2.new(0.95, -130, 1, -45), UDim2.fromOffset(130, 38), "CLOSE", Color3.fromRGB(230, 90, 90), 43)
+local btnSaveConfig = makeButton(
+	settings,
+	"SaveConfig",
+	UDim2.new(0.05, 0, 1, -45),
+	UDim2.fromOffset(130, 38),
+	"SAVE",
+	Color3.fromRGB(70, 200, 100),
+	43
+)
+
+local btnClose = makeButton(
+	settings,
+	"Close",
+	UDim2.new(0.95, -130, 1, -45),
+	UDim2.fromOffset(130, 38),
+	"CLOSE",
+	Color3.fromRGB(230, 90, 90),
+	43
+)
 
 btnSaveConfig.TextColor3 = Color3.fromRGB(255, 255, 255)
 btnClose.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -822,23 +1282,41 @@ connect(btnClose.Activated, function()
 end)
 
 local function refreshJump()
-	if destroyed then return end
+	if destroyed then
+		return
+	end
 
 	task.defer(function()
+		if destroyed then
+			return
+		end
+
 		updateJump()
 		updateShiftLockPosition()
 	end)
 
 	task.delay(0.2, function()
+		if destroyed then
+			return
+		end
+
 		updateJump()
 		updateShiftLockPosition()
 	end)
 end
 
 connect(player.CharacterAdded, function(newCharacter)
-	if destroyed then return end
+	if destroyed then
+		return
+	end
 
 	clearMovement()
+
+	smoothX = 0
+	smoothZ = 0
+	delayDirection = nil
+	activeTouchId = nil
+
 	character = newCharacter
 	humanoid = newCharacter:WaitForChild("Humanoid", 10)
 
