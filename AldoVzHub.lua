@@ -1,1013 +1,1001 @@
 local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 local HttpService = game:GetService("HttpService")
-local TweenService = game:GetService("TweenService")
 local StarterGui = game:GetService("StarterGui")
-local Workspace = game:GetService("Workspace")
-local VirtualUser = game:GetService("VirtualUser")
-local ContextActionService = game:GetService("ContextActionService")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
-if _G._AldoVzHubCleanup then pcall(_G._AldoVzHubCleanup) end
+local CONFIG_FILE = "AldoVzConfig.json"
+local NOTE_PREFIX = "AldoVzNote_"
+local NOTE_COUNT_FILE = "AldoVzNotes.json"
+
+local defaultConfig = {
+	WalkSpeed = 16,
+	JumpPower = 50,
+	AirControl = 20,
+	ControllerEnabled = true,
+	JumpX = 0.85,
+	JumpY = 0.75,
+	JumpSize = 0.30,
+	ShiftX = 0.75,
+	ShiftY = 0.65,
+	ShiftSize = 35,
+	TargetSetting = "JUMP",
+	ShiftLocked = false
+}
+
+local config = {}
+
+for k,v in pairs(defaultConfig) do
+	config[k] = v
+end
+
+local function saveConfig()
+	pcall(function()
+		if writefile then
+			writefile(CONFIG_FILE,HttpService:JSONEncode(config))
+		end
+	end)
+end
+
+local function loadConfig()
+	pcall(function()
+		if readfile and isfile and isfile(CONFIG_FILE) then
+			local data = HttpService:JSONDecode(readfile(CONFIG_FILE))
+			if type(data) == "table" then
+				for k,v in pairs(data) do
+					if defaultConfig[k] ~= nil and type(v) == type(defaultConfig[k]) then
+						config[k] = v
+					end
+				end
+			end
+		end
+	end)
+end
+
+loadConfig()
+
+local function saveNote(index,text)
+	pcall(function()
+		if writefile then
+			writefile(NOTE_PREFIX..tostring(index)..".txt",text or "")
+		end
+	end)
+end
+
+local function loadNote(index)
+	local result = ""
+	pcall(function()
+		if readfile and isfile and isfile(NOTE_PREFIX..tostring(index)..".txt") then
+			result = readfile(NOTE_PREFIX..tostring(index)..".txt")
+		end
+	end)
+	return result
+end
+
+local function saveNoteList(list)
+	pcall(function()
+		if writefile then
+			writefile(NOTE_COUNT_FILE,HttpService:JSONEncode(list))
+		end
+	end)
+end
+
+local function loadNoteList()
+	local list = {1}
+	pcall(function()
+		if readfile and isfile and isfile(NOTE_COUNT_FILE) then
+			local data = HttpService:JSONDecode(readfile(NOTE_COUNT_FILE))
+			if type(data) == "table" then
+				list = data
+			end
+		end
+	end)
+	return list
+end
+
+if _G.AldoVzCleanup then
+	pcall(_G.AldoVzCleanup)
+end
 
 local connections = {}
 local destroyed = false
 
-local function connect(sig, cb)
-  local c
-  pcall(function() c = sig:Connect(cb) end)
-  if c then table.insert(connections, c) end
-  return c
+local function connect(signal,callback)
+	local c
+	pcall(function()
+		c = signal:Connect(callback)
+	end)
+	if c then
+		table.insert(connections,c)
+	end
+	return c
 end
 
-local function cleanup()
-  destroyed = true
-  for _, c in ipairs(connections) do
-    pcall(function() c:Disconnect() end)
-  end
-  table.clear(connections)
-  local sg = playerGui:FindFirstChild("AldoVzHub")
-  if sg then sg:Destroy() end
-  ContextActionService:UnbindAction("AldoVzMove")
+local function disconnectAll()
+	for i=#connections,1,-1 do
+		pcall(function()
+			connections[i]:Disconnect()
+		end)
+	end
+	table.clear(connections)
 end
 
-_G._AldoVzHubCleanup = cleanup
-
-local SAVE_FILE = "AldoVzHub_Config.json"
-local NOTES_FILE = "AldoVzHub_Notes.json"
-
-local config = {
-  walkSpeed = 16,
-  jumpPower = 50,
-  shiftLock = false,
-  airControl = 20,
-  wasdEnabled = true
-}
-
-local notes = {}
-local selectedNote = nil
-
-local function loadConfig()
-  local s, d = pcall(function() return readfile(SAVE_FILE) end)
-  if s and d and #d > 0 then
-    local ok, dec = pcall(function() return HttpService:JSONDecode(d) end)
-    if ok and type(dec) == "table" then
-      for k, v in pairs(dec) do config[k] = v end
-    end
-  end
+local function destroy(name)
+	local obj = playerGui:FindFirstChild(name)
+	if obj then
+		pcall(function()
+			obj:Destroy()
+		end)
+	end
 end
 
-local function saveConfig()
-  local s, e = pcall(function() return HttpService:JSONEncode(config) end)
-  if s then pcall(function() writefile(SAVE_FILE, e) end) end
+_G.AldoVzCleanup = function()
+	if destroyed then return end
+	destroyed = true
+	disconnectAll()
+	destroy("AldoVz")
 end
 
-local function loadNotes()
-  local s, d = pcall(function() return readfile(NOTES_FILE) end)
-  if s and d and #d > 0 then
-    local ok, dec = pcall(function() return HttpService:JSONDecode(d) end)
-    if ok and type(dec) == "table" then notes = dec end
-  end
+destroy("AldoVz")
+
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid")
+
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "AldoVz"
+screenGui.ResetOnSpawn = false
+screenGui.IgnoreGuiInset = false
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+screenGui.DisplayOrder = 999999
+screenGui.Parent = playerGui
+
+local mainColor = Color3.fromRGB(28,28,35)
+local panelColor = Color3.fromRGB(35,35,45)
+local buttonColor = Color3.fromRGB(48,48,60)
+local selectedColor = Color3.fromRGB(100,60,180)
+local greenColor = Color3.fromRGB(55,180,95)
+local redColor = Color3.fromRGB(210,65,65)
+local white = Color3.fromRGB(245,245,245)
+local gray = Color3.fromRGB(170,170,180)
+
+local function corner(obj,radius)
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0,radius or 8)
+	c.Parent = obj
+	return c
 end
 
-local function saveNotes()
-  local s, e = pcall(function() return HttpService:JSONEncode(notes) end)
-  if s then pcall(function() writefile(NOTES_FILE, e) end) end
+local function stroke(obj,color,transparency,thickness)
+	local s = Instance.new("UIStroke")
+	s.Color = color or Color3.new(1,1,1)
+	s.Transparency = transparency or .7
+	s.Thickness = thickness or 1
+	s.Parent = obj
+	return s
 end
 
-loadConfig()
-loadNotes()
-
-local sg = Instance.new("ScreenGui")
-sg.Name = "AldoVzHub"
-sg.ResetOnSpawn = false
-sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-sg.DisplayOrder = 999999
-sg.Parent = playerGui
-=
-local leftPanel = Instance.new("Frame")
-leftPanel.Name = "LeftPanel"
-leftPanel.Size = UDim2.new(0, 180, 1, 0)
-leftPanel.Position = UDim2.fromOffset(0, 0)
-leftPanel.BackgroundColor3 = Color3.fromRGB(12, 10, 22)
-leftPanel.BorderSizePixel = 0
-leftPanel.Parent = sg
-
-local leftGrad = Instance.new("UIGradient")
-leftGrad.Color = ColorSequence.new({
-  ColorSequenceKeypoint.new(0, Color3.fromRGB(20, 12, 40)),
-  ColorSequenceKeypoint.new(1, Color3.fromRGB(12, 10, 22))
-})
-leftGrad.Parent = leftPanel
-
-local leftStroke = Instance.new("UIStroke")
-leftStroke.Color = Color3.fromRGB(100, 50, 200)
-leftStroke.Thickness = 1.5
-leftStroke.Transparency = 0.5
-leftStroke.Parent = leftPanel
-
-local titleBar = Instance.new("Frame")
-titleBar.Name = "TitleBar"
-titleBar.Size = UDim2.new(1, 0, 0, 50)
-titleBar.BackgroundColor3 = Color3.fromRGB(18, 14, 32)
-titleBar.BackgroundTransparency = 0.2
-titleBar.BorderSizePixel = 0
-titleBar.Parent = leftPanel
-
-local titleLabel = Instance.new("TextLabel")
-titleLabel.Size = UDim2.new(1, -6, 0, 18)
-titleLabel.Position = UDim2.fromOffset(4, 2)
-titleLabel.Text = "👾 AldoVz"
-titleLabel.TextColor3 = Color3.fromRGB(200, 170, 255)
-titleLabel.Font = Enum.Font.GothamBold
-titleLabel.TextSize = 14
-titleLabel.TextXAlignment = Enum.TextXAlignment.Left
-titleLabel.BackgroundTransparency = 1
-titleLabel.Parent = titleBar
-
-local pingLabel = Instance.new("TextLabel")
-pingLabel.Size = UDim2.new(0.5, -4, 0, 14)
-pingLabel.Position = UDim2.fromOffset(4, 20)
-pingLabel.Text = "PING: 0"
-pingLabel.TextColor3 = Color3.fromRGB(120, 200, 120)
-pingLabel.Font = Enum.Font.Gotham
-pingLabel.TextSize = 9
-pingLabel.TextXAlignment = Enum.TextXAlignment.Left
-pingLabel.BackgroundTransparency = 1
-pingLabel.Parent = titleBar
-
-local fpsLabel = Instance.new("TextLabel")
-fpsLabel.Size = UDim2.new(0.5, -4, 0, 14)
-fpsLabel.Position = UDim2.new(0.5, 0, 0, 20)
-fpsLabel.Text = "FPS: 0"
-fpsLabel.TextColor3 = Color3.fromRGB(200, 200, 100)
-fpsLabel.Font = Enum.Font.Gotham
-fpsLabel.TextSize = 9
-fpsLabel.TextXAlignment = Enum.TextXAlignment.Left
-fpsLabel.BackgroundTransparency = 1
-fpsLabel.Parent = titleBar
-
--- Command input
-local cmdFrame = Instance.new("Frame")
-cmdFrame.Size = UDim2.new(1, -8, 0, 28)
-cmdFrame.Position = UDim2.fromOffset(4, 52)
-cmdFrame.BackgroundColor3 = Color3.fromRGB(22, 18, 38)
-cmdFrame.BackgroundTransparency = 0.2
-cmdFrame.BorderSizePixel = 0
-cmdFrame.Parent = leftPanel
-
-local cmdCorner = Instance.new("UICorner")
-cmdCorner.CornerRadius = UDim.new(0, 6)
-cmdCorner.Parent = cmdFrame
-
-local cmdBox = Instance.new("TextBox")
-cmdBox.Size = UDim2.new(1, -8, 1, 0)
-cmdBox.Position = UDim2.fromOffset(4, 0)
-cmdBox.PlaceholderText = "CMD Infinite Yield..."
-cmdBox.PlaceholderColor3 = Color3.fromRGB(100, 80, 140)
-cmdBox.Text = ""
-cmdBox.TextColor3 = Color3.fromRGB(220, 210, 255)
-cmdBox.TextSize = 11
-cmdBox.Font = Enum.Font.Gotham
-cmdBox.BackgroundTransparency = 1
-cmdBox.BorderSizePixel = 0
-cmdBox.ClearTextOnFocus = false
-cmdBox.Parent = cmdFrame
-
-connect(cmdBox.FocusLost, function(enter)
-  if enter and #cmdBox.Text > 0 then
-    local cmd = cmdBox.Text
-    cmdBox.Text = ""
-    pcall(function() loadstring(cmd)() end)
-  end
-end)
-
-local menuBtnFrame = Instance.new("Frame")
-menuBtnFrame.Name = "MenuButtons"
-menuBtnFrame.Size = UDim2.new(1, 0, 1, -90)
-menuBtnFrame.Position = UDim2.fromOffset(0, 84)
-menuBtnFrame.BackgroundTransparency = 1
-menuBtnFrame.Parent = leftPanel
-
-local menuScroll = Instance.new("ScrollingFrame")
-menuScroll.Size = UDim2.new(1, 0, 1, 0)
-menuScroll.BackgroundTransparency = 1
-menuScroll.BorderSizePixel = 0
-menuScroll.ScrollBarThickness = 3
-menuScroll.ScrollBarImageColor3 = Color3.fromRGB(100, 50, 180)
-menuScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
-menuScroll.Parent = menuBtnFrame
-
-local menuLayout = Instance.new("UIListLayout")
-menuLayout.Padding = UDim.new(0, 4)
-menuLayout.Parent = menuScroll
-
-local menuButtons = {}
-local activeMenuBtn = 1
-local menuNames = {"MAIN", "NOTE", "CONTROL", "PLAYER"}
-
-for i, name in ipairs(menuNames) do
-  local btn = Instance.new("TextButton")
-  btn.Size = UDim2.new(1, -8, 0, 32)
-  btn.Text = "  " .. name
-  btn.TextColor3 = Color3.fromRGB(180, 170, 210)
-  btn.TextSize = 12
-  btn.Font = Enum.Font.GothamBold
-  btn.TextXAlignment = Enum.TextXAlignment.Left
-  btn.BackgroundColor3 = Color3.fromRGB(22, 18, 40)
-  btn.BackgroundTransparency = 0.2
-  btn.BorderSizePixel = 0
-  btn.Parent = menuScroll
-  local btnCorner = Instance.new("UICorner")
-  btnCorner.CornerRadius = UDim.new(0, 8)
-  btnCorner.Parent = btn
-  menuButtons[i] = btn
-
-  connect(btn.Activated, function()
-    activeMenuBtn = i
-    for j, b in ipairs(menuButtons) do
-      b.BackgroundColor3 = (j == i) and Color3.fromRGB(80, 40, 160) or Color3.fromRGB(22, 18, 40)
-      b.TextColor3 = (j == i) and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(180, 170, 210)
-    end
-    for j, p in ipairs(menuPanels) do
-      if p then p.Visible = (j == i) end
-    end
-  end)
+local function button(parent,name,text,pos,size)
+	local b = Instance.new("TextButton")
+	b.Name = name
+	b.Text = text
+	b.Position = pos
+	b.Size = size
+	b.BackgroundColor3 = buttonColor
+	b.TextColor3 = white
+	b.Font = Enum.Font.GothamBold
+	b.TextSize = 14
+	b.AutoButtonColor = false
+	b.BorderSizePixel = 0
+	b.Active = true
+	b.Selectable = false
+	b.ZIndex = 20
+	b.Parent = parent
+	corner(b,8)
+	return b
 end
 
-menuScroll.CanvasSize = UDim2.new(0, 0, 0, #menuNames * 36 + 10)
-
-local rightPanel = Instance.new("Frame")
-rightPanel.Name = "RightPanel"
-rightPanel.Size = UDim2.new(1, -180, 1, 0)
-rightPanel.Position = UDim2.new(0, 180, 0, 0)
-rightPanel.BackgroundColor3 = Color3.fromRGB(15, 13, 28)
-rightPanel.BorderSizePixel = 0
-rightPanel.Parent = sg
-
-local rightGrad = Instance.new("UIGradient")
-rightGrad.Color = ColorSequence.new({
-  ColorSequenceKeypoint.new(0, Color3.fromRGB(22, 15, 42)),
-  ColorSequenceKeypoint.new(1, Color3.fromRGB(15, 13, 28))
-})
-rightGrad.Parent = rightPanel
-
--- Content frame for panels
-local contentFrame = Instance.new("Frame")
-contentFrame.Name = "ContentFrame"
-contentFrame.Size = UDim2.new(1, -12, 1, -12)
-contentFrame.Position = UDim2.fromOffset(6, 6)
-contentFrame.BackgroundTransparency = 1
-contentFrame.Parent = rightPanel
-
-local menuPanels = {}
-
-local mainPanel = Instance.new("Frame")
-mainPanel.Name = "MainPanel"
-mainPanel.Size = UDim2.new(1, 0, 1, 0)
-mainPanel.BackgroundTransparency = 1
-mainPanel.Parent = contentFrame
-menuPanels[1] = mainPanel
-
-local mainScroll = Instance.new("ScrollingFrame")
-mainScroll.Size = UDim2.new(1, 0, 1, 0)
-mainScroll.BackgroundTransparency = 1
-mainScroll.BorderSizePixel = 0
-mainScroll.ScrollBarThickness = 4
-mainScroll.ScrollBarImageColor3 = Color3.fromRGB(100, 50, 180)
-mainScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
-mainScroll.Parent = mainPanel
-
-local mainLayout = Instance.new("UIListLayout")
-mainLayout.Padding = UDim.new(0, 8)
-mainLayout.Parent = mainScroll
-
-local function mHeader(text)
-  local h = Instance.new("TextLabel")
-  h.Size = UDim2.new(1, -10, 0, 22)
-  h.Text = text
-  h.TextColor3 = Color3.fromRGB(160, 120, 255)
-  h.Font = Enum.Font.GothamBold
-  h.TextSize = 13
-  h.TextXAlignment = Enum.TextXAlignment.Left
-  h.BackgroundTransparency = 1
-  h.Parent = mainScroll
-  return h
+local function label(parent,name,text,pos,size,textSize)
+	local l = Instance.new("TextLabel")
+	l.Name = name
+	l.Text = text
+	l.Position = pos
+	l.Size = size
+	l.BackgroundTransparency = 1
+	l.TextColor3 = white
+	l.Font = Enum.Font.GothamBold
+	l.TextSize = textSize or 14
+	l.TextXAlignment = Enum.TextXAlignment.Left
+	l.TextYAlignment = Enum.TextYAlignment.Center
+	l.ZIndex = 20
+	l.Parent = parent
+	return l
 end
 
-local function mSlider(label, min, max, default, callback)
-  local frame = Instance.new("Frame")
-  frame.Size = UDim2.new(1, -10, 0, 44)
-  frame.BackgroundColor3 = Color3.fromRGB(22, 18, 40)
-  frame.BackgroundTransparency = 0.15
-  frame.BorderSizePixel = 0
-  frame.Parent = mainScroll
-  local fCorner = Instance.new("UICorner")
-  fCorner.CornerRadius = UDim.new(0, 8)
-  fCorner.Parent = frame
+local header = Instance.new("Frame")
+header.Name = "Header"
+header.Size = UDim2.new(0,420,0,58)
+header.Position = UDim2.new(0,8,0,8)
+header.BackgroundColor3 = mainColor
+header.BorderSizePixel = 0
+header.Parent = screenGui
+corner(header,10)
+stroke(header,Color3.fromRGB(110,80,180),.5,1)
 
-  local label = Instance.new("TextLabel")
-  label.Size = UDim2.new(0.5, -6, 0, 20)
-  label.Position = UDim2.fromOffset(8, 2)
-  label.Text = label
-  label.TextColor3 = Color3.fromRGB(200, 190, 230)
-  label.Font = Enum.Font.GothamBold
-  label.TextSize = 12
-  label.TextXAlignment = Enum.TextXAlignment.Left
-  label.BackgroundTransparency = 1
-  label.Parent = frame
+local title = label(header,"Title","👾 AldoVz",UDim2.fromOffset(12,2),UDim2.fromOffset(110,28),17)
 
-  local valLabel = Instance.new("TextLabel")
-  valLabel.Size = UDim2.new(0.5, -6, 0, 20)
-  valLabel.Position = UDim2.new(0.5, 0, 0, 2)
-  valLabel.Text = tostring(default)
-  valLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
-  valLabel.Font = Enum.Font.GothamBold
-  valLabel.TextSize = 12
-  valLabel.TextXAlignment = Enum.TextXAlignment.Right
-  valLabel.BackgroundTransparency = 1
-  valLabel.Parent = frame
+local pingLabel = label(header,"Ping","PING : 0",UDim2.fromOffset(120,2),UDim2.fromOffset(80,25),12)
+local fpsLabel = label(header,"FPS","FPS : 0",UDim2.fromOffset(200,2),UDim2.fromOffset(70,25),12)
+local checkLabel = label(header,"Check","CHECK : 0",UDim2.fromOffset(270,2),UDim2.fromOffset(95,25),12)
 
-  local minusBtn = Instance.new("TextButton")
-  minusBtn.Size = UDim2.fromOffset(28, 24)
-  minusBtn.Position = UDim2.fromOffset(8, 22)
-  minusBtn.Text = "-"
-  minusBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-  minusBtn.TextSize = 16
-  minusBtn.Font = Enum.Font.GothamBold
-  minusBtn.BackgroundColor3 = Color3.fromRGB(60, 40, 100)
-  minusBtn.BackgroundTransparency = 0.2
-  minusBtn.BorderSizePixel = 0
-  minusBtn.Parent = frame
-  local miCorner = Instance.new("UICorner")
-  miCorner.CornerRadius = UDim.new(0, 6)
-  miCorner.Parent = minusBtn
+local menuButton = button(header,"MenuButton","MENU",UDim2.fromOffset(10,31),UDim2.fromOffset(90,22))
+menuButton.TextSize = 11
 
-  local plusBtn = Instance.new("TextButton")
-  plusBtn.Size = UDim2.fromOffset(28, 24)
-  plusBtn.Position = UDim2.fromOffset(40, 22)
-  plusBtn.Text = "+"
-  plusBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-  plusBtn.TextSize = 16
-  plusBtn.Font = Enum.Font.GothamBold
-  plusBtn.BackgroundColor3 = Color3.fromRGB(60, 40, 100)
-  plusBtn.BackgroundTransparency = 0.2
-  plusBtn.BorderSizePixel = 0
-  plusBtn.Parent = frame
-  local plCorner = Instance.new("UICorner")
-  plCorner.CornerRadius = UDim.new(0, 6)
-  plCorner.Parent = plusBtn
+local speedLabel = label(header,"Speed","SPEED : "..tostring(config.WalkSpeed),UDim2.fromOffset(310,30),UDim2.fromOffset(100,22),11)
 
-  local resetBtn = Instance.new("TextButton")
-  resetBtn.Size = UDim2.fromOffset(40, 24)
-  resetBtn.Position = UDim2.fromOffset(72, 22)
-  resetBtn.Text = "↺"
-  resetBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-  resetBtn.TextSize = 14
-  resetBtn.Font = Enum.Font.GothamBold
-  resetBtn.BackgroundColor3 = Color3.fromRGB(80, 50, 60)
-  resetBtn.BackgroundTransparency = 0.2
-  resetBtn.BorderSizePixel = 0
-  resetBtn.Parent = frame
-  local rsCorner = Instance.new("UICorner")
-  rsCorner.CornerRadius = UDim.new(0, 6)
-  rsCorner.Parent = resetBtn
+local body = Instance.new("Frame")
+body.Name = "MenuBody"
+body.Size = UDim2.new(0,760,0,530)
+body.Position = UDim2.new(0,8,0,72)
+body.BackgroundColor3 = mainColor
+body.BorderSizePixel = 0
+body.Visible = true
+body.Parent = screenGui
+corner(body,10)
+stroke(body,Color3.fromRGB(110,80,180),.5,1)
 
-  local val = default
+local side = Instance.new("Frame")
+side.Name = "MenuList"
+side.Size = UDim2.new(0,145,1,0)
+side.BackgroundColor3 = Color3.fromRGB(24,24,30)
+side.BorderSizePixel = 0
+side.Parent = body
+corner(side,10)
 
-  connect(minusBtn.Activated, function()
-    val = math.max(min, val - 1)
-    valLabel.Text = tostring(val)
-    callback(val)
-  end)
+local sideTitle = label(side,"MenuTitle","MENU LIST",UDim2.fromOffset(12,10),UDim2.new(1,-24,0,30),14)
 
-  connect(plusBtn.Activated, function()
-    val = math.min(max, val + 1)
-    valLabel.Text = tostring(val)
-    callback(val)
-  end)
+local mainButton = button(side,"MainButton","MAIN",UDim2.fromOffset(10,52),UDim2.new(1,-20,0,42))
+local noteButton = button(side,"NoteButton","NOTE",UDim2.fromOffset(10,102),UDim2.new(1,-20,0,42))
+local controlButton = button(side,"ControlButton","CONTROL",UDim2.fromOffset(10,152),UDim2.new(1,-20,0,42))
+local playerButton = button(side,"PlayerButton","PLAYER",UDim2.fromOffset(10,202),UDim2.new(1,-20,0,42))
 
-  connect(resetBtn.Activated, function()
-    val = default
-    valLabel.Text = tostring(default)
-    callback(default)
-  end)
+local content = Instance.new("Frame")
+content.Name = "MainContent"
+content.Size = UDim2.new(1,-155,1,-10)
+content.Position = UDim2.fromOffset(150,5)
+content.BackgroundTransparency = 1
+content.Parent = body
 
-  return frame, function() return val end
-end
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Size = UDim2.fromScale(1,1)
+mainFrame.BackgroundTransparency = 1
+mainFrame.Visible = true
+mainFrame.Parent = content
 
-mHeader("⚡ WALK SPEED")
-mSlider("Walk Speed", 1, 200, config.walkSpeed, function(v)
-  config.walkSpeed = v
-  local char = player.Character
-  if char then
-    local hum = char:FindFirstChild("Humanoid")
-    if hum then hum.WalkSpeed = v end
-  end
-  saveConfig()
-end)
+local mainTitle = label(mainFrame,"Title","MAIN",UDim2.fromOffset(10,5),UDim2.new(1,-20,0,35),20)
 
-mHeader("🦘 JUMP POWER")
-mSlider("Jump Power", 10, 200, config.jumpPower, function(v)
-  config.jumpPower = v
-  local char = player.Character
-  if char then
-    local hum = char:FindFirstChild("Humanoid")
-    if hum then hum.JumpPower = v end
-  end
-  saveConfig()
-end)
+local walkFrame = Instance.new("Frame")
+walkFrame.Size = UDim2.new(1,-20,0,85)
+walkFrame.Position = UDim2.fromOffset(10,48)
+walkFrame.BackgroundColor3 = panelColor
+walkFrame.BorderSizePixel = 0
+walkFrame.Parent = mainFrame
+corner(walkFrame,10)
 
-mHeader("🔒 SHIFT LOCK")
-local slFrame = Instance.new("Frame")
-slFrame.Size = UDim2.new(1, -10, 0, 34)
-slFrame.BackgroundColor3 = Color3.fromRGB(22, 18, 40)
-slFrame.BackgroundTransparency = 0.15
-slFrame.BorderSizePixel = 0
-slFrame.Parent = mainScroll
-local slCorner = Instance.new("UICorner")
-slCorner.CornerRadius = UDim.new(0, 8)
-slCorner.Parent = slFrame
+label(walkFrame,"WalkTitle","WALK SPEED",UDim2.fromOffset(12,8),UDim2.new(1,-24,0,25),14)
 
-local slLabel = Instance.new("TextLabel")
-slLabel.Size = UDim2.new(0.6, -10, 1, 0)
-slLabel.Position = UDim2.fromOffset(8, 0)
-slLabel.Text = "Shift Lock"
-slLabel.TextColor3 = Color3.fromRGB(200, 190, 230)
-slLabel.Font = Enum.Font.GothamBold
-slLabel.TextSize = 12
-slLabel.TextXAlignment = Enum.TextXAlignment.Left
-slLabel.BackgroundTransparency = 1
-slLabel.Parent = slFrame
+local speedMinus = button(walkFrame,"Minus","-",UDim2.fromOffset(12,38),UDim2.fromOffset(55,35))
+local speedValue = label(walkFrame,"Value",tostring(config.WalkSpeed),UDim2.fromOffset(80,38),UDim2.fromOffset(100,35),17)
+speedValue.TextXAlignment = Enum.TextXAlignment.Center
+local speedPlus = button(walkFrame,"Plus","+",UDim2.fromOffset(190,38),UDim2.fromOffset(55,35))
 
-local slBtn = Instance.new("TextButton")
-slBtn.Size = UDim2.fromOffset(50, 26)
-slBtn.Position = UDim2.new(1, -56, 0, 4)
-slBtn.Text = config.shiftLock and "ON" or "OFF"
-slBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-slBtn.TextSize = 11
-slBtn.Font = Enum.Font.GothamBold
-slBtn.BackgroundColor3 = config.shiftLock and Color3.fromRGB(60, 140, 60) or Color3.fromRGB(100, 50, 50)
-slBtn.BackgroundTransparency = 0.15
-slBtn.BorderSizePixel = 0
-slBtn.Parent = slFrame
-local slBtnCorner = Instance.new("UICorner")
-slBtnCorner.CornerRadius = UDim.new(0, 6)
-slBtnCorner.Parent = slBtn
+local jumpSetting = Instance.new("Frame")
+jumpSetting.Size = UDim2.new(1,-20,0,255)
+jumpSetting.Position = UDim2.fromOffset(10,145)
+jumpSetting.BackgroundColor3 = panelColor
+jumpSetting.BorderSizePixel = 0
+jumpSetting.Parent = mainFrame
+corner(jumpSetting,10)
 
-connect(slBtn.Activated, function()
-  config.shiftLock = not config.shiftLock
-  slBtn.Text = config.shiftLock and "ON" or "OFF"
-  slBtn.BackgroundColor3 = config.shiftLock and Color3.fromRGB(60, 140, 60) or Color3.fromRGB(100, 50, 50)
-  if config.shiftLock then
-    UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
-  else
-    UserInputService.MouseBehavior = Enum.MouseBehavior.Default
-  end
-  saveConfig()
-end)
+label(jumpSetting,"Title","SETTING SHIFTLOCK / JUMP",UDim2.fromOffset(12,8),UDim2.new(1,-24,0,28),15)
 
-local notePanel = Instance.new("Frame")
-notePanel.Name = "NotePanel"
-notePanel.Size = UDim2.new(1, 0, 1, 0)
-notePanel.BackgroundTransparency = 1
-notePanel.Visible = false
-notePanel.Parent = contentFrame
-menuPanels[2] = notePanel
+local targetButton = button(jumpSetting,"Target","PILIH SET : "..config.TargetSetting,UDim2.fromOffset(12,40),UDim2.new(1,-24,0,35))
+targetButton.BackgroundColor3 = selectedColor
 
-local noteScroll = Instance.new("ScrollingFrame")
-noteScroll.Size = UDim2.new(1, 0, 1, -50)
-noteScroll.BackgroundTransparency = 1
-noteScroll.BorderSizePixel = 0
-noteScroll.ScrollBarThickness = 4
-noteScroll.ScrollBarImageColor3 = Color3.fromRGB(100, 50, 180)
-noteScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
-noteScroll.Parent = notePanel
+local arrowUp = button(jumpSetting,"Up","↑",UDim2.new(.5,-30,0,85),UDim2.fromOffset(60,38))
+local arrowLeft = button(jumpSetting,"Left","←",UDim2.new(.5,-100,0,127),UDim2.fromOffset(60,38))
+local arrowRight = button(jumpSetting,"Right","→",UDim2.new(.5,40,0,127),UDim2.fromOffset(60,38))
+local arrowDown = button(jumpSetting,"Down","↓",UDim2.new(.5,-30,0,169),UDim2.fromOffset(60,38))
+
+local sizePlus = button(jumpSetting,"SizePlus","SIZE +",UDim2.fromOffset(15,215),UDim2.fromOffset(90,32))
+local sizeMinus = button(jumpSetting,"SizeMinus","SIZE -",UDim2.new(1,-105,0,215),UDim2.fromOffset(90,32))
+local resetSetting = button(jumpSetting,"Reset","RESET 🔁",UDim2.new(.5,-45,0,215),UDim2.fromOffset(90,32))
+
+local noteFrame = Instance.new("Frame")
+noteFrame.Name = "NoteFrame"
+noteFrame.Size = UDim2.fromScale(1,1)
+noteFrame.BackgroundTransparency = 1
+noteFrame.Visible = false
+noteFrame.Parent = content
+
+label(noteFrame,"Title","NOTE",UDim2.fromOffset(10,5),UDim2.new(1,-20,0,35),20)
+
+local noteList = Instance.new("ScrollingFrame")
+noteList.Name = "NoteList"
+noteList.Size = UDim2.new(0,105,1,-55)
+noteList.Position = UDim2.fromOffset(10,45)
+noteList.BackgroundColor3 = panelColor
+noteList.BorderSizePixel = 0
+noteList.ScrollBarThickness = 4
+noteList.CanvasSize = UDim2.new()
+noteList.Parent = noteFrame
+corner(noteList,8)
 
 local noteLayout = Instance.new("UIListLayout")
-noteLayout.Padding = UDim.new(0, 4)
-noteLayout.Parent = noteScroll
+noteLayout.Padding = UDim.new(0,5)
+noteLayout.Parent = noteList
 
-local noteFrames = {}
+local noteEditor = Instance.new("TextBox")
+noteEditor.Name = "NoteEditor"
+noteEditor.Size = UDim2.new(1,-130,1,-105)
+noteEditor.Position = UDim2.fromOffset(125,45)
+noteEditor.BackgroundColor3 = Color3.fromRGB(20,20,25)
+noteEditor.TextColor3 = white
+noteEditor.PlaceholderText = "Tulis catatan..."
+noteEditor.PlaceholderColor3 = gray
+noteEditor.Text = ""
+noteEditor.TextSize = 14
+noteEditor.Font = Enum.Font.Code
+noteEditor.TextXAlignment = Enum.TextXAlignment.Left
+noteEditor.TextYAlignment = Enum.TextYAlignment.Top
+noteEditor.MultiLine = true
+noteEditor.ClearTextOnFocus = false
+noteEditor.TextWrapped = true
+noteEditor.BorderSizePixel = 0
+noteEditor.Parent = noteFrame
+corner(noteEditor,8)
 
-local function refreshNotes()
-  for _, f in ipairs(noteFrames) do
-    if f and f.Parent then f:Destroy() end
-  end
-  table.clear(noteFrames)
+local noteCurrent = 1
 
-  for i, note in ipairs(notes) do
-    local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(1, -10, 0, 60)
-    frame.BackgroundColor3 = Color3.fromRGB(22, 18, 40)
-    frame.BackgroundTransparency = 0.15
-    frame.BorderSizePixel = 0
-    frame.Parent = noteScroll
-    local fCorner = Instance.new("UICorner")
-    fCorner.CornerRadius = UDim.new(0, 6)
-    fCorner.Parent = frame
-    table.insert(noteFrames, frame)
+local noteSave = button(noteFrame,"Save","SAVE FILE",UDim2.fromOffset(125,445),UDim2.fromOffset(110,38))
+local noteCopy = button(noteFrame,"Copy","COPY",UDim2.fromOffset(245,445),UDim2.fromOffset(90,38))
+local notePaste = button(noteFrame,"Paste","PASTE",UDim2.fromOffset(345,445),UDim2.fromOffset(90,38))
+local noteNew = button(noteFrame,"New","NEW FILE",UDim2.fromOffset(445,445),UDim2.fromOffset(110,38))
 
-    local titleL = Instance.new("TextLabel")
-    titleL.Size = UDim2.new(1, -50, 0, 18)
-    titleL.Position = UDim2.fromOffset(6, 2)
-    titleL.Text = note.title or "Note " .. i
-    titleL.TextColor3 = Color3.fromRGB(200, 180, 255)
-    titleL.Font = Enum.Font.GothamBold
-    titleL.TextSize = 12
-    titleL.TextXAlignment = Enum.TextXAlignment.Left
-    titleL.BackgroundTransparency = 1
-    titleL.Parent = frame
+local controlFrame = Instance.new("Frame")
+controlFrame.Name = "ControlFrame"
+controlFrame.Size = UDim2.fromScale(1,1)
+controlFrame.BackgroundTransparency = 1
+controlFrame.Visible = false
+controlFrame.Parent = content
 
-    local bodyL = Instance.new("TextLabel")
-    bodyL.Size = UDim2.new(1, -50, 0, 28)
-    bodyL.Position = UDim2.fromOffset(6, 20)
-    bodyL.Text = note.body or ""
-    bodyL.TextColor3 = Color3.fromRGB(180, 170, 200)
-    bodyL.Font = Enum.Font.Gotham
-    bodyL.TextSize = 10
-    bodyL.TextXAlignment = Enum.TextXAlignment.Left
-    bodyL.TextYAlignment = Enum.TextYAlignment.Top
-    bodyL.BackgroundTransparency = 1
-    bodyL.TextWrapped = true
-    bodyL.Parent = frame
+label(controlFrame,"Title","CONTROL",UDim2.fromOffset(10,5),UDim2.new(1,-20,0,35),20)
 
-    local copyBtn = Instance.new("TextButton")
-    copyBtn.Size = UDim2.fromOffset(22, 22)
-    copyBtn.Position = UDim2.new(1, -50, 0, 3)
-    copyBtn.Text = "📋"
-    copyBtn.TextSize = 12
-    copyBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 80)
-    copyBtn.BackgroundTransparency = 0.3
-    copyBtn.BorderSizePixel = 0
-    copyBtn.Parent = frame
-    local cpCorner = Instance.new("UICorner")
-    cpCorner.CornerRadius = UDim.new(0, 4)
-    cpCorner.Parent = copyBtn
-    connect(copyBtn.Activated, function()
-      setclipboard(note.body or note.title or "")
-      StarterGui:SetCore("SendNotification", {Title = "📋 Copied", Text = "Note copied!", Duration = 1})
-    end)
+local controllerStatus = button(controlFrame,"Controller","CONTROLLER : "..(config.ControllerEnabled and "ON" or "OFF"),UDim2.fromOffset(10,50),UDim2.new(1,-20,0,45))
+controllerStatus.BackgroundColor3 = config.ControllerEnabled and greenColor or redColor
 
-    local delBtn = Instance.new("TextButton")
-    delBtn.Size = UDim2.fromOffset(22, 22)
-    delBtn.Position = UDim2.new(1, -26, 0, 3)
-    delBtn.Text = "✕"
-    delBtn.TextColor3 = Color3.fromRGB(255, 100, 100)
-    delBtn.TextSize = 11
-    delBtn.Font = Enum.Font.GothamBold
-    delBtn.BackgroundColor3 = Color3.fromRGB(60, 25, 25)
-    delBtn.BackgroundTransparency = 0.4
-    delBtn.BorderSizePixel = 0
-    delBtn.Parent = frame
-    local dCorner = Instance.new("UICorner")
-    dCorner.CornerRadius = UDim.new(0, 4)
-    dCorner.Parent = delBtn
-    connect(delBtn.Activated, function()
-      table.remove(notes, i)
-      saveNotes()
-      refreshNotes()
-    end)
-  end
+local airFrame = Instance.new("Frame")
+airFrame.Size = UDim2.new(1,-20,0,120)
+airFrame.Position = UDim2.fromOffset(10,110)
+airFrame.BackgroundColor3 = panelColor
+airFrame.BorderSizePixel = 0
+airFrame.Parent = controlFrame
+corner(airFrame,10)
 
-  noteScroll.CanvasSize = UDim2.new(0, 0, 0, #notes * 64 + 60)
-end
+label(airFrame,"AirTitle","AIR CONTROL",UDim2.fromOffset(12,8),UDim2.new(1,-24,0,28),15)
 
-local noteInputFrame = Instance.new("Frame")
-noteInputFrame.Size = UDim2.new(1, 0, 0, 44)
-noteInputFrame.Position = UDim2.new(0, 0, 1, -44)
-noteInputFrame.BackgroundColor3 = Color3.fromRGB(18, 15, 32)
-noteInputFrame.BackgroundTransparency = 0.15
-noteInputFrame.BorderSizePixel = 0
-noteInputFrame.Parent = notePanel
-local nifCorner = Instance.new("UICorner")
-nifCorner.CornerRadius = UDim.new(0, 8)
-nifCorner.Parent = noteInputFrame
+local airMinus = button(airFrame,"Minus","-",UDim2.fromOffset(15,52),UDim2.fromOffset(60,40))
+local airValue = label(airFrame,"Value",tostring(config.AirControl),UDim2.fromOffset(90,52),UDim2.fromOffset(120,40),17)
+airValue.TextXAlignment = Enum.TextXAlignment.Center
+local airPlus = button(airFrame,"Plus","+",UDim2.fromOffset(220,52),UDim2.fromOffset(60,40))
 
-local noteTitleInput = Instance.new("TextBox")
-noteTitleInput.Size = UDim2.new(0.35, -6, 1, -8)
-noteTitleInput.Position = UDim2.fromOffset(4, 4)
-noteTitleInput.PlaceholderText = "Title"
-noteTitleInput.PlaceholderColor3 = Color3.fromRGB(100, 80, 140)
-noteTitleInput.Text = ""
-noteTitleInput.TextColor3 = Color3.fromRGB(255, 255, 255)
-noteTitleInput.TextSize = 11
-noteTitleInput.Font = Enum.Font.Gotham
-noteTitleInput.BackgroundColor3 = Color3.fromRGB(25, 20, 45)
-noteTitleInput.BackgroundTransparency = 0.2
-noteTitleInput.BorderSizePixel = 0
-noteTitleInput.ClearTextOnFocus = false
-noteTitleInput.Parent = noteInputFrame
-local ntiCorner = Instance.new("UICorner")
-ntiCorner.CornerRadius = UDim.new(0, 6)
-ntiCorner.Parent = noteTitleInput
+local controlInfo = label(controlFrame,"Info","W A S D / TOUCH CONTROLLER\nAIR CONTROL : "..tostring(config.AirControl),UDim2.fromOffset(15,245),UDim2.new(1,-30,0,80),15)
+controlInfo.TextYAlignment = Enum.TextYAlignment.Top
 
-local noteBodyInput = Instance.new("TextBox")
-noteBodyInput.Size = UDim2.new(0.65, -14, 1, -8)
-noteBodyInput.Position = UDim2.new(0.35, 4, 0, 4)
-noteBodyInput.PlaceholderText = "Content"
-noteBodyInput.PlaceholderColor3 = Color3.fromRGB(100, 80, 140)
-noteBodyInput.Text = ""
-noteBodyInput.TextColor3 = Color3.fromRGB(255, 255, 255)
-noteBodyInput.TextSize = 11
-noteBodyInput.Font = Enum.Font.Gotham
-noteBodyInput.BackgroundColor3 = Color3.fromRGB(25, 20, 45)
-noteBodyInput.BackgroundTransparency = 0.2
-noteBodyInput.BorderSizePixel = 0
-noteBodyInput.ClearTextOnFocus = false
-noteBodyInput.Parent = noteInputFrame
-local nbiCorner = Instance.new("UICorner")
-nbiCorner.CornerRadius = UDim.new(0, 6)
-nbiCorner.Parent = noteBodyInput
+local playerFrame = Instance.new("Frame")
+playerFrame.Name = "PlayerFrame"
+playerFrame.Size = UDim2.fromScale(1,1)
+playerFrame.BackgroundTransparency = 1
+playerFrame.Visible = false
+playerFrame.Parent = content
 
-local addNoteBtn = Instance.new("TextButton")
-addNoteBtn.Size = UDim2.fromOffset(26, 26)
-addNoteBtn.Position = UDim2.new(1, -30, 0, 9)
-addNoteBtn.Text = "+"
-addNoteBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-addNoteBtn.TextSize = 14
-addNoteBtn.Font = Enum.Font.GothamBold
-addNoteBtn.BackgroundColor3 = Color3.fromRGB(100, 50, 180)
-addNoteBtn.BackgroundTransparency = 0.15
-addNoteBtn.BorderSizePixel = 0
-addNoteBtn.Parent = noteInputFrame
-local anCorner = Instance.new("UICorner")
-anCorner.CornerRadius = UDim.new(0, 6)
-anCorner.Parent = addNoteBtn
+label(playerFrame,"Title","PLAYER",UDim2.fromOffset(10,5),UDim2.new(1,-20,0,35),20)
 
-connect(addNoteBtn.Activated, function()
-  local t = noteTitleInput.Text
-  local b = noteBodyInput.Text
-  if #t > 0 or #b > 0 then
-    table.insert(notes, {title = t, body = b})
-    saveNotes()
-    refreshNotes()
-    noteTitleInput.Text = ""
-    noteBodyInput.Text = ""
-  end
-end)
+local spectateLabel = label(playerFrame,"Spectate","SPECTATE : NONE",UDim2.fromOffset(10,43),UDim2.new(1,-20,0,30),14)
 
-refreshNotes()
-
-local controlPanel = Instance.new("Frame")
-controlPanel.Name = "ControlPanel"
-controlPanel.Size = UDim2.new(1, 0, 1, 0)
-controlPanel.BackgroundTransparency = 1
-controlPanel.Visible = false
-controlPanel.Parent = contentFrame
-menuPanels[3] = controlPanel
-
-local controlScroll = Instance.new("ScrollingFrame")
-controlScroll.Size = UDim2.new(1, 0, 1, 0)
-controlScroll.BackgroundTransparency = 1
-controlScroll.BorderSizePixel = 0
-controlScroll.ScrollBarThickness = 4
-controlScroll.ScrollBarImageColor3 = Color3.fromRGB(100, 50, 180)
-controlScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
-controlScroll.Parent = controlPanel
-
-local controlLayout = Instance.new("UIListLayout")
-controlLayout.Padding = UDim.new(0, 8)
-controlLayout.Parent = controlScroll
-
-local function cHeader(text)
-  local h = Instance.new("TextLabel")
-  h.Size = UDim2.new(1, -10, 0, 22)
-  h.Text = text
-  h.TextColor3 = Color3.fromRGB(160, 120, 255)
-  h.Font = Enum.Font.GothamBold
-  h.TextSize = 13
-  h.TextXAlignment = Enum.TextXAlignment.Left
-  h.BackgroundTransparency = 1
-  h.Parent = controlScroll
-  return h
-end
-
-cHeader("🎮 CONTROLLER SETTINGS")
-
-local wasdFrame = Instance.new("Frame")
-wasdFrame.Size = UDim2.new(1, -10, 0, 34)
-wasdFrame.BackgroundColor3 = Color3.fromRGB(22, 18, 40)
-wasdFrame.BackgroundTransparency = 0.15
-wasdFrame.BorderSizePixel = 0
-wasdFrame.Parent = controlScroll
-local wCorner = Instance.new("UICorner")
-wCorner.CornerRadius = UDim.new(0, 8)
-wCorner.Parent = wasdFrame
-
-local wasdLabel = Instance.new("TextLabel")
-wasdLabel.Size = UDim2.new(0.6, -10, 1, 0)
-wasdLabel.Position = UDim2.fromOffset(8, 0)
-wasdLabel.Text = "W A S D Controller"
-wasdLabel.TextColor3 = Color3.fromRGB(200, 190, 230)
-wasdLabel.Font = Enum.Font.GothamBold
-wasdLabel.TextSize = 12
-wasdLabel.TextXAlignment = Enum.TextXAlignment.Left
-wasdLabel.BackgroundTransparency = 1
-wasdLabel.Parent = wasdFrame
-
-local wasdBtn = Instance.new("TextButton")
-wasdBtn.Size = UDim2.fromOffset(50, 26)
-wasdBtn.Position = UDim2.new(1, -56, 0, 4)
-wasdBtn.Text = config.wasdEnabled and "ON" or "OFF"
-wasdBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-wasdBtn.TextSize = 11
-wasdBtn.Font = Enum.Font.GothamBold
-wasdBtn.BackgroundColor3 = config.wasdEnabled and Color3.fromRGB(60, 140, 60) or Color3.fromRGB(100, 50, 50)
-wasdBtn.BackgroundTransparency = 0.15
-wasdBtn.BorderSizePixel = 0
-wasdBtn.Parent = wasdFrame
-local wbCorner = Instance.new("UICorner")
-wbCorner.CornerRadius = UDim.new(0, 6)
-wbCorner.Parent = wasdBtn
-
-local wasdActive = config.wasdEnabled
-
-connect(wasdBtn.Activated, function()
-  wasdActive = not wasdActive
-  wasdBtn.Text = wasdActive and "ON" or "OFF"
-  wasdBtn.BackgroundColor3 = wasdActive and Color3.fromRGB(60, 140, 60) or Color3.fromRGB(100, 50, 50)
-  if not wasdActive then
-    ContextActionService:BindAction("AldoVzMove", function() end, false, Enum.KeyCode.W, Enum.KeyCode.A, Enum.KeyCode.S, Enum.KeyCode.D)
-  else
-    ContextActionService:UnbindAction("AldoVzMove")
-  end
-  config.wasdEnabled = wasdActive
-  saveConfig()
-end)
-
-cHeader("🌪️ AIR CONTROL")
-local acFrame = Instance.new("Frame")
-acFrame.Size = UDim2.new(1, -10, 0, 44)
-acFrame.BackgroundColor3 = Color3.fromRGB(22, 18, 40)
-acFrame.BackgroundTransparency = 0.15
-acFrame.BorderSizePixel = 0
-acFrame.Parent = controlScroll
-local acFCorner = Instance.new("UICorner")
-acFCorner.CornerRadius = UDim.new(0, 8)
-acFCorner.Parent = acFrame
-
-local acLabel = Instance.new("TextLabel")
-acLabel.Size = UDim2.new(0.5, -6, 0, 20)
-acLabel.Position = UDim2.fromOffset(8, 2)
-acLabel.Text = "Air Control"
-acLabel.TextColor3 = Color3.fromRGB(200, 190, 230)
-acLabel.Font = Enum.Font.GothamBold
-acLabel.TextSize = 12
-acLabel.TextXAlignment = Enum.TextXAlignment.Left
-acLabel.BackgroundTransparency = 1
-acLabel.Parent = acFrame
-
-local acVal = Instance.new("TextLabel")
-acVal.Size = UDim2.new(0.5, -6, 0, 20)
-acVal.Position = UDim2.new(0.5, 0, 0, 2)
-acVal.Text = tostring(config.airControl)
-acVal.TextColor3 = Color3.fromRGB(255, 200, 100)
-acVal.Font = Enum.Font.GothamBold
-acVal.TextSize = 12
-acVal.TextXAlignment = Enum.TextXAlignment.Right
-acVal.BackgroundTransparency = 1
-acVal.Parent = acFrame
-
-local acMinus = Instance.new("TextButton")
-acMinus.Size = UDim2.fromOffset(28, 24)
-acMinus.Position = UDim2.fromOffset(8, 22)
-acMinus.Text = "-"
-acMinus.TextColor3 = Color3.fromRGB(255, 255, 255)
-acMinus.TextSize = 16
-acMinus.Font = Enum.Font.GothamBold
-acMinus.BackgroundColor3 = Color3.fromRGB(60, 40, 100)
-acMinus.BackgroundTransparency = 0.2
-acMinus.BorderSizePixel = 0
-acMinus.Parent = acFrame
-local amiCorner = Instance.new("UICorner")
-amiCorner.CornerRadius = UDim.new(0, 6)
-amiCorner.Parent = acMinus
-
-local acPlus = Instance.new("TextButton")
-acPlus.Size = UDim2.fromOffset(28, 24)
-acPlus.Position = UDim2.fromOffset(40, 22)
-acPlus.Text = "+"
-acPlus.TextColor3 = Color3.fromRGB(255, 255, 255)
-acPlus.TextSize = 16
-acPlus.Font = Enum.Font.GothamBold
-acPlus.BackgroundColor3 = Color3.fromRGB(60, 40, 100)
-acPlus.BackgroundTransparency = 0.2
-acPlus.BorderSizePixel = 0
-acPlus.Parent = acFrame
-local aplCorner = Instance.new("UICorner")
-aplCorner.CornerRadius = UDim.new(0, 6)
-aplCorner.Parent = acPlus
-
-local acReset = Instance.new("TextButton")
-acReset.Size = UDim2.fromOffset(40, 24)
-acReset.Position = UDim2.fromOffset(72, 22)
-acReset.Text = "↺"
-acReset.TextColor3 = Color3.fromRGB(255, 255, 255)
-acReset.TextSize = 14
-acReset.Font = Enum.Font.GothamBold
-acReset.BackgroundColor3 = Color3.fromRGB(80, 50, 60)
-acReset.BackgroundTransparency = 0.2
-acReset.BorderSizePixel = 0
-acReset.Parent = acFrame
-local arCorner = Instance.new("UICorner")
-arCorner.CornerRadius = UDim.new(0, 6)
-arCorner.Parent = acReset
-
-local acValNum = config.airControl
-
-connect(acMinus.Activated, function()
-  acValNum = math.max(0, acValNum - 1)
-  acVal.Text = tostring(acValNum)
-  config.airControl = acValNum
-  saveConfig()
-end)
-
-connect(acPlus.Activated, function()
-  acValNum = math.min(100, acValNum + 1)
-  acVal.Text = tostring(acValNum)
-  config.airControl = acValNum
-  saveConfig()
-end)
-
-connect(acReset.Activated, function()
-  acValNum = 20
-  acVal.Text = "20"
-  config.airControl = 20
-  saveConfig()
-end)
-
-controlScroll.CanvasSize = UDim2.new(0, 0, 0, 200)
-
-local playerPanel = Instance.new("Frame")
-playerPanel.Name = "PlayerPanel"
-playerPanel.Size = UDim2.new(1, 0, 1, 0)
-playerPanel.BackgroundTransparency = 1
-playerPanel.Visible = false
-playerPanel.Parent = contentFrame
-menuPanels[4] = playerPanel
-
-local playerScroll = Instance.new("ScrollingFrame")
-playerScroll.Size = UDim2.new(1, 0, 1, 0)
-playerScroll.BackgroundTransparency = 1
-playerScroll.BorderSizePixel = 0
-playerScroll.ScrollBarThickness = 4
-playerScroll.ScrollBarImageColor3 = Color3.fromRGB(100, 50, 180)
-playerScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
-playerScroll.Parent = playerPanel
+local playerList = Instance.new("ScrollingFrame")
+playerList.Name = "PlayerList"
+playerList.Size = UDim2.new(1,-20,1,-90)
+playerList.Position = UDim2.fromOffset(10,80)
+playerList.BackgroundColor3 = panelColor
+playerList.BorderSizePixel = 0
+playerList.ScrollBarThickness = 5
+playerList.CanvasSize = UDim2.new()
+playerList.Parent = playerFrame
+corner(playerList,10)
 
 local playerLayout = Instance.new("UIListLayout")
-playerLayout.Padding = UDim.new(0, 4)
-playerLayout.Parent = playerScroll
+playerLayout.Padding = UDim.new(0,5)
+playerLayout.Parent = playerList
 
-local function refreshPlayerList()
-  for _, child in ipairs(playerScroll:GetChildren()) do
-    if child:IsA("Frame") then child:Destroy() end
-  end
+local pages = {
+	MAIN = mainFrame,
+	NOTE = noteFrame,
+	CONTROL = controlFrame,
+	PLAYER = playerFrame
+}
 
-  local allPlayers = Players:GetPlayers()
-  table.sort(allPlayers, function(a, b) return a.Name < b.Name end)
+local navs = {
+	MAIN = mainButton,
+	NOTE = noteButton,
+	CONTROL = controlButton,
+	PLAYER = playerButton
+}
 
-  for _, plr in ipairs(allPlayers) do
-    if plr ~= player then
-      local frame = Instance.new("Frame")
-      frame.Size = UDim2.new(1, -10, 0, 34)
-      frame.BackgroundColor3 = Color3.fromRGB(22, 18, 40)
-      frame.BackgroundTransparency = 0.15
-      frame.BorderSizePixel = 0
-      frame.Parent = playerScroll
-      local fCorner = Instance.new("UICorner")
-      fCorner.CornerRadius = UDim.new(0, 6)
-      fCorner.Parent = frame
+local function showPage(name)
+	for key,frame in pairs(pages) do
+		frame.Visible = key == name
+	end
 
-      local nameL = Instance.new("TextLabel")
-      nameL.Size = UDim2.new(0.6, -10, 1, 0)
-      nameL.Position = UDim2.fromOffset(8, 0)
-      nameL.Text = plr.Name
-      nameL.TextColor3 = Color3.fromRGB(200, 190, 230)
-      nameL.Font = Enum.Font.Gotham
-      nameL.TextSize = 12
-      nameL.TextXAlignment = Enum.TextXAlignment.Left
-      nameL.BackgroundTransparency = 1
-      nameL.Parent = frame
-
-      local specBtn = Instance.new("TextButton")
-      specBtn.Size = UDim2.fromOffset(40, 24)
-      specBtn.Position = UDim2.new(1, -46, 0, 5)
-      specBtn.Text = "👁"
-      specBtn.TextSize = 14
-      specBtn.BackgroundColor3 = Color3.fromRGB(80, 40, 140)
-      specBtn.BackgroundTransparency = 0.2
-      specBtn.BorderSizePixel = 0
-      specBtn.Parent = frame
-      local sbCorner = Instance.new("UICorner")
-      sbCorner.CornerRadius = UDim.new(0, 4)
-      sbCorner.Parent = specBtn
-
-      connect(specBtn.Activated, function()
-        local cam = Workspace.CurrentCamera
-        if cam then
-          cam.CameraSubject = plr.Character and plr.Character:FindFirstChild("Humanoid") or plr
-          cam.CameraType = Enum.CameraType.Custom
-          StarterGui:SetCore("SendNotification", {Title = "👁 Spectating", Text = plr.Name, Duration = 1})
-        end
-      end)
-    end
-  end
-
-  playerScroll.CanvasSize = UDim2.new(0, 0, 0, (#Players:GetPlayers() - 1) * 38 + 10)
+	for key,b in pairs(navs) do
+		b.BackgroundColor3 = key == name and selectedColor or buttonColor
+	end
 end
 
-refreshPlayerList()
-
-connect(Players.PlayerAdded, refreshPlayerList)
-connect(Players.PlayerRemoving, refreshPlayerList)
-connect(Players.LocalPlayer.CharacterAdded, function()
-  local char = player.Character
-  if char then
-    local hum = char:WaitForChild("Humanoid")
-    if hum then
-      hum.WalkSpeed = config.walkSpeed
-      hum.JumpPower = config.jumpPower
-    end
-  end
+connect(mainButton.Activated,function()
+	showPage("MAIN")
 end)
 
-local fc = 0
-local ft = 0
-local checkSpeed = 0
-
-connect(RunService.RenderStepped, function(dt)
-  fc = fc + 1
-  ft = ft + dt
-  if ft >= 1 then
-    local fps = math.floor(fc / ft)
-    local ping = math.random(10, 60)
-    fpsLabel.Text = "FPS: " .. fps
-    pingLabel.Text = "PING: " .. ping
-    fc = 0
-    ft = 0
-    checkSpeed = math.random(10, 30)
-  end
+connect(noteButton.Activated,function()
+	showPage("NOTE")
 end)
 
-local settingMode = "JUMP"
-local settingVal = 50
-
-local function updateSettingDisplay()
-
-end
-
-connect(UserInputService.InputBegan, function(input, gp)
-  if gp or destroyed then return end
-  if input.KeyCode == Enum.KeyCode.Up then
-    if settingMode == "JUMP" then
-      settingVal = math.min(200, settingVal + 5)
-      config.jumpPower = settingVal
-      local char = player.Character
-      if char then
-        local hum = char:FindFirstChild("Humanoid")
-        if hum then hum.JumpPower = settingVal end
-      end
-      saveConfig()
-    end
-  elseif input.KeyCode == Enum.KeyCode.Down then
-    if settingMode == "JUMP" then
-      settingVal = math.max(10, settingVal - 5)
-      config.jumpPower = settingVal
-      local char = player.Character
-      if char then
-        local hum = char:FindFirstChild("Humanoid")
-        if hum then hum.JumpPower = settingVal end
-      end
-      saveConfig()
-    end
-  elseif input.KeyCode == Enum.KeyCode.Left then
-    settingMode = "SHIFTLOCK"
-  elseif input.KeyCode == Enum.KeyCode.Right then
-    settingMode = "JUMP"
-  end
+connect(controlButton.Activated,function()
+	showPage("CONTROL")
 end)
 
-menuButtons[1].BackgroundColor3 = Color3.fromRGB(80, 40, 160)
-menuButtons[1].TextColor3 = Color3.fromRGB(255, 255, 255)
+connect(playerButton.Activated,function()
+	showPage("PLAYER")
+end)
 
-local function applyConfig(char)
-  if not char then return end
-  local hum = char:FindFirstChild("Humanoid")
-  if hum then
-    hum.WalkSpeed = config.walkSpeed
-    hum.JumpPower = config.jumpPower
-  end
+connect(menuButton.Activated,function()
+	body.Visible = not body.Visible
+end)
+
+local function applyHumanoid()
+	if humanoid and humanoid.Parent then
+		humanoid.WalkSpeed = config.WalkSpeed
+		pcall(function()
+			humanoid.UseJumpPower = true
+			humanoid.JumpPower = config.JumpPower
+		end)
+	end
 end
 
-if player.Character then
-  applyConfig(player.Character)
+connect(speedMinus.Activated,function()
+	config.WalkSpeed = math.clamp(config.WalkSpeed-1,1,200)
+	speedValue.Text = tostring(config.WalkSpeed)
+	speedLabel.Text = "SPEED : "..tostring(config.WalkSpeed)
+	applyHumanoid()
+end)
+
+connect(speedPlus.Activated,function()
+	config.WalkSpeed = math.clamp(config.WalkSpeed+1,1,200)
+	speedValue.Text = tostring(config.WalkSpeed)
+	speedLabel.Text = "SPEED : "..tostring(config.WalkSpeed)
+	applyHumanoid()
+end)
+
+connect(targetButton.Activated,function()
+	if config.TargetSetting == "JUMP" then
+		config.TargetSetting = "SHIFTLOCK"
+	else
+		config.TargetSetting = "JUMP"
+	end
+	targetButton.Text = "PILIH SET : "..config.TargetSetting
+end)
+
+local function getJumpButton()
+	local touchGui = playerGui:FindFirstChild("TouchGui")
+	if not touchGui then return nil end
+	return touchGui:FindFirstChild("JumpButton",true)
 end
 
-connect(player.CharacterAdded, applyConfig)
+local function updateJump()
+	local jump = getJumpButton()
+	local camera = workspace.CurrentCamera
+	if not jump or not camera then return end
 
-print("[AVz")
+	local viewport = camera.ViewportSize
+	local size = math.max(40,math.floor(viewport.Y * config.JumpSize))
+
+	pcall(function()
+		jump.AnchorPoint = Vector2.new(.5,.5)
+		jump.Position = UDim2.new(config.JumpX,0,config.JumpY,0)
+		jump.Size = UDim2.fromOffset(size,size)
+	end)
+end
+
+local shiftButton = Instance.new("TextButton")
+shiftButton.Name = "ShiftLock"
+shiftButton.Text = "⇄"
+shiftButton.TextSize = 22
+shiftButton.Font = Enum.Font.GothamBold
+shiftButton.TextColor3 = white
+shiftButton.BackgroundColor3 = config.ShiftLocked and selectedColor or redColor
+shiftButton.BackgroundTransparency = .1
+shiftButton.Size = UDim2.fromOffset(config.ShiftSize,config.ShiftSize)
+shiftButton.Position = UDim2.new(config.ShiftX,0,config.ShiftY,0)
+shiftButton.AnchorPoint = Vector2.new(.5,.5)
+shiftButton.BorderSizePixel = 0
+shiftButton.Active = true
+shiftButton.ZIndex = 50
+shiftButton.Parent = screenGui
+corner(shiftButton,999)
+
+local crosshair = Instance.new("Frame")
+crosshair.Name = "Crosshair"
+crosshair.Size = UDim2.fromOffset(6,6)
+crosshair.Position = UDim2.new(.5,-3,.5,-3)
+crosshair.BackgroundColor3 = white
+crosshair.BorderSizePixel = 0
+crosshair.Visible = config.ShiftLocked
+crosshair.ZIndex = 49
+crosshair.Parent = screenGui
+corner(crosshair,999)
+
+local function updateShiftButton()
+	shiftButton.Position = UDim2.new(config.ShiftX,0,config.ShiftY,0)
+	shiftButton.Size = UDim2.fromOffset(config.ShiftSize,config.ShiftSize)
+	shiftButton.BackgroundColor3 = config.ShiftLocked and selectedColor or redColor
+end
+
+local function toggleShift()
+	config.ShiftLocked = not config.ShiftLocked
+	crosshair.Visible = config.ShiftLocked
+
+	if humanoid and humanoid.Parent then
+		humanoid.AutoRotate = not config.ShiftLocked
+	end
+
+	updateShiftButton()
+end
+
+connect(shiftButton.Activated,toggleShift)
+
+local function settingMove(dx,dy)
+	if config.TargetSetting == "JUMP" then
+		config.JumpX = math.clamp(config.JumpX+dx,.05,.95)
+		config.JumpY = math.clamp(config.JumpY+dy,.05,.95)
+		updateJump()
+	else
+		config.ShiftX = math.clamp(config.ShiftX+dx,.02,.98)
+		config.ShiftY = math.clamp(config.ShiftY+dy,.02,.98)
+		updateShiftButton()
+	end
+end
+
+local settingStep = .018
+
+connect(arrowUp.Activated,function()
+	settingMove(0,-settingStep)
+end)
+
+connect(arrowDown.Activated,function()
+	settingMove(0,settingStep)
+end)
+
+connect(arrowLeft.Activated,function()
+	settingMove(-settingStep,0)
+end)
+
+connect(arrowRight.Activated,function()
+	settingMove(settingStep,0)
+end)
+
+connect(sizePlus.Activated,function()
+	if config.TargetSetting == "JUMP" then
+		config.JumpSize = math.clamp(config.JumpSize+.05,.05,.5)
+		updateJump()
+	else
+		config.ShiftSize = math.clamp(config.ShiftSize+5,20,100)
+		updateShiftButton()
+	end
+end)
+
+connect(sizeMinus.Activated,function()
+	if config.TargetSetting == "JUMP" then
+		config.JumpSize = math.clamp(config.JumpSize-.05,.05,.5)
+		updateJump()
+	else
+		config.ShiftSize = math.clamp(config.ShiftSize-5,20,100)
+		updateShiftButton()
+	end
+end)
+
+connect(resetSetting.Activated,function()
+	if config.TargetSetting == "JUMP" then
+		config.JumpX = defaultConfig.JumpX
+		config.JumpY = defaultConfig.JumpY
+		config.JumpSize = defaultConfig.JumpSize
+		updateJump()
+	else
+		config.ShiftX = defaultConfig.ShiftX
+		config.ShiftY = defaultConfig.ShiftY
+		config.ShiftSize = defaultConfig.ShiftSize
+		updateShiftButton()
+	end
+end)
+
+local noteListData = loadNoteList()
+
+local function refreshNotes()
+	for _,obj in ipairs(noteList:GetChildren()) do
+		if obj:IsA("TextButton") then
+			obj:Destroy()
+		end
+	end
+
+	for _,index in ipairs(noteListData) do
+		local b = button(noteList,"Note"..tostring(index),"FILE "..tostring(index),UDim2.new(),UDim2.new(1,-8,0,35))
+		b.LayoutOrder = tonumber(index) or 0
+
+		connect(b.Activated,function()
+			noteCurrent = index
+			noteEditor.Text = loadNote(index)
+		end)
+	end
+
+	task.defer(function()
+		noteList.CanvasSize = UDim2.fromOffset(0,noteLayout.AbsoluteContentSize.Y+10)
+	end)
+end
+
+refreshNotes()
+noteEditor.Text = loadNote(noteCurrent)
+
+connect(noteSave.Activated,function()
+	saveNote(noteCurrent,noteEditor.Text)
+end)
+
+connect(noteNew.Activated,function()
+	local max = 0
+
+	for _,v in ipairs(noteListData) do
+		local n = tonumber(v)
+		if n and n > max then
+			max = n
+		end
+	end
+
+	local newIndex = max + 1
+	table.insert(noteListData,newIndex)
+	saveNoteList(noteListData)
+	noteCurrent = newIndex
+	noteEditor.Text = ""
+	refreshNotes()
+end)
+
+connect(noteCopy.Activated,function()
+	pcall(function()
+		if setclipboard then
+			setclipboard(noteEditor.Text)
+		end
+	end)
+end)
+
+connect(notePaste.Activated,function()
+	pcall(function()
+		if getclipboard then
+			noteEditor.Text = getclipboard()
+		end
+	end)
+end)
+
+connect(controllerStatus.Activated,function()
+	config.ControllerEnabled = not config.ControllerEnabled
+
+	controllerStatus.Text = "CONTROLLER : "..(config.ControllerEnabled and "ON" or "OFF")
+	controllerStatus.BackgroundColor3 = config.ControllerEnabled and greenColor or redColor
+end)
+
+connect(airMinus.Activated,function()
+	config.AirControl = math.clamp(config.AirControl-1,0,100)
+	airValue.Text = tostring(config.AirControl)
+	controlInfo.Text = "W A S D / TOUCH CONTROLLER\nAIR CONTROL : "..tostring(config.AirControl)
+end)
+
+connect(airPlus.Activated,function()
+	config.AirControl = math.clamp(config.AirControl+1,0,100)
+	airValue.Text = tostring(config.AirControl)
+	controlInfo.Text = "W A S D / TOUCH CONTROLLER\nAIR CONTROL : "..tostring(config.AirControl)
+end)
+
+local moveState = {
+	W = false,
+	A = false,
+	S = false,
+	D = false
+}
+
+local cachedForward = Vector3.new(0,0,-1)
+local cachedRight = Vector3.new(1,0,0)
+
+local function updateCameraVectors()
+	local camera = workspace.CurrentCamera
+	if not camera then return end
+
+	local look = camera.CFrame.LookVector
+	local right = camera.CFrame.RightVector
+
+	local forward = Vector3.new(look.X,0,look.Z)
+	local side = Vector3.new(right.X,0,right.Z)
+
+	if forward.Magnitude > .001 then
+		cachedForward = forward.Unit
+	end
+
+	if side.Magnitude > .001 then
+		cachedRight = side.Unit
+	end
+end
+
+local function getMovement()
+	if not config.ControllerEnabled then
+		return Vector3.zero
+	end
+
+	local x = 0
+	local z = 0
+
+	if moveState.A then x -= 1 end
+	if moveState.D then x += 1 end
+	if moveState.W then z += 1 end
+	if moveState.S then z -= 1 end
+
+	if x == 0 and z == 0 then
+		return Vector3.zero
+	end
+
+	local move = cachedRight*x + cachedForward*z
+
+	if move.Magnitude <= .001 then
+		return Vector3.zero
+	end
+
+	return move.Unit
+end
+
+local keyboardMap = {
+	[Enum.KeyCode.W] = "W",
+	[Enum.KeyCode.A] = "A",
+	[Enum.KeyCode.S] = "S",
+	[Enum.KeyCode.D] = "D"
+}
+
+connect(UserInputService.InputBegan,function(input,gp)
+	if gp then return end
+
+	local key = keyboardMap[input.KeyCode]
+	if key then
+		moveState[key] = true
+	end
+end)
+
+connect(UserInputService.InputEnded,function(input)
+	local key = keyboardMap[input.KeyCode]
+	if key then
+		moveState[key] = false
+	end
+end)
+
+local touchButtons = {}
+
+local controlPad = Instance.new("Frame")
+controlPad.Name = "TouchController"
+controlPad.Size = UDim2.fromOffset(170,170)
+controlPad.Position = UDim2.new(0,10,1,-185)
+controlPad.BackgroundTransparency = 1
+controlPad.ZIndex = 60
+controlPad.Parent = screenGui
+
+local function touchControl(name,text,pos,key)
+	local b = button(controlPad,name,text,pos,UDim2.fromOffset(52,52))
+	b.BackgroundTransparency = .15
+	b.ZIndex = 61
+
+	connect(b.InputBegan,function(input)
+		if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+			moveState[key] = true
+		end
+	end)
+
+	connect(b.InputEnded,function(input)
+		if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+			moveState[key] = false
+		end
+	end)
+
+	touchButtons[key] = b
+end
+
+touchControl("W","W",UDim2.fromOffset(59,0),"W")
+touchControl("A","A",UDim2.fromOffset(0,59),"A")
+touchControl("S","S",UDim2.fromOffset(59,59),"S")
+touchControl("D","D",UDim2.fromOffset(118,59),"D")
+
+local spectating = nil
+
+local function stopSpectate()
+	spectating = nil
+	spectateLabel.Text = "SPECTATE : NONE"
+
+	if humanoid then
+		workspace.CurrentCamera.CameraSubject = humanoid
+	end
+end
+
+local function spectate(target)
+	if not target or target == player then
+		stopSpectate()
+		return
+	end
+
+	local targetHumanoid = target.Character and target.Character:FindFirstChildOfClass("Humanoid")
+
+	if targetHumanoid then
+		spectating = target
+		spectateLabel.Text = "SPECTATE : "..target.Name
+		workspace.CurrentCamera.CameraSubject = targetHumanoid
+	end
+end
+
+local function refreshPlayers()
+	for _,obj in ipairs(playerList:GetChildren()) do
+		if obj:IsA("TextButton") then
+			obj:Destroy()
+		end
+	end
+
+	for _,target in ipairs(Players:GetPlayers()) do
+		if target ~= player then
+			local b = button(playerList,target.Name.."Button",target.Name.."  |  "..target.DisplayName,UDim2.new(),UDim2.new(1,-10,0,40))
+			b.LayoutOrder = target.UserId
+
+			connect(b.Activated,function()
+				spectate(target)
+			end)
+		end
+	end
+
+	local stop = button(playerList,"StopSpectate","STOP SPECTATE",UDim2.new(),UDim2.new(1,-10,0,40))
+	stop.LayoutOrder = 999999
+
+	connect(stop.Activated,stopSpectate)
+
+	task.defer(function()
+		playerList.CanvasSize = UDim2.fromOffset(0,playerLayout.AbsoluteContentSize.Y+10)
+	end)
+end
+
+refreshPlayers()
+
+connect(Players.PlayerAdded,function()
+	refreshPlayers()
+end)
+
+connect(Players.PlayerRemoving,function(target)
+	if spectating == target then
+		stopSpectate()
+	end
+	refreshPlayers()
+end)
+
+local fps = 0
+local frameCounter = 0
+local lastFps = os.clock()
+
+connect(RunService.RenderStepped,function()
+	if destroyed then return end
+
+	frameCounter += 1
+
+	local now = os.clock()
+
+	if now-lastFps >= 1 then
+		fps = frameCounter
+		frameCounter = 0
+		lastFps = now
+
+		fpsLabel.Text = "FPS : "..tostring(fps)
+	end
+
+	local movement = getMovement()
+
+	if humanoid and humanoid.Parent and humanoid.Health > 0 then
+		local state = humanoid:GetState()
+		local isAir = state == Enum.HumanoidStateType.Freefall or state == Enum.HumanoidStateType.Jumping
+
+		if isAir then
+			local factor = math.clamp(config.AirControl/20,0,1)
+			movement *= factor
+		end
+
+		humanoid:Move(movement,false)
+
+		if config.ShiftLocked then
+			local camera = workspace.CurrentCamera
+			local root = character and character:FindFirstChild("HumanoidRootPart")
+
+			if camera and root then
+				local _,y = camera.CFrame:ToOrientation()
+				root.CFrame = CFrame.new(root.Position)*CFrame.Angles(0,y,0)
+			end
+
+			humanoid.AutoRotate = false
+		else
+			humanoid.AutoRotate = true
+		end
+	end
+
+	updateCameraVectors()
+end)
+
+connect(RunService.Heartbeat,function()
+	if destroyed then return end
+
+	local ok,ping = pcall(function()
+		return player:GetNetworkPing()*1000
+	end)
+
+	if ok and ping then
+		pingLabel.Text = "PING : "..tostring(math.floor(ping))
+	end
+
+	checkLabel.Text = "CHECK : "..tostring(math.floor(config.WalkSpeed))
+end)
+
+connect(player.CharacterAdded,function(newCharacter)
+	if destroyed then return end
+
+	character = newCharacter
+	humanoid = newCharacter:WaitForChild("Humanoid",10)
+
+	if humanoid then
+		applyHumanoid()
+		humanoid.AutoRotate = not config.ShiftLocked
+	end
+
+	task.delay(.5,function()
+		if not destroyed then
+			updateJump()
+		end
+	end)
+end)
+
+connect(playerGui.ChildAdded,function(child)
+	if child.Name == "TouchGui" then
+		task.delay(.2,function()
+			if not destroyed then
+				updateJump()
+			end
+		end)
+	end
+end)
+
+connect(workspace:GetPropertyChangedSignal("CurrentCamera"),function()
+	task.delay(.1,function()
+		if not destroyed then
+			updateJump()
+		end
+	end)
+end)
+
+applyHumanoid()
+updateJump()
+updateShiftButton()
+showPage("MAIN")
+saveConfig()
