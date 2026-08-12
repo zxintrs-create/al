@@ -231,8 +231,8 @@ local function createButton(name, position, size, text, zIndex, bgColor)
 	button.Font = Enum.Font.GothamBold
 	button.TextSize = 28
 	button.AutoButtonColor = false
-	button.Active = false
-	button.Selectable = false
+	button.Active = true
+	button.Selectable = true
 	button.BorderSizePixel = 0
 	button.ZIndex = zIndex or 10
 	button.Parent = mainFrame
@@ -262,8 +262,8 @@ btnWLock.TextColor3 = BUTTON_TEXT_COLOR
 btnWLock.Font = Enum.Font.GothamBold
 btnWLock.TextSize = 28
 btnWLock.AutoButtonColor = false
-btnWLock.Active = false
-btnWLock.Selectable = false
+btnWLock.Active = true
+btnWLock.Selectable = true
 btnWLock.BorderSizePixel = 0
 btnWLock.ZIndex = 12
 btnWLock.Parent = mainFrame
@@ -272,7 +272,7 @@ local centerCorner = Instance.new("UICorner")
 centerCorner.CornerRadius = UDim.new(1,0)
 centerCorner.Parent = btnWLock
 
--- === FITUR SAKLAR MODE DELAY ===
+-- === SAKLAR MODE DELAY ===
 local isDelayMode = false
 
 local btnToggleDelay = Instance.new("TextButton")
@@ -307,118 +307,40 @@ connect(btnToggleDelay.Activated, function()
 end)
 -- ===============================
 
-local touchZone = Instance.new("Frame")
-touchZone.Name = "TouchZone"
-touchZone.Size = UDim2.new(1, 0, 1, 0)
-touchZone.BackgroundTransparency = 1
-touchZone.ZIndex = 50
-touchZone.Active = true
-touchZone.Parent = mainFrame
+-- Sistem Tombol Independen (Anti Bentrok / Anti Nyala Bersamaan jika tidak ditekan)
+local activeTouches = {}
 
-local activeTouchId = nil
-local touchStartPos = nil
-local touchStartTime = 0
+local function setupButtonEvents(button, stateKey)
+	connect(button.InputBegan, function(input)
+		if destroyed then return end
+		if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+			activeTouches[input] = stateKey
+			moveState[stateKey] = true
+			setButtonVisual(button, true)
+		end
+	end)
 
--- Variabel pelacak momentum/delay mentah agar transisi lompat & belok tidak patah-patah
-local smoothX, smoothZ = 0, 0
-
-local function updateMovementFromPosition(pos)
-	local absPos = touchZone.AbsolutePosition
-	local absSize = touchZone.AbsoluteSize
-	
-	local centerX = absPos.X + (absSize.X / 2)
-	local centerY = absPos.Y + (absSize.Y / 2)
-	
-	local deltaX = (pos.X - centerX) / (absSize.X / 2)
-	local deltaY = (pos.Y - centerY) / (absSize.Y / 2)
-
-	moveState.Forward = false
-	moveState.Backward = false
-	moveState.Left = false
-	moveState.Right = false
-
-	local threshold = 0.15 
-
-	if deltaY < -threshold then 
-		moveState.Forward = true 
-	elseif deltaY > threshold then 
-		moveState.Backward = true 
-	end
-	
-	if deltaX < -threshold then 
-		moveState.Left = true 
-	elseif deltaX > threshold then 
-		moveState.Right = true 
+	local function release(input)
+		if activeTouches[input] == stateKey then
+			activeTouches[input] = nil
+			moveState[stateKey] = false
+			setButtonVisual(button, false)
+		end
 	end
 
-	setButtonVisual(btnUp, moveState.Forward)
-	setButtonVisual(btnDown, moveState.Backward)
-	setButtonVisual(btnLeft, moveState.Left)
-	setButtonVisual(btnRight, moveState.Right)
+	connect(button.InputEnded, release)
+	connect(button.TouchCancel, release)
 end
 
-connect(touchZone.InputBegan, function(input)
+setupButtonEvents(btnUp, "Forward")
+setupButtonEvents(btnDown, "Backward")
+setupButtonEvents(btnLeft, "Left")
+setupButtonEvents(btnRight, "Right")
+
+connect(btnWLock.Activated, function()
 	if destroyed then return end
-	if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-		if activeTouchId == nil then
-			activeTouchId = input
-			touchStartPos = input.Position
-			touchStartTime = tick()
-			updateMovementFromPosition(input.Position)
-		end
-	end
-end)
-
-connect(touchZone.InputChanged, function(input)
-	if destroyed then return end
-	if input == activeTouchId then
-		updateMovementFromPosition(input.Position)
-	end
-end)
-
-local function stopTouch(input)
-	if input == activeTouchId then
-		local holdTime = tick() - touchStartTime
-		local dist = (input.Position - touchStartPos).Magnitude
-
-		if holdTime < 0.3 and dist < 30 then
-			local relX = (input.Position.X - touchZone.AbsolutePosition.X) / touchZone.AbsoluteSize.X
-			local relY = (input.Position.Y - touchZone.AbsolutePosition.Y) / touchZone.AbsoluteSize.Y
-
-			if relX > 0.33 and relX < 0.66 and relY > 0.33 and relY < 0.66 then
-				moveState.WLock = not moveState.WLock
-				updateWLock()
-			end
-		end
-
-		activeTouchId = nil
-
-		local function turnOffMovement()
-			if activeTouchId == nil then
-				moveState.Forward = false
-				moveState.Backward = false
-				moveState.Left = false
-				moveState.Right = false
-
-				setButtonVisual(btnUp, false)
-				setButtonVisual(btnDown, false)
-				setButtonVisual(btnLeft, false)
-				setButtonVisual(btnRight, false)
-			end
-		end
-
-		if not isDelayMode then
-			turnOffMovement()
-		end
-		-- Jika delay aktif, kita biarkan variabel interpolasi (lerp) yang meredakan gerakannya secara mulus tanpa menghentikan pergerakan/combo lompat secara mendadak.
-	end
-end
-
-connect(touchZone.InputEnded, stopTouch)
-connect(UserInputService.InputEnded, function(input)
-	if input == activeTouchId then
-		stopTouch(input)
-	end
+	moveState.WLock = not moveState.WLock
+	updateWLock()
 end)
 
 local cachedForward = Vector3.new(0,0,-1)
@@ -439,6 +361,8 @@ local function updateCameraVectors()
 	if side.Magnitude > .001 then cachedSide = side.Unit end
 end
 
+local smoothX, smoothZ = 0, 0
+
 local function getMoveVector()
 	local targetX, targetZ = 0, 0
 
@@ -456,8 +380,7 @@ local function getMoveVector()
 		return cachedForward
 	end
 
-	-- Sistem Lerp (Interpolasi Momentum Halus) agar tidak ada jeda patah/berhenti saat tombol dilepas atau dikombinasikan dengan lompatan
-	local lerpSpeed = isDelayMode and 0.12 or 0.5 -- Semakin kecil nilainya, semakin terasa efek 'jejak' licinnya
+	local lerpSpeed = isDelayMode and 0.15 or 0.6
 	smoothX = smoothX + (targetX - smoothX) * lerpSpeed
 	smoothZ = smoothZ + (targetZ - smoothZ) * lerpSpeed
 
@@ -831,7 +754,6 @@ local function refreshJump()
 		updateJump()
 		updateShiftLockPosition()
 	end)
-
 end
 
 connect(player.CharacterAdded, function(newCharacter)
