@@ -261,6 +261,61 @@ titleBar.BackgroundTransparency=0.25
 titleBar.BorderSizePixel=0
 titleBar.Parent=mainFrame
 
+local menuBusy=false
+local menuDragActive=false
+local menuDragMoved=false
+local menuDragStart=nil
+local menuStartPos=nil
+
+connect(titleBar.InputBegan:Connect(function(input)
+    if menuBusy then return end
+    if input.UserInputType==Enum.UserInputType.Touch or input.UserInputType==Enum.UserInputType.MouseButton1 then
+        menuDragActive=true
+        menuDragMoved=false
+        menuDragStart=input.Position
+        menuStartPos=mainFrame.Position
+    end
+end))
+
+connect(UserInputService.InputChanged:Connect(function(input)
+    if not menuDragActive then return end
+    if input.UserInputType~=Enum.UserInputType.Touch and input.UserInputType~=Enum.UserInputType.MouseMovement then return end
+    local delta=input.Position-(menuDragStart or input.Position)
+    if delta.Magnitude>6 then menuDragMoved=true end
+    local camera=Workspace.CurrentCamera
+    if camera and menuStartPos then
+        local vp=camera.ViewportSize
+        local size=mainFrame.AbsoluteSize
+        local x=menuStartPos.X.Offset+delta.X
+        local y=menuStartPos.Y.Offset+delta.Y
+        if menuStartPos.X.Scale~=0 or menuStartPos.Y.Scale~=0 then
+            local abs=mainFrame.AbsolutePosition
+            x=abs.X+delta.X
+            y=abs.Y+delta.Y
+        end
+        mainFrame.Position=UDim2.fromOffset(
+            math.clamp(x,0,math.max(0,vp.X-size.X)),
+            math.clamp(y,0,math.max(0,vp.Y-size.Y))
+        )
+    end
+end))
+
+connect(UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType==Enum.UserInputType.Touch or input.UserInputType==Enum.UserInputType.MouseButton1 then
+        if menuDragActive and menuDragMoved then
+            menuDragActive=false
+            menuDragMoved=false
+            menuDragStart=nil
+            menuStartPos=nil
+            return
+        end
+        menuDragActive=false
+        menuDragMoved=false
+        menuDragStart=nil
+        menuStartPos=nil
+    end
+end))
+
 local titleLabel=Instance.new("TextLabel")
 titleLabel.Size=UDim2.new(0,150,1,0)
 titleLabel.Position=UDim2.fromOffset(12,0)
@@ -338,7 +393,6 @@ local function tweenMenuObjects(values,hidden)
     end
 end
 
-local menuBusy=false
 local menuTransparency={}
 local function refreshMenuTransparency()
     menuTransparency=captureTransparency()
@@ -1290,4 +1344,4 @@ end
 
 _G.AldoVzHubV3Cleanup=cleanup
 notify("👾 AldoVz","Loaded",2)
-print("AVz")
+print("[AVz]")
