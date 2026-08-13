@@ -4,92 +4,298 @@ local UserInputService = game:GetService("UserInputService")
 local HttpService = game:GetService("HttpService")
 
 local Player = Players.LocalPlayer
-local CoreGui = game:GetService("CoreGui")
 
-local GUI_NAME = "DeltaAutoWalk"
-local DATA_FOLDER = "DeltaAutoWalk"
-local INDEX_FILE = DATA_FOLDER .. "/index.json"
+local GUI_NAME = "DeltaAutoWalk_Final"
+local FILE_NAME = "DeltaAutoWalk_Routes.json"
 
 local SAMPLE_INTERVAL = 0.035
-local MIN_SAMPLE_DISTANCE = 0.12
-local MAX_ROUTE_POINTS = 100000
+local MIN_RECORD_DISTANCE = 0.08
+local MAX_ROUTE_POINTS = 15000
 
 local DEFAULT_SPEED = 16
 local MIN_SPEED = 2
 local MAX_SPEED = 100
 
-local CHARACTER
-local HUMANOID
-local ROOT
+local WAYPOINT_DISTANCE = 1.15
+local STUCK_DISTANCE = 0.35
+local STUCK_DELAY = 1.25
+local RECOVERY_DISTANCE = 3
 
-local function refreshCharacter()
-    CHARACTER = Player.Character
-
-    if not CHARACTER then
-        CHARACTER = Player.CharacterAdded:Wait()
-    end
-
-    HUMANOID = CHARACTER:FindFirstChildOfClass("Humanoid")
-
-    if not HUMANOID then
-        HUMANOID = CHARACTER:WaitForChild("Humanoid", 10)
-    end
-
-    ROOT = CHARACTER:FindFirstChild("HumanoidRootPart")
-
-    if not ROOT then
-        ROOT = CHARACTER:WaitForChild("HumanoidRootPart", 10)
-    end
-
-    return CHARACTER ~= nil
-        and HUMANOID ~= nil
-        and ROOT ~= nil
-end
-
-refreshCharacter()
+local Character
+local Humanoid
+local Root
 
 local Recording = false
 local Playing = false
 
 local LoopEnabled = false
-local RespawnEnabled = false
-local JumpEnabled = false
+local RespawnEnabled = true
+local JumpEnabled = true
 local PathEnabled = true
 local ShiftEnabled = false
 
-local HorizontalOffset = 0
 local PlaybackSpeed = DEFAULT_SPEED
+local HorizontalOffset = 0
 
 local Route = {}
-local RouteName = nil
-local RouteStart = nil
+local Routes = {}
+local CurrentRouteName = nil
 
-local RecordConnection = nil
-local PlaybackConnection = nil
-local CharacterConnection = nil
+local RecordConnection
+local PlaybackConnection
+local CharacterConnection
 
-local PlaybackIndex = 1
-local PlaybackStartPosition = nil
-local PlaybackStartYaw = nil
+local PathFolder
 
-local LastRecordPosition = nil
-local LastRecordTime = 0
+local function getGuiParent()
+    local parent
 
-local LastMovePosition = nil
-local StuckTime = 0
+    pcall(function()
+        parent = game:GetService("CoreGui")
+    end)
 
-local PathFolder = Instance.new("Folder")
-PathFolder.Name = "DeltaAutoWalkPath"
-PathFolder.Parent = workspace
+    if parent then
+        return parent
+    end
 
-local function stopRecordConnection()
+    return Player:WaitForChild("PlayerGui")
+end
+
+local function removeOldGui()
+    local parent = getGuiParent()
+    local old = parent:FindFirstChild(GUI_NAME)
+
+    if old then
+        old:Destroy()
+    end
+end
+
+removeOldGui()
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = GUI_NAME
+ScreenGui.ResetOnSpawn = false
+ScreenGui.IgnoreGuiInset = true
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+ScreenGui.DisplayOrder = 999999
+ScreenGui.Parent = getGuiParent()
+
+local OpenButton = Instance.new("TextButton")
+OpenButton.Name = "OpenButton"
+OpenButton.Size = UDim2.fromOffset(54, 54)
+OpenButton.Position = UDim2.new(0, 18, 0.5, -27)
+OpenButton.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+OpenButton.BorderSizePixel = 0
+OpenButton.Text = "AW"
+OpenButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+OpenButton.Font = Enum.Font.GothamBold
+OpenButton.TextSize = 14
+OpenButton.AutoButtonColor = true
+OpenButton.ZIndex = 100
+OpenButton.Parent = ScreenGui
+
+local OpenCorner = Instance.new("UICorner")
+OpenCorner.CornerRadius = UDim.new(1, 0)
+OpenCorner.Parent = OpenButton
+
+local OpenStroke = Instance.new("UIStroke")
+OpenStroke.Color = Color3.fromRGB(255, 40, 180)
+OpenStroke.Thickness = 2
+OpenStroke.Parent = OpenButton
+
+local Main = Instance.new("Frame")
+Main.Name = "Main"
+Main.Size = UDim2.fromOffset(440, 500)
+Main.Position = UDim2.new(0.5, -220, 0.5, -250)
+Main.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
+Main.BorderSizePixel = 0
+Main.Visible = false
+Main.ZIndex = 10
+Main.Parent = ScreenGui
+
+local MainCorner = Instance.new("UICorner")
+MainCorner.CornerRadius = UDim.new(0, 12)
+MainCorner.Parent = Main
+
+local MainStroke = Instance.new("UIStroke")
+MainStroke.Color = Color3.fromRGB(255, 40, 180)
+MainStroke.Thickness = 1.5
+MainStroke.Parent = Main
+
+local Header = Instance.new("Frame")
+Header.Size = UDim2.new(1, 0, 0, 52)
+Header.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+Header.BorderSizePixel = 0
+Header.Parent = Main
+
+local HeaderCorner = Instance.new("UICorner")
+HeaderCorner.CornerRadius = UDim.new(0, 12)
+HeaderCorner.Parent = Header
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, -120, 1, 0)
+Title.Position = UDim2.fromOffset(14, 0)
+Title.BackgroundTransparency = 1
+Title.Text = "AUTO WALK"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.Font = Enum.Font.GothamBold
+Title.TextSize = 17
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.Parent = Header
+
+local Status = Instance.new("TextLabel")
+Status.Size = UDim2.new(1, -140, 0, 18)
+Status.Position = UDim2.new(0, 14, 1, -21)
+Status.BackgroundTransparency = 1
+Status.Text = "READY"
+Status.TextColor3 = Color3.fromRGB(160, 160, 170)
+Status.Font = Enum.Font.Gotham
+Status.TextSize = 9
+Status.TextXAlignment = Enum.TextXAlignment.Left
+Status.Parent = Header
+
+local CloseButton = Instance.new("TextButton")
+CloseButton.Size = UDim2.fromOffset(34, 34)
+CloseButton.Position = UDim2.new(1, -43, 0, 9)
+CloseButton.BackgroundColor3 = Color3.fromRGB(120, 35, 42)
+CloseButton.BorderSizePixel = 0
+CloseButton.Text = "×"
+CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+CloseButton.Font = Enum.Font.GothamBold
+CloseButton.TextSize = 21
+CloseButton.Parent = Header
+
+local CloseCorner = Instance.new("UICorner")
+CloseCorner.CornerRadius = UDim.new(1, 0)
+CloseCorner.Parent = CloseButton
+
+local Left = Instance.new("Frame")
+Left.Size = UDim2.new(0.52, -12, 1, -66)
+Left.Position = UDim2.fromOffset(8, 58)
+Left.BackgroundColor3 = Color3.fromRGB(23, 23, 28)
+Left.BorderSizePixel = 0
+Left.Parent = Main
+
+local LeftCorner = Instance.new("UICorner")
+LeftCorner.CornerRadius = UDim.new(0, 9)
+LeftCorner.Parent = Left
+
+local Right = Instance.new("Frame")
+Right.Size = UDim2.new(0.48, -12, 1, -66)
+Right.Position = UDim2.new(0.52, 4, 0, 58)
+Right.BackgroundColor3 = Color3.fromRGB(23, 23, 28)
+Right.BorderSizePixel = 0
+Right.Parent = Main
+
+local RightCorner = Instance.new("UICorner")
+RightCorner.CornerRadius = UDim.new(0, 9)
+RightCorner.Parent = Right
+
+local RouteTitle = Instance.new("TextLabel")
+RouteTitle.Size = UDim2.new(1, -16, 0, 28)
+RouteTitle.Position = UDim2.fromOffset(8, 5)
+RouteTitle.BackgroundTransparency = 1
+RouteTitle.Text = "ROUTES"
+RouteTitle.TextColor3 = Color3.fromRGB(220, 220, 225)
+RouteTitle.Font = Enum.Font.GothamBold
+RouteTitle.TextSize = 11
+RouteTitle.TextXAlignment = Enum.TextXAlignment.Left
+RouteTitle.Parent = Left
+
+local RouteList = Instance.new("ScrollingFrame")
+RouteList.Size = UDim2.new(1, -12, 1, -42)
+RouteList.Position = UDim2.fromOffset(6, 36)
+RouteList.BackgroundColor3 = Color3.fromRGB(16, 16, 20)
+RouteList.BorderSizePixel = 0
+RouteList.ScrollBarThickness = 3
+RouteList.CanvasSize = UDim2.fromOffset(0, 0)
+RouteList.Parent = Left
+
+local RouteLayout = Instance.new("UIListLayout")
+RouteLayout.Padding = UDim.new(0, 5)
+RouteLayout.Parent = RouteList
+
+local function makeButton(text, y)
+    local button = Instance.new("TextButton")
+    button.Size = UDim2.new(1, -14, 0, 34)
+    button.Position = UDim2.fromOffset(7, y)
+    button.BackgroundColor3 = Color3.fromRGB(45, 45, 52)
+    button.BorderSizePixel = 0
+    button.Text = text
+    button.TextColor3 = Color3.fromRGB(245, 245, 245)
+    button.Font = Enum.Font.GothamBold
+    button.TextSize = 9
+    button.Parent = Right
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 7)
+    corner.Parent = button
+
+    return button
+end
+
+local RecordButton = makeButton("RECORD", 10)
+local PlayButton = makeButton("PLAY", 49)
+local StopButton = makeButton("STOP", 88)
+local LoopButton = makeButton("LOOP : OFF", 127)
+local RespawnButton = makeButton("RESPAWN : ON", 166)
+local JumpButton = makeButton("JUMP : ON", 205)
+local PathButton = makeButton("PATH : ON", 244)
+local ShiftButton = makeButton("SHIFT : OFF", 283)
+local OffsetMinus = makeButton("H-OFFSET  -", 322)
+local OffsetPlus = makeButton("H-OFFSET  +", 361)
+local SpeedMinus = makeButton("SPEED  -", 400)
+local SpeedPlus = makeButton("SPEED  +", 439)
+
+local SpeedInfo = Instance.new("TextLabel")
+SpeedInfo.Size = UDim2.new(1, -14, 0, 30)
+SpeedInfo.Position = UDim2.fromOffset(7, 476)
+SpeedInfo.BackgroundTransparency = 1
+SpeedInfo.Text = "SPEED 16   OFFSET 0"
+SpeedInfo.TextColor3 = Color3.fromRGB(170, 170, 180)
+SpeedInfo.Font = Enum.Font.Gotham
+SpeedInfo.TextSize = 9
+SpeedInfo.Parent = Right
+
+local function setStatus(text)
+    Status.Text = text
+end
+
+local function updateInfo()
+    SpeedInfo.Text =
+        "SPEED "
+        .. tostring(PlaybackSpeed)
+        .. "   OFFSET "
+        .. string.format("%.1f", HorizontalOffset)
+end
+
+local function refreshCharacter()
+    Character = Player.Character
+
+    if not Character then
+        return false
+    end
+
+    Humanoid = Character:FindFirstChildOfClass("Humanoid")
+    Root = Character:FindFirstChild("HumanoidRootPart")
+
+    if not Humanoid or not Root then
+        return false
+    end
+
+    return Humanoid.Health > 0
+end
+
+refreshCharacter()
+
+local function stopRecord()
     if RecordConnection then
         RecordConnection:Disconnect()
         RecordConnection = nil
     end
 end
 
-local function stopPlaybackConnection()
+local function stopPlayback()
     if PlaybackConnection then
         PlaybackConnection:Disconnect()
         PlaybackConnection = nil
@@ -97,102 +303,113 @@ local function stopPlaybackConnection()
 end
 
 local function stopMovement()
-    if HUMANOID and HUMANOID.Parent then
-        HUMANOID:Move(Vector3.zero, false)
+    if Humanoid and Humanoid.Parent then
+        Humanoid:Move(Vector3.zero, false)
     end
 end
 
 local function clearPath()
-    for _, object in ipairs(PathFolder:GetChildren()) do
-        object:Destroy()
+    if PathFolder then
+        PathFolder:Destroy()
+        PathFolder = nil
     end
 end
 
-local function createPathPoint(position)
+local function ensurePathFolder()
     if not PathEnabled then
         return
     end
 
-    local point = Instance.new("Part")
-    point.Name = "Point"
-    point.Shape = Enum.PartType.Ball
-    point.Size = Vector3.new(0.16, 0.16, 0.16)
-    point.Position = position
-    point.Anchored = true
-    point.CanCollide = false
-    point.CanTouch = false
-    point.CanQuery = false
-    point.CastShadow = false
-    point.Material = Enum.Material.Neon
-    point.Color = Color3.fromRGB(255, 35, 180)
-    point.Parent = PathFolder
+    if PathFolder and PathFolder.Parent then
+        return
+    end
+
+    PathFolder = Instance.new("Folder")
+    PathFolder.Name = "DeltaAutoWalkPath"
+    PathFolder.Parent = workspace
 end
 
-local function createPathLine(a, b)
+local function makePathSegment(a, b)
     if not PathEnabled then
         return
     end
+
+    ensurePathFolder()
 
     local difference = b - a
     local length = difference.Magnitude
 
-    if length < 0.01 then
+    if length < 0.05 then
         return
     end
 
-    local line = Instance.new("Part")
-    line.Name = "Line"
-    line.Size = Vector3.new(0.08, 0.08, length)
-    line.CFrame = CFrame.lookAt((a + b) / 2, b)
-    line.Anchored = true
-    line.CanCollide = false
-    line.CanTouch = false
-    line.CanQuery = false
-    line.CastShadow = false
-    line.Material = Enum.Material.Neon
-    line.Color = Color3.fromRGB(255, 35, 180)
-    line.Parent = PathFolder
+    local segment = Instance.new("Part")
+    segment.Anchored = true
+    segment.CanCollide = false
+    segment.CanTouch = false
+    segment.CanQuery = false
+    segment.CastShadow = false
+    segment.Material = Enum.Material.Neon
+    segment.Color = Color3.fromRGB(255, 35, 180)
+    segment.Size = Vector3.new(0.07, 0.07, length)
+    segment.CFrame = CFrame.lookAt((a + b) / 2, b)
+    segment.Parent = PathFolder
 end
 
-local function drawRoute()
+local function drawPath()
     clearPath()
 
     if not PathEnabled then
         return
     end
 
-    local previousPosition = nil
+    ensurePathFolder()
 
-    for _, point in ipairs(Route) do
+    local previous
+
+    local step = 1
+
+    if #Route > 400 then
+        step = math.ceil(#Route / 400)
+    end
+
+    for index = 1, #Route, step do
+        local point = Route[index]
+
         local position = Vector3.new(
             point.x,
             point.y,
             point.z
         )
 
-        createPathPoint(position)
-
-        if previousPosition then
-            createPathLine(previousPosition, position)
+        if previous then
+            makePathSegment(previous, position)
         end
 
-        previousPosition = position
+        previous = position
     end
 end
 
-local function getStateData()
-    local state = HUMANOID:GetState()
+local function getHeading(cframe)
+    local look = cframe.LookVector
 
-    return {
-        jump =
-            state == Enum.HumanoidStateType.Jumping,
+    return math.atan2(
+        -look.X,
+        -look.Z
+    )
+end
 
-        freefall =
-            state == Enum.HumanoidStateType.Freefall,
+local function getState()
+    if not Humanoid then
+        return false, false, false
+    end
 
-        seated =
-            state == Enum.HumanoidStateType.Seated
-    }
+    local state = Humanoid:GetState()
+
+    return
+        state == Enum.HumanoidStateType.Jumping,
+        state == Enum.HumanoidStateType.Freefall,
+        state == Enum.HumanoidStateType.Seated
 end
 
 local function beginRecording()
@@ -200,132 +417,111 @@ local function beginRecording()
         return
     end
 
-    if Playing then
-        stopPlaybackConnection()
-        Playing = false
-        stopMovement()
-    end
-
     if not refreshCharacter() then
+        setStatus("CHARACTER NOT READY")
         return
     end
 
-    table.clear(Route)
+    if Playing then
+        Playing = false
+        stopPlayback()
+        stopMovement()
+    end
 
-    RouteName = nil
-    RouteStart = ROOT.CFrame
+    Route = {}
+    CurrentRouteName = nil
 
-    clearPath()
-
-    Recording = true
-    LastRecordPosition = ROOT.Position
-    LastRecordTime = os.clock()
+    local startPosition = Root.Position
+    local startTime = os.clock()
 
     table.insert(Route, {
-        x = ROOT.Position.X,
-        y = ROOT.Position.Y,
-        z = ROOT.Position.Z,
-        yaw = math.atan2(
-            -ROOT.CFrame.LookVector.X,
-            -ROOT.CFrame.LookVector.Z
-        ),
+        x = 0,
+        y = 0,
+        z = 0,
+        yaw = getHeading(Root.CFrame),
         t = 0,
         jump = false,
         freefall = false,
         seated = false
     })
 
-    createPathPoint(ROOT.Position)
+    clearPath()
+
+    if PathEnabled then
+        ensurePathFolder()
+    end
+
+    Recording = true
+
+    local lastPosition = startPosition
+    local lastSample = startTime
 
     RecordConnection = RunService.Heartbeat:Connect(function()
         if not Recording then
             return
         end
 
-        if not ROOT
-            or not ROOT.Parent
-            or not HUMANOID
-            or HUMANOID.Health <= 0 then
-
+        if not Root
+            or not Root.Parent
+            or not Humanoid
+            or Humanoid.Health <= 0 then
             return
         end
 
         local now = os.clock()
 
-        if now - LastRecordTime < SAMPLE_INTERVAL then
+        if now - lastSample < SAMPLE_INTERVAL then
             return
         end
 
-        LastRecordTime = now
+        lastSample = now
 
-        local position = ROOT.Position
-        local distance = (position - LastRecordPosition).Magnitude
+        local position = Root.Position
 
-        if distance < MIN_SAMPLE_DISTANCE then
+        if (position - lastPosition).Magnitude < MIN_RECORD_DISTANCE then
             return
         end
 
         if #Route >= MAX_ROUTE_POINTS then
             Recording = false
-            stopRecordConnection()
+            stopRecord()
+            setStatus("MAX ROUTE SIZE")
             return
         end
 
-        local stateData = getStateData()
-
-        local first = Route[1]
-
-        local currentTime = now - (LastRecordTime - SAMPLE_INTERVAL)
-
-        if #Route > 0 then
-            local firstPoint = Route[1]
-            currentTime = now - (os.clock() - firstPoint.t)
-        end
+        local relative = position - startPosition
+        local jump, freefall, seated = getState()
 
         local point = {
-            x = position.X,
-            y = position.Y,
-            z = position.Z,
-
-            yaw = math.atan2(
-                -ROOT.CFrame.LookVector.X,
-                -ROOT.CFrame.LookVector.Z
-            ),
-
-            t = os.clock(),
-
-            jump = stateData.jump,
-            freefall = stateData.freefall,
-            seated = stateData.seated
+            x = relative.X,
+            y = relative.Y,
+            z = relative.Z,
+            yaw = getHeading(Root.CFrame),
+            t = now - startTime,
+            jump = jump,
+            freefall = freefall,
+            seated = seated
         }
-
-        if #Route == 1 then
-            point.t = 0
-        else
-            point.t =
-                Route[#Route].t
-                + (now - LastRecordTime + SAMPLE_INTERVAL)
-        end
 
         table.insert(Route, point)
 
-        createPathPoint(position)
-
-        local previous = Route[#Route - 1]
-
-        if previous then
-            createPathLine(
-                Vector3.new(
-                    previous.x,
-                    previous.y,
-                    previous.z
-                ),
+        if PathEnabled then
+            makePathSegment(
+                lastPosition,
                 position
             )
         end
 
-        LastRecordPosition = position
+        lastPosition = position
+
+        setStatus(
+            "RECORDING  "
+            .. tostring(#Route)
+            .. " POINTS"
+        )
     end)
+
+    setStatus("RECORDING")
 end
 
 local function finishRecording()
@@ -334,52 +530,109 @@ local function finishRecording()
     end
 
     Recording = false
-    stopRecordConnection()
+    stopRecord()
 
-    if #Route >= 2 then
-        local startTime = Route[1].t
-
-        for _, point in ipairs(Route) do
-            point.t = point.t - startTime
-        end
+    if #Route < 2 then
+        Route = {}
+        clearPath()
+        setStatus("ROUTE TOO SHORT")
+        return
     end
+
+    setStatus(
+        "RECORDED "
+        .. tostring(#Route)
+        .. " POINTS"
+    )
 end
 
 local function stopAll()
     Recording = false
     Playing = false
 
-    stopRecordConnection()
-    stopPlaybackConnection()
+    stopRecord()
+    stopPlayback()
 
     stopMovement()
+
+    setStatus("STOPPED")
 end
 
-local function getRoutePosition(point)
-    local routePosition = Vector3.new(
-        point.x,
-        point.y,
-        point.z
-    )
-
-    if not PlaybackStartPosition or not RouteStart then
-        return routePosition
+local function getOffsetVector()
+    if #Route == 0 then
+        return Vector3.zero
     end
 
-    local routeOrigin = RouteStart.Position
+    local firstYaw = Route[1].yaw
 
-    local relative = routePosition - routeOrigin
-
-    local offset = Vector3.new(
-        HorizontalOffset,
+    local right = Vector3.new(
+        math.cos(firstYaw),
         0,
-        0
+        -math.sin(firstYaw)
     )
 
-    return PlaybackStartPosition + relative + offset
+    return right * HorizontalOffset
 end
 
-local function getInterpolatedPosition(a, b, alpha)
+local function getRoutePointPosition(point, origin)
+    return origin
+        + Vector3.new(
+            point.x,
+            point.y,
+            point.z
+        )
+        + getOffsetVector()
+end
+
+local function findRouteSegment(time)
+    if #Route < 2 then
+        return nil, nil, 0
+    end
+
+    local low = 1
+    local high = #Route
+
+    while low < high do
+        local middle = math.floor(
+            (low + high + 1) / 2
+        )
+
+        if Route[middle].t <= time then
+            low = middle
+        else
+            high = middle - 1
+        end
+    end
+
+    local aIndex = low
+    local bIndex = math.min(
+        low + 1,
+        #Route
+    )
+
+    local a = Route[aIndex]
+    local b = Route[bIndex]
+
+    if aIndex == bIndex then
+        return aIndex, bIndex, 0
+    end
+
+    local duration = b.t - a.t
+
+    if duration <= 0 then
+        return aIndex, bIndex, 0
+    end
+
+    local alpha =
+        (time - a.t) / duration
+
+    return
+        aIndex,
+        bIndex,
+        math.clamp(alpha, 0, 1)
+end
+
+local function interpolate(a, b, alpha)
     return Vector3.new(
         a.X + (b.X - a.X) * alpha,
         a.Y + (b.Y - a.Y) * alpha,
@@ -387,779 +640,726 @@ local function getInterpolatedPosition(a, b, alpha)
     )
 end
 
-local function findNextPoint(currentTime)
-    local count = #Route
-
-    if count < 2 then
-        return 1, 1, 0
-    end
-
-    while PlaybackIndex < count
-        and Route[PlaybackIndex + 1].t <= currentTime do
-
-        PlaybackIndex += 1
-    end
-
-    if PlaybackIndex >= count then
-        return count, count, 0
-    end
-
-    local a = Route[PlaybackIndex]
-    local b = Route[PlaybackIndex + 1]
-
-    local duration = b.t - a.t
-
-    if duration <= 0 then
-        return PlaybackIndex, PlaybackIndex + 1, 0
-    end
-
-    local alpha =
-        (currentTime - a.t) / duration
-
-    alpha = math.clamp(alpha, 0, 1)
-
-    return PlaybackIndex, PlaybackIndex + 1, alpha
-end
-
 local function startPlayback()
     if Playing then
         return
     end
 
+    if Recording then
+        finishRecording()
+    end
+
     if #Route < 2 then
+        setStatus("NO ROUTE")
         return
     end
 
     if not refreshCharacter() then
+        setStatus("CHARACTER NOT READY")
         return
     end
 
-    finishRecording()
-
     Playing = true
-    PlaybackIndex = 1
 
-    PlaybackStartPosition = ROOT.Position
-
-    PlaybackStartYaw =
-        math.atan2(
-            -ROOT.CFrame.LookVector.X,
-            -ROOT.CFrame.LookVector.Z
-        )
-
-    LastMovePosition = ROOT.Position
-    StuckTime = 0
-
+    local origin = Root.Position
     local elapsed = 0
-    local lastTime = os.clock()
+    local lastClock = os.clock()
+    local lastPosition = Root.Position
+    local stuckTime = 0
+    local lastJumpTime = -10
 
     PlaybackConnection = RunService.Heartbeat:Connect(function()
         if not Playing then
             return
         end
 
-        if not ROOT
-            or not ROOT.Parent
-            or not HUMANOID
-            or HUMANOID.Health <= 0 then
+        if not Character
+            or not Character.Parent
+            or not Humanoid
+            or not Root
+            or not Root.Parent
+            or Humanoid.Health <= 0 then
 
-            if RespawnEnabled then
-                return
-            end
-
-            Playing = false
-            stopPlaybackConnection()
             return
         end
 
         local now = os.clock()
-        local delta = now - lastTime
-        lastTime = now
+        local delta = math.clamp(
+            now - lastClock,
+            0,
+            0.1
+        )
 
-        delta = math.clamp(delta, 0, 0.1)
+        lastClock = now
 
-        elapsed += delta * (PlaybackSpeed / DEFAULT_SPEED)
+        local totalTime = Route[#Route].t
 
-        local lastPoint = Route[#Route]
+        if totalTime <= 0 then
+            Playing = false
+            stopPlayback()
+            stopMovement()
+            return
+        end
 
-        if elapsed > lastPoint.t then
+        elapsed +=
+            delta
+            * (PlaybackSpeed / DEFAULT_SPEED)
+
+        if elapsed >= totalTime then
             if LoopEnabled then
                 elapsed = 0
-                PlaybackIndex = 1
-
-                PlaybackStartPosition = ROOT.Position
+                origin = Root.Position
+                lastPosition = Root.Position
+                stuckTime = 0
             else
                 Playing = false
-                stopPlaybackConnection()
+                stopPlayback()
                 stopMovement()
+                setStatus("PLAYBACK COMPLETE")
                 return
             end
         end
 
         local aIndex, bIndex, alpha =
-            findNextPoint(elapsed)
+            findRouteSegment(elapsed)
+
+        if not aIndex then
+            return
+        end
 
         local a = Route[aIndex]
         local b = Route[bIndex]
 
-        if not a or not b then
-            return
-        end
+        local positionA =
+            getRoutePointPosition(
+                a,
+                origin
+            )
 
-        local targetA = getRoutePosition(a)
-        local targetB = getRoutePosition(b)
+        local positionB =
+            getRoutePointPosition(
+                b,
+                origin
+            )
 
         local target =
-            getInterpolatedPosition(
-                targetA,
-                targetB,
+            interpolate(
+                positionA,
+                positionB,
                 alpha
             )
 
-        local current = ROOT.Position
+        local current = Root.Position
 
-        local horizontalTarget = Vector3.new(
-            target.X,
-            current.Y,
-            target.Z
-        )
-
-        local difference =
-            horizontalTarget - current
-
-        local distance = difference.Magnitude
-
-        if distance > 0.05 then
-            local direction = difference.Unit
-
-            HUMANOID.WalkSpeed = PlaybackSpeed
-
-            HUMANOID:Move(
-                direction,
-                false
+        local horizontalTarget =
+            Vector3.new(
+                target.X,
+                current.Y,
+                target.Z
             )
 
-            if ShiftEnabled then
-                local lookPosition =
-                    Vector3.new(
-                        target.X,
-                        current.Y,
-                        target.Z
-                    )
+        local deltaPosition =
+            horizontalTarget - current
 
-                if (lookPosition - current).Magnitude > 0.1 then
-                    ROOT.CFrame = CFrame.lookAt(
-                        current,
-                        lookPosition
-                    )
-                end
-            end
-        else
-            HUMANOID:Move(
+        local distance =
+            deltaPosition.Magnitude
+
+        if distance <= WAYPOINT_DISTANCE then
+            Humanoid:Move(
                 Vector3.zero,
                 false
             )
+        else
+            local direction =
+                deltaPosition.Unit
+
+            Humanoid.WalkSpeed =
+                PlaybackSpeed
+
+            Humanoid:Move(
+                direction,
+                false
+            )
+        end
+
+        if ShiftEnabled and distance > 0.1 then
+            local look =
+                Vector3.new(
+                    target.X,
+                    current.Y,
+                    target.Z
+                )
+
+            Root.CFrame =
+                CFrame.lookAt(
+                    current,
+                    look
+                )
         end
 
         if JumpEnabled then
-            if a.jump or b.jump then
-                HUMANOID.Jump = true
+            local shouldJump =
+                a.jump
+                or b.jump
+
+            if shouldJump
+                and now - lastJumpTime > 0.35 then
+
+                Humanoid.Jump = true
+                lastJumpTime = now
             end
         end
 
-        local movedDistance =
-            (ROOT.Position - LastMovePosition).Magnitude
+        local moved =
+            (Root.Position - lastPosition).Magnitude
 
-        if movedDistance < STUCK_DISTANCE
-            and distance > WAYPOINT_REACH then
-
-            StuckTime += delta
-
-            if StuckTime >= STUCK_TIME then
-                HUMANOID.Jump = true
-
-                local recovery =
-                    math.min(
-                        aIndex + LOOK_AHEAD,
-                        #Route
-                    )
-
-                PlaybackIndex = recovery
-                StuckTime = 0
+        if distance > WAYPOINT_DISTANCE then
+            if moved < STUCK_DISTANCE then
+                stuckTime += delta
+            else
+                stuckTime = 0
             end
         else
-            StuckTime = 0
+            stuckTime = 0
         end
 
-        LastMovePosition = ROOT.Position
+        if stuckTime >= STUCK_DELAY then
+            Humanoid.Jump = true
+
+            local recoveryDirection =
+                deltaPosition.Magnitude > 0
+                and deltaPosition.Unit
+                or Vector3.zero
+
+            Humanoid:Move(
+                recoveryDirection,
+                false
+            )
+
+            stuckTime = 0
+        end
+
+        lastPosition = Root.Position
+
+        setStatus(
+            "PLAYING  "
+            .. string.format(
+                "%.1f",
+                math.min(
+                    elapsed,
+                    totalTime
+                )
+            )
+            .. "/"
+            .. string.format(
+                "%.1f",
+                totalTime
+            )
+        )
     end)
 end
 
-local function setPathVisibility(enabled)
-    PathEnabled = enabled
+local function setLoop(value)
+    LoopEnabled = value
 
-    if enabled then
-        drawRoute()
+    LoopButton.Text =
+        "LOOP : "
+        .. (value and "ON" or "OFF")
+end
+
+local function setRespawn(value)
+    RespawnEnabled = value
+
+    RespawnButton.Text =
+        "RESPAWN : "
+        .. (value and "ON" or "OFF")
+end
+
+local function setJump(value)
+    JumpEnabled = value
+
+    JumpButton.Text =
+        "JUMP : "
+        .. (value and "ON" or "OFF")
+end
+
+local function setPath(value)
+    PathEnabled = value
+
+    PathButton.Text =
+        "PATH : "
+        .. (value and "ON" or "OFF")
+
+    if value then
+        drawPath()
     else
         clearPath()
     end
 end
 
-local function setLoop(enabled)
-    LoopEnabled = enabled
-end
+local function setShift(value)
+    ShiftEnabled = value
 
-local function setJump(enabled)
-    JumpEnabled = enabled
-end
-
-local function setShift(enabled)
-    ShiftEnabled = enabled
-end
-
-local function setSpeed(value)
-    PlaybackSpeed = math.clamp(
-        value,
-        MIN_SPEED,
-        MAX_SPEED
-    )
+    ShiftButton.Text =
+        "SHIFT : "
+        .. (value and "ON" or "OFF")
 end
 
 local function changeSpeed(amount)
-    setSpeed(PlaybackSpeed + amount)
+    PlaybackSpeed = math.clamp(
+        PlaybackSpeed + amount,
+        MIN_SPEED,
+        MAX_SPEED
+    )
+
+    updateInfo()
 end
 
 local function changeOffset(amount)
-    HorizontalOffset += amount
-end
+    HorizontalOffset =
+        math.clamp(
+            HorizontalOffset + amount,
+            -100,
+            100
+        )
 
-pcall(function()
-    local old = CoreGui:FindFirstChild(GUI_NAME)
+    updateInfo()
 
-    if old then
-        old:Destroy()
+    if PathEnabled and #Route > 0 then
+        drawPath()
     end
-end)
-
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = GUI_NAME
-ScreenGui.ResetOnSpawn = false
-ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-
-local parentOK = pcall(function()
-    ScreenGui.Parent = CoreGui
-end)
-
-if not parentOK or not ScreenGui.Parent then
-    ScreenGui.Parent =
-        Player:WaitForChild("PlayerGui")
 end
 
-local OpenButton = Instance.new("TextButton")
-OpenButton.Name = "Open"
-OpenButton.Size = UDim2.fromOffset(52, 52)
-OpenButton.Position = UDim2.new(
-    0,
-    18,
-    0.5,
-    -26
-)
-OpenButton.BackgroundColor3 =
-    Color3.fromRGB(25, 25, 30)
-OpenButton.BorderSizePixel = 0
-OpenButton.Text = "AW"
-OpenButton.TextColor3 =
-    Color3.fromRGB(255, 255, 255)
-OpenButton.Font =
-    Enum.Font.GothamBold
-OpenButton.TextSize = 14
-OpenButton.Parent = ScreenGui
+local function getFileData()
+    if type(isfile) ~= "function"
+        or type(readfile) ~= "function" then
+        return {}
+    end
 
-local OpenCorner = Instance.new("UICorner")
-OpenCorner.CornerRadius = UDim.new(1, 0)
-OpenCorner.Parent = OpenButton
+    local exists = false
 
-local OpenStroke = Instance.new("UIStroke")
-OpenStroke.Color =
-    Color3.fromRGB(255, 35, 180)
-OpenStroke.Thickness = 2
-OpenStroke.Parent = OpenButton
+    pcall(function()
+        exists = isfile(FILE_NAME)
+    end)
 
-local Main = Instance.new("Frame")
-Main.Name = "Main"
-Main.Size = UDim2.fromOffset(430, 430)
-Main.Position = UDim2.new(
-    0.5,
-    -215,
-    0.5,
-    -215
-)
-Main.BackgroundColor3 =
-    Color3.fromRGB(22, 10, 13)
-Main.BorderSizePixel = 0
-Main.Visible = false
-Main.Parent = ScreenGui
+    if not exists then
+        return {}
+    end
 
-local MainCorner = Instance.new("UICorner")
-MainCorner.CornerRadius =
-    UDim.new(0, 12)
-MainCorner.Parent = Main
+    local content
 
-local MainStroke = Instance.new("UIStroke")
-MainStroke.Color =
-    Color3.fromRGB(90, 255, 100)
-MainStroke.Thickness = 1
-MainStroke.Transparency = 0.2
-MainStroke.Parent = Main
+    local ok = pcall(function()
+        content = readfile(FILE_NAME)
+    end)
 
-local Header = Instance.new("Frame")
-Header.Size = UDim2.new(
-    1,
-    0,
-    0,
-    48
-)
-Header.BackgroundTransparency = 1
-Header.Parent = Main
+    if not ok
+        or type(content) ~= "string"
+        or content == "" then
 
-local Title = Instance.new("TextLabel")
-Title.Size = UDim2.new(
-    1,
-    -60,
-    1,
-    0
-)
-Title.Position =
-    UDim2.fromOffset(14, 0)
-Title.BackgroundTransparency = 1
-Title.Text = "AUTO WALK"
-Title.TextColor3 =
-    Color3.fromRGB(255, 255, 255)
-Title.Font =
-    Enum.Font.GothamBold
-Title.TextSize = 17
-Title.TextXAlignment =
-    Enum.TextXAlignment.Left
-Title.Parent = Header
+        return {}
+    end
 
-local Close = Instance.new("TextButton")
-Close.Size =
-    UDim2.fromOffset(34, 34)
-Close.Position =
-    UDim2.new(1, -43, 0, 7)
-Close.BackgroundColor3 =
-    Color3.fromRGB(145, 40, 40)
-Close.BorderSizePixel = 0
-Close.Text = "×"
-Close.TextColor3 =
-    Color3.fromRGB(255, 255, 255)
-Close.Font =
-    Enum.Font.GothamBold
-Close.TextSize = 20
-Close.Parent = Header
+    local decoded
 
-local CloseCorner = Instance.new("UICorner")
-CloseCorner.CornerRadius =
-    UDim.new(1, 0)
-CloseCorner.Parent = Close
+    local decodeOK = pcall(function()
+        decoded =
+            HttpService:JSONDecode(content)
+    end)
 
-local Status = Instance.new("TextLabel")
-Status.Size = UDim2.new(
-    1,
-    -28,
-    0,
-    24
-)
-Status.Position =
-    UDim2.fromOffset(14, 47)
-Status.BackgroundTransparency = 1
-Status.Text = "READY"
-Status.TextColor3 =
-    Color3.fromRGB(170, 170, 170)
-Status.Font =
-    Enum.Font.Gotham
-Status.TextSize = 10
-Status.TextXAlignment =
-    Enum.TextXAlignment.Left
-Status.Parent = Main
+    if not decodeOK
+        or type(decoded) ~= "table" then
 
-local List = Instance.new("ScrollingFrame")
-List.Name = "Routes"
-List.Size = UDim2.new(
-    0.53,
-    -10,
-    1,
-    -82
-)
-List.Position =
-    UDim2.fromOffset(8, 72)
-List.BackgroundColor3 =
-    Color3.fromRGB(30, 12, 16)
-List.BorderSizePixel = 0
-List.ScrollBarThickness = 3
-List.CanvasSize =
-    UDim2.fromOffset(0, 0)
-List.Parent = Main
+        return {}
+    end
 
-local ListCorner = Instance.new("UICorner")
-ListCorner.CornerRadius =
-    UDim.new(0, 9)
-ListCorner.Parent = List
-
-local Layout = Instance.new("UIListLayout")
-Layout.Padding =
-    UDim.new(0, 5)
-Layout.Parent = List
-
-local Controls = Instance.new("Frame")
-Controls.Size = UDim2.new(
-    0.47,
-    -10,
-    1,
-    -82
-)
-Controls.Position =
-    UDim2.new(
-        0.53,
-        2,
-        0,
-        72
-    )
-Controls.BackgroundColor3 =
-    Color3.fromRGB(37, 10, 14)
-Controls.BorderSizePixel = 0
-Controls.Parent = Main
-
-local ControlsCorner = Instance.new("UICorner")
-ControlsCorner.CornerRadius =
-    UDim.new(0, 9)
-ControlsCorner.Parent = Controls
-
-local function createControl(text, y)
-    local button = Instance.new("TextButton")
-    button.Size = UDim2.new(
-        1,
-        -12,
-        0,
-        34
-    )
-    button.Position =
-        UDim2.fromOffset(6, y)
-    button.BackgroundColor3 =
-        Color3.fromRGB(55, 20, 25)
-    button.BorderSizePixel = 0
-    button.Text = text
-    button.TextColor3 =
-        Color3.fromRGB(245, 245, 245)
-    button.Font =
-        Enum.Font.GothamBold
-    button.TextSize = 10
-    button.Parent = Controls
-
-    local c = Instance.new("UICorner")
-    c.CornerRadius =
-        UDim.new(0, 7)
-    c.Parent = button
-
-    return button
+    return decoded
 end
 
-local RecordButton =
-    createControl("RECORD", 8)
+local function writeFileData(data)
+    if type(writefile) ~= "function" then
+        return false
+    end
 
-local StopButton =
-    createControl("STOP ALL", 47)
+    local encoded
 
-local LoopButton =
-    createControl("LOOP OFF", 86)
+    local ok = pcall(function()
+        encoded =
+            HttpService:JSONEncode(data)
+    end)
 
-local RespawnButton =
-    createControl("RESPAWN OFF", 125)
+    if not ok then
+        return false
+    end
 
-local JumpButton =
-    createControl("JUMP OFF", 164)
-
-local PathButton =
-    createControl("PATH ON", 203)
-
-local ShiftButton =
-    createControl("SHIFT OFF", 242)
-
-local OffsetMinus =
-    createControl("H-OFFSET -", 281)
-
-local OffsetPlus =
-    createControl("H-OFFSET +", 320)
-
-local SpeedMinus =
-    createControl("SPEED -", 359)
-
-local SpeedPlus =
-    createControl("SPEED +", 398)
-
-local SpeedLabel = Instance.new("TextLabel")
-SpeedLabel.Size =
-    UDim2.new(
-        1,
-        -12,
-        0,
-        22
-    )
-SpeedLabel.Position =
-    UDim2.fromOffset(6, 436)
-SpeedLabel.BackgroundTransparency = 1
-SpeedLabel.TextColor3 =
-    Color3.fromRGB(180, 180, 180)
-SpeedLabel.Font =
-    Enum.Font.Gotham
-SpeedLabel.TextSize = 9
-SpeedLabel.Text =
-    "SPEED: 16"
-SpeedLabel.Parent = Controls
-
-local BackButton =
-    createControl("BK", 463)
-
-local function updateSpeedLabel()
-    SpeedLabel.Text =
-        "SPEED: "
-        .. tostring(PlaybackSpeed)
-        .. "  H: "
-        .. tostring(HorizontalOffset)
+    return pcall(function()
+        writefile(
+            FILE_NAME,
+            encoded
+        )
+    end)
 end
 
-local function updateStatus(text)
-    Status.Text = text
+local function saveRoute(name)
+    if #Route < 2 then
+        return false, "NO ROUTE"
+    end
+
+    name =
+        tostring(name or "")
+
+    name =
+        name:gsub(
+            "[^%w_%-%s]",
+            ""
+        )
+
+    name =
+        name:match("^%s*(.-)%s*$")
+
+    if name == "" then
+        name =
+            "Route_"
+            .. os.date("%Y%m%d_%H%M%S")
+    end
+
+    Routes[name] = {
+        version = 1,
+        points = Route
+    }
+
+    CurrentRouteName = name
+
+    local data = getFileData()
+
+    data[name] = Routes[name]
+
+    local fileOK =
+        writeFileData(data)
+
+    if fileOK then
+        return true,
+            "SAVED : " .. name
+    end
+
+    if type(writefile) ~= "function" then
+        return true,
+            "SAVED SESSION : " .. name
+    end
+
+    return false, "SAVE FAILED"
+end
+
+local function loadRoute(name)
+    local routeData = Routes[name]
+
+    if not routeData then
+        local data = getFileData()
+
+        routeData = data[name]
+    end
+
+    if type(routeData) ~= "table"
+        or type(routeData.points) ~= "table" then
+
+        return false,
+            "ROUTE NOT FOUND"
+    end
+
+    if #routeData.points < 2 then
+        return false,
+            "ROUTE INVALID"
+    end
+
+    Route = {}
+
+    for _, point in ipairs(routeData.points) do
+        if type(point) == "table"
+            and type(point.x) == "number"
+            and type(point.y) == "number"
+            and type(point.z) == "number"
+            and type(point.t) == "number" then
+
+            table.insert(
+                Route,
+                {
+                    x = point.x,
+                    y = point.y,
+                    z = point.z,
+                    yaw = tonumber(point.yaw) or 0,
+                    t = point.t,
+                    jump = point.jump == true,
+                    freefall =
+                        point.freefall == true,
+                    seated =
+                        point.seated == true
+                }
+            )
+        end
+    end
+
+    if #Route < 2 then
+        return false,
+            "ROUTE INVALID"
+    end
+
+    CurrentRouteName = name
+
+    if PathEnabled then
+        drawPath()
+    end
+
+    return true,
+        "LOADED : " .. name
+end
+
+local function deleteRoute(name)
+    Routes[name] = nil
+
+    local data = getFileData()
+
+    if data[name] ~= nil then
+        data[name] = nil
+        writeFileData(data)
+    end
+end
+
+local function getSavedNames()
+    local names = {}
+
+    for name in pairs(Routes) do
+        table.insert(names, name)
+    end
+
+    local data = getFileData()
+
+    for name in pairs(data) do
+        if not Routes[name] then
+            table.insert(names, name)
+        end
+    end
+
+    table.sort(names)
+
+    return names
 end
 
 local function rebuildRouteList()
-    for _, child in ipairs(List:GetChildren()) do
-        if child:IsA("TextButton")
-            or child:IsA("Frame") then
-
+    for _, child in ipairs(
+        RouteList:GetChildren()
+    ) do
+        if child:IsA("Frame") then
             child:Destroy()
         end
     end
 
-    for _, name in ipairs(SavedRoutes) do
+    local names = getSavedNames()
+
+    for _, name in ipairs(names) do
         local row = Instance.new("Frame")
         row.Size =
             UDim2.new(1, -8, 0, 38)
         row.BackgroundColor3 =
-            Color3.fromRGB(48, 16, 21)
+            Color3.fromRGB(35, 35, 42)
         row.BorderSizePixel = 0
-        row.Parent = List
+        row.Parent = RouteList
 
-        local rowCorner = Instance.new("UICorner")
+        local rowCorner =
+            Instance.new("UICorner")
+
         rowCorner.CornerRadius =
             UDim.new(0, 6)
+
         rowCorner.Parent = row
 
-        local loadButton = Instance.new("TextButton")
-        loadButton.Size =
-            UDim2.new(1, -38, 1, 0)
-        loadButton.BackgroundTransparency = 1
-        loadButton.Text =
-            name
-        loadButton.TextColor3 =
-            Color3.fromRGB(235, 235, 235)
-        loadButton.Font =
+        local load = Instance.new("TextButton")
+        load.Size =
+            UDim2.new(1, -42, 1, 0)
+        load.BackgroundTransparency = 1
+        load.Text = name
+        load.TextColor3 =
+            Color3.fromRGB(235, 235, 240)
+        load.Font =
             Enum.Font.Gotham
-        loadButton.TextSize = 10
-        loadButton.TextXAlignment =
+        load.TextSize = 9
+        load.TextXAlignment =
             Enum.TextXAlignment.Left
-        loadButton.Parent = row
+        load.Parent = row
 
-        local padding = Instance.new("UIPadding")
+        local padding =
+            Instance.new("UIPadding")
+
         padding.PaddingLeft =
             UDim.new(0, 8)
-        padding.Parent = loadButton
 
-        local deleteButton =
+        padding.Parent = load
+
+        local delete =
             Instance.new("TextButton")
 
-        deleteButton.Size =
-            UDim2.fromOffset(34, 30)
-        deleteButton.Position =
+        delete.Size =
+            UDim2.fromOffset(36, 30)
+
+        delete.Position =
             UDim2.new(
                 1,
-                -36,
+                -39,
                 0,
                 4
             )
-        deleteButton.BackgroundColor3 =
-            Color3.fromRGB(125, 35, 40)
-        deleteButton.BorderSizePixel = 0
-        deleteButton.Text = "DEL"
-        deleteButton.TextColor3 =
+
+        delete.BackgroundColor3 =
+            Color3.fromRGB(120, 38, 45)
+
+        delete.BorderSizePixel = 0
+        delete.Text = "DEL"
+        delete.TextColor3 =
             Color3.fromRGB(255, 255, 255)
-        deleteButton.Font =
+        delete.Font =
             Enum.Font.GothamBold
-        deleteButton.TextSize = 8
-        deleteButton.Parent = row
+        delete.TextSize = 8
+        delete.Parent = row
 
         local deleteCorner =
             Instance.new("UICorner")
 
         deleteCorner.CornerRadius =
             UDim.new(0, 5)
-        deleteCorner.Parent =
-            deleteButton
 
-        loadButton.Activated:Connect(function()
+        deleteCorner.Parent =
+            delete
+
+        load.Activated:Connect(function()
             local ok, message =
                 loadRoute(name)
 
+            setStatus(message)
+
             if ok then
-                drawRoute()
-                updateStatus(
-                    "LOADED: "
-                    .. name
-                )
-            else
-                updateStatus(message)
+                rebuildRouteList()
             end
         end)
 
-        deleteButton.Activated:Connect(function()
+        delete.Activated:Connect(function()
             deleteRoute(name)
-            rebuildRouteList()
-            updateStatus(
-                "DELETED: "
-                .. name
+
+            setStatus(
+                "DELETED : " .. name
             )
+
+            rebuildRouteList()
         end)
     end
 
     task.defer(function()
-        List.CanvasSize =
+        RouteList.CanvasSize =
             UDim2.fromOffset(
                 0,
-                Layout.AbsoluteContentSize.Y
-                    + 8
+                RouteLayout.AbsoluteContentSize.Y + 8
             )
     end)
 end
 
-RecordButton.Activated:Connect(function()
-    if Recording then
-        finishRecording()
+local SaveButton = Instance.new("TextButton")
+SaveButton.Size =
+    UDim2.fromOffset(80, 30)
+SaveButton.Position =
+    UDim2.new(1, -88, 0, 10)
+SaveButton.BackgroundColor3 =
+    Color3.fromRGB(40, 105, 60)
+SaveButton.BorderSizePixel = 0
+SaveButton.Text = "SAVE"
+SaveButton.TextColor3 =
+    Color3.fromRGB(255, 255, 255)
+SaveButton.Font =
+    Enum.Font.GothamBold
+SaveButton.TextSize = 9
+SaveButton.Parent = Header
 
-        updateStatus(
-            "RECORDED: "
-            .. tostring(#Route)
-            .. " POINTS"
-        )
-    else
-        beginRecording()
+local SaveCorner =
+    Instance.new("UICorner")
 
-        updateStatus(
-            "RECORDING..."
-        )
-    end
-end)
+SaveCorner.CornerRadius =
+    UDim.new(0, 6)
 
-StopButton.Activated:Connect(function()
-    stopAll()
-    updateStatus("STOPPED")
-end)
-
-LoopButton.Activated:Connect(function()
-    LoopEnabled = not LoopEnabled
-
-    LoopButton.Text =
-        LoopEnabled
-        and "LOOP ON"
-        or "LOOP OFF"
-end)
-
-RespawnButton.Activated:Connect(function()
-    RespawnEnabled =
-        not RespawnEnabled
-
-    RespawnButton.Text =
-        RespawnEnabled
-        and "RESPAWN ON"
-        or "RESPAWN OFF"
-end)
-
-JumpButton.Activated:Connect(function()
-    JumpEnabled =
-        not JumpEnabled
-
-    JumpButton.Text =
-        JumpEnabled
-        and "JUMP ON"
-        or "JUMP OFF"
-end)
-
-PathButton.Activated:Connect(function()
-    setPathVisibility(
-        not PathEnabled
-    )
-
-    PathButton.Text =
-        PathEnabled
-        and "PATH ON"
-        or "PATH OFF"
-end)
-
-ShiftButton.Activated:Connect(function()
-    ShiftEnabled =
-        not ShiftEnabled
-
-    ShiftButton.Text =
-        ShiftEnabled
-        and "SHIFT ON"
-        or "SHIFT OFF"
-end)
-
-OffsetMinus.Activated:Connect(function()
-    changeOffset(-1)
-    updateSpeedLabel()
-end)
-
-OffsetPlus.Activated:Connect(function()
-    changeOffset(1)
-    updateSpeedLabel()
-end)
-
-SpeedMinus.Activated:Connect(function()
-    changeSpeed(-2)
-    updateSpeedLabel()
-end)
-
-SpeedPlus.Activated:Connect(function()
-    changeSpeed(2)
-    updateSpeedLabel()
-end)
-
-BackButton.Activated:Connect(function()
-    Playing = false
-    stopPlaybackConnection()
-    stopMovement()
-
-    updateStatus("READY")
-end)
+SaveCorner.Parent = SaveButton
 
 OpenButton.Activated:Connect(function()
     Main.Visible = not Main.Visible
 end)
 
-Close.Activated:Connect(function()
+CloseButton.Activated:Connect(function()
     Main.Visible = false
 end)
 
-local function saveCurrentRoute()
+RecordButton.Activated:Connect(function()
+    if Recording then
+        finishRecording()
+    else
+        beginRecording()
+    end
+end)
+
+PlayButton.Activated:Connect(function()
+    if Playing then
+        Playing = false
+        stopPlayback()
+        stopMovement()
+        setStatus("STOPPED")
+    else
+        startPlayback()
+    end
+end)
+
+StopButton.Activated:Connect(function()
+    stopAll()
+end)
+
+LoopButton.Activated:Connect(function()
+    setLoop(not LoopEnabled)
+end)
+
+RespawnButton.Activated:Connect(function()
+    setRespawn(not RespawnEnabled)
+end)
+
+JumpButton.Activated:Connect(function()
+    setJump(not JumpEnabled)
+end)
+
+PathButton.Activated:Connect(function()
+    setPath(not PathEnabled)
+end)
+
+ShiftButton.Activated:Connect(function()
+    setShift(not ShiftEnabled)
+end)
+
+OffsetMinus.Activated:Connect(function()
+    changeOffset(-1)
+end)
+
+OffsetPlus.Activated:Connect(function()
+    changeOffset(1)
+end)
+
+SpeedMinus.Activated:Connect(function()
+    changeSpeed(-2)
+end)
+
+SpeedPlus.Activated:Connect(function()
+    changeSpeed(2)
+end)
+
+SaveButton.Activated:Connect(function()
     if #Route < 2 then
-        updateStatus("NO ROUTE")
+        setStatus("NO ROUTE")
         return
     end
 
     local name =
-        RouteName
+        CurrentRouteName
 
-    if not name or name == "" then
+    if not name then
         name =
             "Route_"
             .. os.date("%Y%m%d_%H%M%S")
@@ -1168,92 +1368,16 @@ local function saveCurrentRoute()
     local ok, message =
         saveRoute(name)
 
-    updateStatus(message)
+    setStatus(message)
 
-    rebuildRouteList()
-end
-
-local SaveRoute = Instance.new("TextButton")
-SaveRoute.Size =
-    UDim2.fromOffset(90, 30)
-SaveRoute.Position =
-    UDim2.new(
-        1,
-        -100,
-        0,
-        10
-    )
-SaveRoute.BackgroundColor3 =
-    Color3.fromRGB(40, 100, 55)
-SaveRoute.BorderSizePixel = 0
-SaveRoute.Text = "SAVE"
-SaveRoute.TextColor3 =
-    Color3.fromRGB(255, 255, 255)
-SaveRoute.Font =
-    Enum.Font.GothamBold
-SaveRoute.TextSize = 9
-SaveRoute.Parent = Main
-
-local SaveCorner =
-    Instance.new("UICorner")
-
-SaveCorner.CornerRadius =
-    UDim.new(0, 6)
-
-SaveCorner.Parent =
-    SaveRoute
-
-SaveRoute.Activated:Connect(
-    saveCurrentRoute
-)
-
-local PlayRoute = Instance.new("TextButton")
-PlayRoute.Size =
-    UDim2.fromOffset(90, 30)
-PlayRoute.Position =
-    UDim2.new(
-        1,
-        -198,
-        0,
-        10
-    )
-PlayRoute.BackgroundColor3 =
-    Color3.fromRGB(45, 90, 145)
-PlayRoute.BorderSizePixel = 0
-PlayRoute.Text = "PLAY"
-PlayRoute.TextColor3 =
-    Color3.fromRGB(255, 255, 255)
-PlayRoute.Font =
-    Enum.Font.GothamBold
-PlayRoute.TextSize = 9
-PlayRoute.Parent = Main
-
-local PlayCorner =
-    Instance.new("UICorner")
-
-PlayCorner.CornerRadius =
-    UDim.new(0, 6)
-
-PlayCorner.Parent =
-    PlayRoute
-
-PlayRoute.Activated:Connect(
-    function()
-        if Playing then
-            Playing = false
-            stopPlaybackConnection()
-            stopMovement()
-            updateStatus("STOPPED")
-        else
-            startPlayback()
-            updateStatus("PLAYING")
-        end
+    if ok then
+        rebuildRouteList()
     end
-)
+end)
 
 local draggingOpen = false
-local openDragStart
-local openStartPosition
+local dragStart
+local buttonStart
 
 OpenButton.InputBegan:Connect(function(input)
     if input.UserInputType ==
@@ -1262,9 +1386,8 @@ OpenButton.InputBegan:Connect(function(input)
         Enum.UserInputType.MouseButton1 then
 
         draggingOpen = true
-        openDragStart = input.Position
-        openStartPosition =
-            OpenButton.Position
+        dragStart = input.Position
+        buttonStart = OpenButton.Position
 
         input.Changed:Connect(function()
             if input.UserInputState ==
@@ -1276,39 +1399,34 @@ OpenButton.InputBegan:Connect(function(input)
     end
 end)
 
-UserInputService.InputChanged:Connect(
-    function(input)
-        if not draggingOpen then
-            return
-        end
-
-        if input.UserInputType ~=
-            Enum.UserInputType.Touch
-            and input.UserInputType ~=
-            Enum.UserInputType.MouseMovement then
-
-            return
-        end
-
-        local delta =
-            input.Position
-            - openDragStart
-
-        OpenButton.Position =
-            UDim2.new(
-                openStartPosition.X.Scale,
-                openStartPosition.X.Offset
-                    + delta.X,
-                openStartPosition.Y.Scale,
-                openStartPosition.Y.Offset
-                    + delta.Y
-            )
+UserInputService.InputChanged:Connect(function(input)
+    if not draggingOpen then
+        return
     end
-)
+
+    if input.UserInputType ~=
+        Enum.UserInputType.Touch
+        and input.UserInputType ~=
+        Enum.UserInputType.MouseMovement then
+
+        return
+    end
+
+    local delta =
+        input.Position - dragStart
+
+    OpenButton.Position =
+        UDim2.new(
+            buttonStart.X.Scale,
+            buttonStart.X.Offset + delta.X,
+            buttonStart.Y.Scale,
+            buttonStart.Y.Offset + delta.Y
+        )
+end)
 
 local draggingMain = false
 local mainDragStart
-local mainStartPosition
+local mainStart
 
 Header.InputBegan:Connect(function(input)
     if input.UserInputType ==
@@ -1318,8 +1436,7 @@ Header.InputBegan:Connect(function(input)
 
         draggingMain = true
         mainDragStart = input.Position
-        mainStartPosition =
-            Main.Position
+        mainStart = Main.Position
 
         input.Changed:Connect(function()
             if input.UserInputState ==
@@ -1331,57 +1448,68 @@ Header.InputBegan:Connect(function(input)
     end
 end)
 
-UserInputService.InputChanged:Connect(
-    function(input)
-        if not draggingMain then
-            return
-        end
-
-        if input.UserInputType ~=
-            Enum.UserInputType.Touch
-            and input.UserInputType ~=
-            Enum.UserInputType.MouseMovement then
-
-            return
-        end
-
-        local delta =
-            input.Position
-            - mainDragStart
-
-        Main.Position =
-            UDim2.new(
-                mainStartPosition.X.Scale,
-                mainStartPosition.X.Offset
-                    + delta.X,
-                mainStartPosition.Y.Scale,
-                mainStartPosition.Y.Offset
-                    + delta.Y
-            )
+UserInputService.InputChanged:Connect(function(input)
+    if not draggingMain then
+        return
     end
-)
+
+    if input.UserInputType ~=
+        Enum.UserInputType.Touch
+        and input.UserInputType ~=
+        Enum.UserInputType.MouseMovement then
+
+        return
+    end
+
+    local delta =
+        input.Position - mainDragStart
+
+    Main.Position =
+        UDim2.new(
+            mainStart.X.Scale,
+            mainStart.X.Offset + delta.X,
+            mainStart.Y.Scale,
+            mainStart.Y.Offset + delta.Y
+        )
+end)
 
 CharacterConnection =
-    Player.CharacterAdded:Connect(
-        function()
-            task.wait(0.5)
+    Player.CharacterAdded:Connect(function()
+        Character = nil
+        Humanoid = nil
+        Root = nil
 
-            refreshCharacter()
+        task.wait(0.4)
 
-            if RespawnEnabled
-                and Playing
-                and #Route >= 2 then
+        local ready = false
 
-                task.wait(0.3)
+        for _ = 1, 50 do
+            if refreshCharacter() then
+                ready = true
+                break
+            end
 
-                PlaybackStartPosition =
-                    ROOT.Position
+            task.wait(0.1)
+        end
 
-                PlaybackIndex = 1
+        if not ready then
+            setStatus("CHARACTER NOT READY")
+            return
+        end
+
+        if RespawnEnabled and Playing then
+            Playing = false
+            stopPlayback()
+            stopMovement()
+
+            task.wait(0.2)
+
+            if refreshCharacter() then
+                startPlayback()
             end
         end
-    )
+    end)
 
+updateInfo()
 rebuildRouteList()
-updateSpeedLabel()
-updateStatus("READY")
+setStatus("READY")
