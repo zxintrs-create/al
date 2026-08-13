@@ -1,7 +1,7 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
 local HttpService = game:GetService("HttpService")
 local Stats = game:GetService("Stats")
 
@@ -9,19 +9,19 @@ local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
 local CONFIG_FILE = "AldoVzPremiumConfig.json"
-local NOTE_FILE_PREFIX = "AldoVzNote_"
 
 local defaultConfig = {
 	WalkSpeed = 16,
+	JumpPower = 50,
+	AirControl = 20,
+	ControllerEnabled = false,
 	JumpX = 0.85,
 	JumpY = 0.75,
 	JumpSize = 0.30,
 	ShiftX = 0.75,
 	ShiftY = 0.65,
 	ShiftSize = 35,
-	Sensitivity = 1,
-	AirControl = 20,
-	ControllerEnabled = false
+	Sensitivity = 1
 }
 
 local config = {}
@@ -30,30 +30,24 @@ for k,v in pairs(defaultConfig) do
 	config[k] = v
 end
 
-local function saveConfig()
-	pcall(function()
-		if writefile then
-			writefile(CONFIG_FILE,HttpService:JSONEncode(config))
-		end
-	end)
-end
-
-local function loadConfig()
-	pcall(function()
-		if readfile and isfile and isfile(CONFIG_FILE) then
-			local data = HttpService:JSONDecode(readfile(CONFIG_FILE))
-			if type(data) == "table" then
-				for k,v in pairs(data) do
-					if defaultConfig[k] ~= nil and type(v) == type(defaultConfig[k]) then
-						config[k] = v
-					end
+pcall(function()
+	if isfile and readfile and isfile(CONFIG_FILE) then
+		local data = HttpService:JSONDecode(readfile(CONFIG_FILE))
+		if type(data) == "table" then
+			for k,v in pairs(data) do
+				if defaultConfig[k] ~= nil and type(v) == type(defaultConfig[k]) then
+					config[k] = v
 				end
 			end
 		end
-	end)
-end
+	end
+end)
 
-loadConfig()
+pcall(function()
+	if writefile then
+		writefile(CONFIG_FILE,HttpService:JSONEncode(config))
+	end
+end)
 
 if _G.AldoVzPremiumCleanup then
 	pcall(_G.AldoVzPremiumCleanup)
@@ -74,7 +68,7 @@ local function connect(signal,callback)
 end
 
 local function disconnectAll()
-	for i=#connections,1,-1 do
+	for i = #connections,1,-1 do
 		pcall(function()
 			connections[i]:Disconnect()
 		end)
@@ -82,146 +76,24 @@ local function disconnectAll()
 	table.clear(connections)
 end
 
-local function destroyGui(name)
-	local obj = playerGui:FindFirstChild(name)
-	if obj then
-		pcall(function()
-			obj:Destroy()
-		end)
+local function destroyOld()
+	local names = {
+		"AldoVzPremium",
+		"DeltaMobileControls",
+		"DeltaMobileErgo"
+	}
+
+	for _,name in ipairs(names) do
+		local obj = playerGui:FindFirstChild(name)
+		if obj then
+			pcall(function()
+				obj:Destroy()
+			end)
+		end
 	end
 end
 
-_G.AldoVzPremiumCleanup = function()
-	if destroyed then
-		return
-	end
-
-	destroyed = true
-	disconnectAll()
-
-	destroyGui("AldoVzPremium")
-	destroyGui("AldoVzController")
-
-	pcall(function()
-		if player.Character and player.Character:FindFirstChildOfClass("Humanoid") then
-			local h = player.Character:FindFirstChildOfClass("Humanoid")
-			h.AutoRotate = true
-			h.CameraOffset = Vector3.zero
-		end
-	end)
-end
-
-destroyGui("AldoVzPremium")
-destroyGui("AldoVzController")
-
-local character = player.Character or player.CharacterAdded:Wait()
-local humanoid = character:WaitForChild("Humanoid")
-
-local MAIN = Color3.fromRGB(13,14,25)
-local PANEL = Color3.fromRGB(19,20,34)
-local PANEL2 = Color3.fromRGB(25,26,43)
-local BUTTON = Color3.fromRGB(29,30,48)
-local WHITE = Color3.fromRGB(245,245,255)
-local PURPLE = Color3.fromRGB(170,45,255)
-local BLUE = Color3.fromRGB(45,135,255)
-local RED = Color3.fromRGB(220,65,75)
-local GREEN = Color3.fromRGB(60,205,110)
-
-local controllerState = {
-	Forward = false,
-	Backward = false,
-	Left = false,
-	Right = false
-}
-
-local activeTouches = {}
-local holdingSettings = {}
-
-local shiftLocked = false
-local targetSetting = "JUMP"
-local currentPage = "MAIN"
-local controllerEnabled = config.ControllerEnabled == true
-local jumpButton
-local spectating = nil
-
-local function makeCorner(obj,radius)
-	local c = Instance.new("UICorner")
-	c.CornerRadius = UDim.new(0,radius)
-	c.Parent = obj
-	return c
-end
-
-local function makeStroke(obj)
-	local stroke = Instance.new("UIStroke")
-	stroke.Thickness = 1.5
-	stroke.Color = WHITE
-	stroke.Transparency = 0.05
-	stroke.Parent = obj
-
-	local gradient = Instance.new("UIGradient")
-	gradient.Color = ColorSequence.new({
-		ColorSequenceKeypoint.new(0,Color3.fromRGB(255,255,255)),
-		ColorSequenceKeypoint.new(.25,Color3.fromRGB(170,70,255)),
-		ColorSequenceKeypoint.new(.5,Color3.fromRGB(50,180,255)),
-		ColorSequenceKeypoint.new(.75,Color3.fromRGB(190,50,255)),
-		ColorSequenceKeypoint.new(1,Color3.fromRGB(255,255,255))
-	})
-	gradient.Rotation = 0
-	gradient.Parent = stroke
-
-	task.spawn(function()
-		while gradient.Parent and not destroyed do
-			gradient.Offset = Vector2.new(-1,0)
-			local tw = TweenService:Create(
-				gradient,
-				TweenInfo.new(2.2,Enum.EasingStyle.Linear),
-				{Offset = Vector2.new(1,0)}
-			)
-			tw:Play()
-			tw.Completed:Wait()
-		end
-	end)
-
-	return stroke
-end
-
-local function makeButton(parent,name,text,pos,size)
-	local b = Instance.new("TextButton")
-	b.Name = name
-	b.Text = text
-	b.Position = pos
-	b.Size = size
-	b.BackgroundColor3 = BUTTON
-	b.BackgroundTransparency = .04
-	b.TextColor3 = WHITE
-	b.Font = Enum.Font.GothamBold
-	b.TextSize = 14
-	b.AutoButtonColor = false
-	b.Active = true
-	b.Selectable = false
-	b.BorderSizePixel = 0
-	b.Parent = parent
-	makeCorner(b,10)
-	makeStroke(b)
-
-	connect(b.MouseEnter,function()
-		if b.Parent then
-			TweenService:Create(b,TweenInfo.new(.15),{
-				BackgroundColor3 = Color3.fromRGB(42,43,67)
-			}):Play()
-		end
-	end)
-
-	connect(b.MouseLeave,function()
-		if b.Parent then
-			TweenService:Create(b,TweenInfo.new(.15),{
-				BackgroundColor3 = BUTTON
-			}):Play()
-		end
-	end)
-
-	return b
-end
+destroyOld()
 
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "AldoVzPremium"
@@ -231,455 +103,417 @@ screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 screenGui.DisplayOrder = 999999
 screenGui.Parent = playerGui
 
-local openButton = Instance.new("TextButton")
-openButton.Name = "OpenMenu"
-openButton.AnchorPoint = Vector2.new(0,0)
-openButton.Position = UDim2.fromOffset(90,82)
-openButton.Size = UDim2.fromOffset(58,58)
-openButton.Text = "☰"
-openButton.TextColor3 = WHITE
-openButton.TextSize = 26
-openButton.Font = Enum.Font.GothamBold
-openButton.BackgroundColor3 = MAIN
-openButton.BorderSizePixel = 0
-openButton.AutoButtonColor = false
-openButton.Parent = screenGui
-makeCorner(openButton,14)
-makeStroke(openButton)
+local animationObjects = {}
 
-local header = Instance.new("Frame")
-header.Name = "MenuHeader"
-header.Position = UDim2.fromOffset(84,150)
-header.Size = UDim2.new(0,800,0,72)
-header.BackgroundColor3 = MAIN
-header.BorderSizePixel = 0
-header.Visible = false
-header.Parent = screenGui
-makeCorner(header,15)
-makeStroke(header)
+local gradientColors = ColorSequence.new({
+	ColorSequenceKeypoint.new(0,Color3.fromRGB(0,170,255)),
+	ColorSequenceKeypoint.new(.25,Color3.fromRGB(140,60,255)),
+	ColorSequenceKeypoint.new(.5,Color3.fromRGB(255,0,200)),
+	ColorSequenceKeypoint.new(.75,Color3.fromRGB(140,60,255)),
+	ColorSequenceKeypoint.new(1,Color3.fromRGB(0,170,255))
+})
 
-local headerScale = Instance.new("UIScale")
-headerScale.Parent = header
+local function addGradient(object,rotation)
+	local gradient = Instance.new("UIGradient")
+	gradient.Color = gradientColors
+	gradient.Rotation = rotation or 0
+	gradient.Offset = Vector2.new(-1,0)
+	gradient.Parent = object
+	table.insert(animationObjects,gradient)
+	return gradient
+end
 
-local title = Instance.new("TextLabel")
-title.BackgroundTransparency = 1
-title.Position = UDim2.fromOffset(18,7)
-title.Size = UDim2.fromOffset(170,28)
-title.Text = "👾 AldoVz"
-title.TextColor3 = WHITE
-title.TextXAlignment = Enum.TextXAlignment.Left
-title.Font = Enum.Font.GothamBold
-title.TextSize = 18
-title.Parent = header
+local function addStroke(object,thickness)
+	local stroke = Instance.new("UIStroke")
+	stroke.Thickness = thickness or 1.5
+	stroke.Color = Color3.new(1,1,1)
+	stroke.Transparency = .05
+	stroke.Parent = object
 
-local pingLabel = Instance.new("TextLabel")
-pingLabel.BackgroundTransparency = 1
-pingLabel.Position = UDim2.fromOffset(185,7)
-pingLabel.Size = UDim2.fromOffset(120,28)
-pingLabel.Text = "PING : 0"
-pingLabel.TextColor3 = WHITE
-pingLabel.Font = Enum.Font.GothamBold
-pingLabel.TextSize = 13
-pingLabel.Parent = header
+	local gradient = Instance.new("UIGradient")
+	gradient.Color = gradientColors
+	gradient.Rotation = 0
+	gradient.Offset = Vector2.new(-1,0)
+	gradient.Parent = stroke
 
-local fpsLabel = Instance.new("TextLabel")
-fpsLabel.BackgroundTransparency = 1
-fpsLabel.Position = UDim2.fromOffset(310,7)
-fpsLabel.Size = UDim2.fromOffset(120,28)
-fpsLabel.Text = "FPS : 0"
-fpsLabel.TextColor3 = WHITE
-fpsLabel.Font = Enum.Font.GothamBold
-fpsLabel.TextSize = 13
-fpsLabel.Parent = header
+	table.insert(animationObjects,gradient)
 
-local checkLabel = Instance.new("TextLabel")
-checkLabel.BackgroundTransparency = 1
-checkLabel.Position = UDim2.fromOffset(430,7)
-checkLabel.Size = UDim2.fromOffset(130,28)
-checkLabel.Text = "CHECK : 0"
-checkLabel.TextColor3 = WHITE
-checkLabel.Font = Enum.Font.GothamBold
-checkLabel.TextSize = 13
-checkLabel.Parent = header
+	return stroke
+end
 
-local speedLabel = Instance.new("TextLabel")
-speedLabel.BackgroundTransparency = 1
-speedLabel.Position = UDim2.fromOffset(560,7)
-speedLabel.Size = UDim2.fromOffset(120,28)
-speedLabel.Text = "SPEED : "..tostring(config.WalkSpeed)
-speedLabel.TextColor3 = WHITE
-speedLabel.Font = Enum.Font.GothamBold
-speedLabel.TextSize = 13
-speedLabel.Parent = header
+local function round(object,radius)
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0,radius)
+	c.Parent = object
+	return c
+end
 
-local commandBox = Instance.new("TextBox")
-commandBox.Name = "InfiniteYieldCommand"
-commandBox.Position = UDim2.fromOffset(185,39)
-commandBox.Size = UDim2.fromOffset(480,25)
-commandBox.BackgroundColor3 = Color3.fromRGB(8,9,17)
-commandBox.BorderSizePixel = 0
-commandBox.Text = ""
-commandBox.PlaceholderText = "COMMAND INFINITE YIEL :_____________:"
-commandBox.PlaceholderColor3 = Color3.fromRGB(130,130,150)
-commandBox.TextColor3 = WHITE
-commandBox.Font = Enum.Font.Code
-commandBox.TextSize = 12
-commandBox.ClearTextOnFocus = false
-commandBox.Parent = header
-makeCorner(commandBox,7)
+local function animateGradient(gradient,speed)
+	task.spawn(function()
+		while gradient and gradient.Parent and not destroyed do
+			gradient.Offset = Vector2.new(-1,0)
 
-local menuFrame = Instance.new("Frame")
-menuFrame.Name = "MenuFrame"
-menuFrame.Position = UDim2.fromOffset(84,228)
-menuFrame.Size = UDim2.new(0,800,0,540)
-menuFrame.BackgroundColor3 = MAIN
-menuFrame.BorderSizePixel = 0
-menuFrame.Visible = false
-menuFrame.Parent = screenGui
-makeCorner(menuFrame,16)
-makeStroke(menuFrame)
+			local tween = TweenService:Create(
+				gradient,
+				TweenInfo.new(speed or 2.5,Enum.EasingStyle.Linear),
+				{Offset = Vector2.new(1,0)}
+			)
 
-local menuList = Instance.new("Frame")
-menuList.Name = "MenuList"
-menuList.Position = UDim2.fromOffset(12,12)
-menuList.Size = UDim2.new(0,180,1,-24)
-menuList.BackgroundColor3 = PANEL
-menuList.BorderSizePixel = 0
-menuList.Parent = menuFrame
-makeCorner(menuList,13)
-makeStroke(menuList)
-
-local menuTitle = Instance.new("TextLabel")
-menuTitle.BackgroundTransparency = 1
-menuTitle.Position = UDim2.fromOffset(14,12)
-menuTitle.Size = UDim2.new(1,-28,0,32)
-menuTitle.Text = "MENU"
-menuTitle.TextColor3 = WHITE
-menuTitle.TextXAlignment = Enum.TextXAlignment.Left
-menuTitle.Font = Enum.Font.GothamBold
-menuTitle.TextSize = 17
-menuTitle.Parent = menuList
-
-local menuScroll = Instance.new("ScrollingFrame")
-menuScroll.Name = "UIScrollingButton"
-menuScroll.Position = UDim2.fromOffset(10,52)
-menuScroll.Size = UDim2.new(1,-20,1,-62)
-menuScroll.BackgroundTransparency = 1
-menuScroll.BorderSizePixel = 0
-menuScroll.ScrollBarThickness = 3
-menuScroll.CanvasSize = UDim2.fromOffset(0,0)
-menuScroll.Parent = menuList
-
-local menuLayout = Instance.new("UIListLayout")
-menuLayout.Padding = UDim.new(0,9)
-menuLayout.SortOrder = Enum.SortOrder.LayoutOrder
-menuLayout.Parent = menuScroll
-
-local mainArea = Instance.new("Frame")
-mainArea.Name = "MainFrame"
-mainArea.Position = UDim2.fromOffset(204,12)
-mainArea.Size = UDim2.new(1,-216,1,-24)
-mainArea.BackgroundColor3 = PANEL
-mainArea.BorderSizePixel = 0
-mainArea.Parent = menuFrame
-makeCorner(mainArea,13)
-makeStroke(mainArea)
-
-local pageTitle = Instance.new("TextLabel")
-pageTitle.Name = "PageTitle"
-pageTitle.BackgroundTransparency = 1
-pageTitle.Position = UDim2.fromOffset(18,12)
-pageTitle.Size = UDim2.new(1,-36,0,34)
-pageTitle.Text = "MAIN"
-pageTitle.TextColor3 = WHITE
-pageTitle.TextXAlignment = Enum.TextXAlignment.Left
-pageTitle.Font = Enum.Font.GothamBold
-pageTitle.TextSize = 19
-pageTitle.Parent = mainArea
-
-local pageContainer = Instance.new("Frame")
-pageContainer.Name = "PageContainer"
-pageContainer.Position = UDim2.fromOffset(12,54)
-pageContainer.Size = UDim2.new(1,-24,1,-66)
-pageContainer.BackgroundTransparency = 1
-pageContainer.Parent = mainArea
-
-local pages = {}
-
-local function newPage(name)
-	local frame = Instance.new("ScrollingFrame")
-	frame.Name = name
-	frame.Size = UDim2.fromScale(1,1)
-	frame.BackgroundTransparency = 1
-	frame.BorderSizePixel = 0
-	frame.ScrollBarThickness = 4
-	frame.Visible = false
-	frame.CanvasSize = UDim2.fromOffset(0,0)
-	frame.Parent = pageContainer
-
-	local layout = Instance.new("UIListLayout")
-	layout.Padding = UDim.new(0,12)
-	layout.SortOrder = Enum.SortOrder.LayoutOrder
-	layout.Parent = frame
-
-	connect(layout:GetPropertyChangedSignal("AbsoluteContentSize"),function()
-		frame.CanvasSize = UDim2.fromOffset(0,layout.AbsoluteContentSize.Y+20)
+			tween:Play()
+			tween.Completed:Wait()
+		end
 	end)
+end
 
-	pages[name] = frame
+for _,gradient in ipairs(animationObjects) do
+	animateGradient(gradient,2.8)
+end
+
+local function makeFrame(parent,name,size,position,background,transparency,z)
+	local frame = Instance.new("Frame")
+	frame.Name = name
+	frame.Size = size
+	frame.Position = position
+	frame.BackgroundColor3 = background or Color3.fromRGB(18,18,27)
+	frame.BackgroundTransparency = transparency or 0
+	frame.BorderSizePixel = 0
+	frame.ZIndex = z or 10
+	frame.Parent = parent
+
+	round(frame,14)
+	addGradient(frame,0)
+	addStroke(frame,1.5)
+
 	return frame
 end
 
-local mainPage = newPage("MAIN")
-local notePage = newPage("NOTE")
-local controlPage = newPage("CONTROL")
-local playerPage = newPage("PLAYER")
-local settingPage = newPage("SETTING")
+local function makeLabel(parent,name,size,position,text,textSize,z)
+	local label = Instance.new("TextLabel")
+	label.Name = name
+	label.Size = size
+	label.Position = position
+	label.BackgroundTransparency = 1
+	label.BorderSizePixel = 0
+	label.Text = text
+	label.TextColor3 = Color3.new(1,1,1)
+	label.Font = Enum.Font.GothamBold
+	label.TextSize = textSize or 16
+	label.TextXAlignment = Enum.TextXAlignment.Left
+	label.ZIndex = z or 20
+	label.Parent = parent
 
-local function section(parent,height)
-	local f = Instance.new("Frame")
-	f.Size = UDim2.new(1,0,0,height)
-	f.BackgroundColor3 = PANEL2
-	f.BorderSizePixel = 0
-	f.Parent = parent
-	makeCorner(f,12)
-	makeStroke(f)
-	return f
+	addGradient(label,0)
+
+	return label
 end
 
-local function label(parent,text,pos,size)
-	local l = Instance.new("TextLabel")
-	l.BackgroundTransparency = 1
-	l.Position = pos
-	l.Size = size
-	l.Text = text
-	l.TextColor3 = WHITE
-	l.Font = Enum.Font.GothamBold
-	l.TextSize = 14
-	l.TextXAlignment = Enum.TextXAlignment.Left
-	l.Parent = parent
-	return l
+local function makeButton(parent,name,size,position,text,z)
+	local button = Instance.new("TextButton")
+	button.Name = name
+	button.Size = size
+	button.Position = position
+	button.BackgroundColor3 = Color3.fromRGB(25,25,38)
+	button.BackgroundTransparency = .05
+	button.BorderSizePixel = 0
+	button.Text = text
+	button.TextColor3 = Color3.new(1,1,1)
+	button.Font = Enum.Font.GothamBold
+	button.TextSize = 15
+	button.AutoButtonColor = false
+	button.Active = true
+	button.Selectable = false
+	button.ZIndex = z or 30
+	button.Parent = parent
+
+	round(button,10)
+	addStroke(button,1.2)
+
+	connect(button.MouseEnter,function()
+		if button.Parent then
+			TweenService:Create(
+				button,
+				TweenInfo.new(.15),
+				{BackgroundTransparency = 0}
+			):Play()
+		end
+	end)
+
+	connect(button.MouseLeave,function()
+		if button.Parent then
+			TweenService:Create(
+				button,
+				TweenInfo.new(.15),
+				{BackgroundTransparency = .05}
+			):Play()
+		end
+	end)
+
+	return button
 end
 
-local speedSection = section(mainPage,100)
-label(speedSection,"WALK SPEED",UDim2.fromOffset(16,12),UDim2.fromOffset(200,25))
+local openButton = Instance.new("TextButton")
+openButton.Name = "OpenMenu"
+openButton.AnchorPoint = Vector2.new(0,0)
+openButton.Position = UDim2.new(0,12,0,42)
+openButton.Size = UDim2.fromOffset(48,48)
+openButton.BackgroundColor3 = Color3.fromRGB(18,18,27)
+openButton.BackgroundTransparency = .05
+openButton.BorderSizePixel = 0
+openButton.Text = "☰"
+openButton.TextColor3 = Color3.new(1,1,1)
+openButton.Font = Enum.Font.GothamBold
+openButton.TextSize = 24
+openButton.AutoButtonColor = false
+openButton.ZIndex = 100
+openButton.Parent = screenGui
 
-local speedMinus = makeButton(speedSection,"Minus","-",UDim2.fromOffset(14,45),UDim2.fromOffset(55,40))
-local speedValue = label(speedSection,tostring(config.WalkSpeed),UDim2.new(.5,-50,0,45),UDim2.fromOffset(100,40))
-speedValue.TextXAlignment = Enum.TextXAlignment.Center
-speedValue.TextSize = 17
+round(openButton,12)
+addStroke(openButton,1.5)
 
-local speedPlus = makeButton(speedSection,"Plus","+",UDim2.new(1,-69,0,45),UDim2.fromOffset(55,40))
+local menu = Instance.new("Frame")
+menu.Name = "MenuFrame"
+menu.Size = UDim2.new(0,650,0,440)
+menu.Position = UDim2.new(0,12,0,98)
+menu.BackgroundColor3 = Color3.fromRGB(12,12,20)
+menu.BackgroundTransparency = .04
+menu.BorderSizePixel = 0
+menu.Visible = false
+menu.ZIndex = 10
+menu.Parent = screenGui
 
-local shiftSection = section(mainPage,300)
-label(shiftSection,"SETTING SHIFTLOCK / JUMP",UDim2.fromOffset(16,12),UDim2.fromOffset(300,25))
+round(menu,18)
+addGradient(menu,0)
+addStroke(menu,2)
+
+local header = Instance.new("Frame")
+header.Name = "Header"
+header.Size = UDim2.new(1,-20,0,54)
+header.Position = UDim2.fromOffset(10,10)
+header.BackgroundColor3 = Color3.fromRGB(20,20,32)
+header.BackgroundTransparency = .05
+header.BorderSizePixel = 0
+header.ZIndex = 20
+header.Parent = menu
+
+round(header,12)
+addGradient(header,0)
+addStroke(header,1.5)
+
+local headerLabel = makeLabel(
+	header,
+	"HeaderLabel",
+	UDim2.new(1,-20,1,0),
+	UDim2.fromOffset(10,0),
+	"👾 AldoVz | PING : 0 | FPS : 0 | CHECK : 0 | SPEED : 16",
+	14,
+	30
+)
+
+local menuList = Instance.new("ScrollingFrame")
+menuList.Name = "MenuList"
+menuList.Size = UDim2.new(0,155,1,-78)
+menuList.Position = UDim2.fromOffset(10,70)
+menuList.BackgroundColor3 = Color3.fromRGB(16,16,26)
+menuList.BackgroundTransparency = .05
+menuList.BorderSizePixel = 0
+menuList.ScrollBarThickness = 3
+menuList.CanvasSize = UDim2.new(0,0,0,0)
+menuList.ZIndex = 20
+menuList.Parent = menu
+
+round(menuList,12)
+addStroke(menuList,1.2)
+
+local listLayout = Instance.new("UIListLayout")
+listLayout.Padding = UDim.new(0,8)
+listLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+listLayout.Parent = menuList
+
+local listPadding = Instance.new("UIPadding")
+listPadding.PaddingTop = UDim.new(0,10)
+listPadding.PaddingBottom = UDim.new(0,10)
+listPadding.Parent = menuList
+
+local mainArea = Instance.new("Frame")
+mainArea.Name = "MainArea"
+mainArea.Size = UDim2.new(1,-180,1,-78)
+mainArea.Position = UDim2.fromOffset(170,70)
+mainArea.BackgroundColor3 = Color3.fromRGB(16,16,26)
+mainArea.BackgroundTransparency = .05
+mainArea.BorderSizePixel = 0
+mainArea.ZIndex = 20
+mainArea.Parent = menu
+
+round(mainArea,12)
+addGradient(mainArea,0)
+addStroke(mainArea,1.5)
+
+local mainTitle = makeLabel(
+	mainArea,
+	"MainTitle",
+	UDim2.new(1,-20,0,35),
+	UDim2.fromOffset(10,8),
+	"MAIN",
+	20,
+	30
+)
+
+local mainInfo = makeLabel(
+	mainArea,
+	"MainInfo",
+	UDim2.new(1,-20,0,28),
+	UDim2.fromOffset(10,45),
+	"FITUR IN MAIN FRAME",
+	13,
+	30
+)
+
+local function makeSectionButton(text,order)
+	local b = makeButton(
+		menuList,
+		"Menu_"..text,
+		UDim2.new(1,-20,0,45),
+		UDim2.new(),
+		text,
+		30
+	)
+	b.LayoutOrder = order
+	return b
+end
+
+local mainButton = makeSectionButton("MAIN",1)
+local noteButton = makeSectionButton("NOTE",2)
+local controlButton = makeSectionButton("CONTROL",3)
+local playerButton = makeSectionButton("PLAYER",4)
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFeatureFrame"
+mainFrame.Size = UDim2.new(1,-20,1,-85)
+mainFrame.Position = UDim2.fromOffset(10,75)
+mainFrame.BackgroundTransparency = 1
+mainFrame.ZIndex = 25
+mainFrame.Parent = mainArea
+
+local walkSpeedLabel = makeLabel(
+	mainFrame,
+	"WalkSpeedLabel",
+	UDim2.new(1,-20,0,32),
+	UDim2.fromOffset(10,5),
+	"WALK SPEED : 16",
+	16,
+	30
+)
+
+local walkMinus = makeButton(
+	mainFrame,
+	"WalkMinus",
+	UDim2.fromOffset(70,38),
+	UDim2.fromOffset(10,45),
+	"-",
+	30
+)
+
+local walkPlus = makeButton(
+	mainFrame,
+	"WalkPlus",
+	UDim2.fromOffset(70,38),
+	UDim2.fromOffset(90,45),
+	"+",
+	30
+)
+
+local jumpSetting = makeButton(
+	mainFrame,
+	"JumpSetting",
+	UDim2.new(1,-180,0,42),
+	UDim2.fromOffset(10,100),
+	"JUMP SETTING",
+	30
+)
+
+local shiftSetting = makeButton(
+	mainFrame,
+	"ShiftSetting",
+	UDim2.new(1,-180,0,42),
+	UDim2.fromOffset(10,150),
+	"SHIFT LOCK",
+	30
+)
+
+local controllerButton = makeButton(
+	mainFrame,
+	"Controller",
+	UDim2.new(1,-20,0,42),
+	UDim2.fromOffset(10,205),
+	"CONTROLLER : OFF",
+	30
+)
+
+local settingFrame = Instance.new("Frame")
+settingFrame.Name = "JumpShiftSetting"
+settingFrame.Size = UDim2.new(1,-20,0,170)
+settingFrame.Position = UDim2.fromOffset(10,255)
+settingFrame.BackgroundColor3 = Color3.fromRGB(22,22,34)
+settingFrame.BorderSizePixel = 0
+settingFrame.ZIndex = 30
+settingFrame.Parent = mainFrame
+
+round(settingFrame,12)
+addGradient(settingFrame,0)
+addStroke(settingFrame,1.2)
+
+local targetLabel = makeLabel(
+	settingFrame,
+	"TargetLabel",
+	UDim2.new(1,-20,0,28),
+	UDim2.fromOffset(10,5),
+	"PILIH SET : JUMP",
+	14,
+	35
+)
 
 local targetButton = makeButton(
-	shiftSection,
+	settingFrame,
 	"Target",
-	"← ↑ ↓ →    PILIH SET : JUMP",
-	UDim2.fromOffset(14,42),
-	UDim2.new(1,-28,0,40)
+	UDim2.new(1,-20,0,32),
+	UDim2.fromOffset(10,35),
+	"JUMP",
+	35
 )
-targetButton.BackgroundColor3 = BLUE
 
-local upButton = makeButton(shiftSection,"Up","↑",UDim2.new(.5,-30,0,91),UDim2.fromOffset(60,42))
-local leftButton = makeButton(shiftSection,"Left","←",UDim2.new(.28,-30,0,140),UDim2.fromOffset(60,42))
-local rightButton = makeButton(shiftSection,"Right","→",UDim2.new(.72,-30,0,140),UDim2.fromOffset(60,42))
-local downButton = makeButton(shiftSection,"Down","↓",UDim2.new(.5,-30,0,189),UDim2.fromOffset(60,42))
+local leftButton = makeButton(settingFrame,"Left",UDim2.fromOffset(42,35),UDim2.fromOffset(10,78),"←",35)
+local upButton = makeButton(settingFrame,"Up",UDim2.fromOffset(42,35),UDim2.fromOffset(58,78),"↑",35)
+local downButton = makeButton(settingFrame,"Down",UDim2.fromOffset(42,35),UDim2.fromOffset(106,78),"↓",35)
+local rightButton = makeButton(settingFrame,"Right",UDim2.fromOffset(42,35),UDim2.fromOffset(154,78),"→",35)
 
-local sizePlus = makeButton(shiftSection,"SizePlus","SIZE +",UDim2.fromOffset(14,245),UDim2.fromOffset(90,40))
-local resetButton = makeButton(shiftSection,"Reset","RESET 🔄",UDim2.new(.5,-45,0,245),UDim2.fromOffset(90,40))
-local sizeMinus = makeButton(shiftSection,"SizeMinus","SIZE -",UDim2.new(1,-104,0,245),UDim2.fromOffset(90,40))
+local sizePlus = makeButton(settingFrame,"SizePlus",UDim2.fromOffset(70,35),UDim2.new(1,-235,0,78),"SIZE +",35)
+local sizeMinus = makeButton(settingFrame,"SizeMinus",UDim2.fromOffset(70,35),UDim2.new(1,-160,0,78),"SIZE -",35)
+local resetButton = makeButton(settingFrame,"Reset",UDim2.fromOffset(70,35),UDim2.new(1,-85,0,78),"RESET 🔁",35)
 
-local jumpObject
+local noteFrame = Instance.new("Frame")
+noteFrame.Name = "NoteFrame"
+noteFrame.Size = UDim2.new(1,-20,1,-20)
+noteFrame.Position = UDim2.fromOffset(10,10)
+noteFrame.BackgroundTransparency = 1
+noteFrame.Visible = false
+noteFrame.ZIndex = 25
+noteFrame.Parent = mainArea
 
-local function getJumpButton()
-	if jumpObject and jumpObject.Parent then
-		return jumpObject
-	end
-
-	local touchGui = playerGui:FindFirstChild("TouchGui")
-	if touchGui then
-		jumpObject = touchGui:FindFirstChild("JumpButton",true)
-	end
-
-	return jumpObject
-end
-
-local function updateJump()
-	local jump = getJumpButton()
-	local camera = workspace.CurrentCamera
-
-	if not jump or not camera then
-		return
-	end
-
-	local viewport = camera.ViewportSize
-	local size = math.max(40,math.floor(viewport.Y * math.clamp(config.JumpSize,.05,.5)))
-
-	pcall(function()
-		jump.AnchorPoint = Vector2.new(.5,.5)
-		jump.Position = UDim2.new(
-			math.clamp(config.JumpX,.05,.95),
-			0,
-			math.clamp(config.JumpY,.05,.95),
-			0
-		)
-		jump.Size = UDim2.fromOffset(size,size)
-	end)
-end
-
-local shiftLockButton = Instance.new("ImageButton")
-shiftLockButton.Name = "ShiftLockButton"
-shiftLockButton.AnchorPoint = Vector2.new(.5,.5)
-shiftLockButton.Position = UDim2.new(config.ShiftX,0,config.ShiftY,0)
-shiftLockButton.Size = UDim2.fromOffset(config.ShiftSize,config.ShiftSize)
-shiftLockButton.Image = "rbxassetid://6031068426"
-shiftLockButton.ImageColor3 = WHITE
-shiftLockButton.BackgroundColor3 = WHITE
-shiftLockButton.BackgroundTransparency = .2
-shiftLockButton.AutoButtonColor = false
-shiftLockButton.Active = true
-shiftLockButton.Selectable = false
-shiftLockButton.BorderSizePixel = 0
-shiftLockButton.Visible = true
-shiftLockButton.Parent = screenGui
-makeCorner(shiftLockButton,99)
-makeStroke(shiftLockButton)
-
-local crosshair = Instance.new("Frame")
-crosshair.Name = "ShiftLockCrosshair"
-crosshair.Size = UDim2.fromOffset(6,6)
-crosshair.Position = UDim2.new(.5,-3,.5,-3)
-crosshair.BackgroundColor3 = WHITE
-crosshair.BorderSizePixel = 0
-crosshair.Visible = false
-crosshair.Parent = screenGui
-makeCorner(crosshair,99)
-
-local function updateShiftButton()
-	shiftLockButton.BackgroundColor3 = shiftLocked and Color3.fromRGB(170,0,255) or WHITE
-	crosshair.Visible = shiftLocked
-end
-
-local function toggleShift()
-	shiftLocked = not shiftLocked
-	updateShiftButton()
-
-	if humanoid and humanoid.Parent then
-		humanoid.AutoRotate = not shiftLocked
-		humanoid.CameraOffset = Vector3.zero
-	end
-end
-
-connect(shiftLockButton.Activated,toggleShift)
-
-local function updateShift()
-	shiftLockButton.Position = UDim2.new(
-		math.clamp(config.ShiftX,.02,.98),
-		0,
-		math.clamp(config.ShiftY,.02,.98),
-		0
-	)
-
-	shiftLockButton.Size = UDim2.fromOffset(
-		math.clamp(config.ShiftSize,20,100),
-		math.clamp(config.ShiftSize,20,100)
-	)
-end
-
-local function moveSetting(dx,dy)
-	if targetSetting == "JUMP" then
-		config.JumpX = math.clamp(config.JumpX+dx,.05,.95)
-		config.JumpY = math.clamp(config.JumpY+dy,.05,.95)
-		updateJump()
-	else
-		config.ShiftX = math.clamp(config.ShiftX+dx,.02,.98)
-		config.ShiftY = math.clamp(config.ShiftY+dy,.02,.98)
-		updateShift()
-	end
-end
-
-local function changeTarget()
-	if targetSetting == "JUMP" then
-		targetSetting = "SHIFT"
-		targetButton.Text = "← ↑ ↓ →    PILIH SET : SHIFTLOCK"
-		targetButton.BackgroundColor3 = PURPLE
-	else
-		targetSetting = "JUMP"
-		targetButton.Text = "← ↑ ↓ →    PILIH SET : JUMP"
-		targetButton.BackgroundColor3 = BLUE
-	end
-end
-
-connect(targetButton.Activated,changeTarget)
-connect(upButton.Activated,function() moveSetting(0,-.018) end)
-connect(downButton.Activated,function() moveSetting(0,.018) end)
-connect(leftButton.Activated,function() moveSetting(-.018,0) end)
-connect(rightButton.Activated,function() moveSetting(.018,0) end)
-
-connect(sizePlus.Activated,function()
-	if targetSetting == "JUMP" then
-		config.JumpSize = math.clamp(config.JumpSize+.05,.05,.5)
-		updateJump()
-	else
-		config.ShiftSize = math.clamp(config.ShiftSize+5,20,100)
-		updateShift()
-	end
-end)
-
-connect(sizeMinus.Activated,function()
-	if targetSetting == "JUMP" then
-		config.JumpSize = math.clamp(config.JumpSize-.05,.05,.5)
-		updateJump()
-	else
-		config.ShiftSize = math.clamp(config.ShiftSize-5,20,100)
-		updateShift()
-	end
-end)
-
-connect(resetButton.Activated,function()
-	if targetSetting == "JUMP" then
-		config.JumpX = defaultConfig.JumpX
-		config.JumpY = defaultConfig.JumpY
-		config.JumpSize = defaultConfig.JumpSize
-		updateJump()
-	else
-		config.ShiftX = defaultConfig.ShiftX
-		config.ShiftY = defaultConfig.ShiftY
-		config.ShiftSize = defaultConfig.ShiftSize
-		updateShift()
-	end
-end)
-
-local function applySpeed()
-	if humanoid and humanoid.Parent then
-		humanoid.WalkSpeed = config.WalkSpeed
-	end
-	speedValue.Text = tostring(config.WalkSpeed)
-	speedLabel.Text = "SPEED : "..tostring(config.WalkSpeed)
-end
-
-connect(speedMinus.Activated,function()
-	config.WalkSpeed = math.clamp(config.WalkSpeed-1,1,200)
-	applySpeed()
-end)
-
-connect(speedPlus.Activated,function()
-	config.WalkSpeed = math.clamp(config.WalkSpeed+1,1,200)
-	applySpeed()
-end)
+local noteTitle = makeLabel(noteFrame,"NoteTitle",UDim2.new(1,-20,0,35),UDim2.fromOffset(10,5),"NOTE",20,30)
 
 local noteList = Instance.new("ScrollingFrame")
 noteList.Name = "NoteList"
-noteList.Size = UDim2.new(1,0,0,125)
-noteList.BackgroundColor3 = PANEL2
+noteList.Size = UDim2.new(0,130,1,-55)
+noteList.Position = UDim2.fromOffset(10,45)
+noteList.BackgroundColor3 = Color3.fromRGB(22,22,34)
 noteList.BorderSizePixel = 0
 noteList.ScrollBarThickness = 3
-noteList.Parent = notePage
-makeCorner(noteList,12)
-makeStroke(noteList)
+noteList.ZIndex = 30
+noteList.Parent = noteFrame
+
+round(noteList,10)
+addStroke(noteList,1.2)
 
 local noteLayout = Instance.new("UIListLayout")
 noteLayout.Padding = UDim.new(0,6)
@@ -687,791 +521,703 @@ noteLayout.Parent = noteList
 
 local noteEditor = Instance.new("TextBox")
 noteEditor.Name = "NoteEditor"
-noteEditor.Size = UDim2.new(1,0,0,180)
-noteEditor.BackgroundColor3 = PANEL2
+noteEditor.Size = UDim2.new(1,-155,0,230)
+noteEditor.Position = UDim2.fromOffset(145,45)
+noteEditor.BackgroundColor3 = Color3.fromRGB(22,22,34)
 noteEditor.BorderSizePixel = 0
+noteEditor.TextColor3 = Color3.new(1,1,1)
+noteEditor.PlaceholderText = "Tulis catatan..."
+noteEditor.PlaceholderColor3 = Color3.fromRGB(150,150,160)
 noteEditor.Text = ""
-noteEditor.PlaceholderText = "Tulis catatan di sini..."
-noteEditor.PlaceholderColor3 = Color3.fromRGB(120,120,140)
-noteEditor.TextColor3 = WHITE
+noteEditor.TextSize = 14
+noteEditor.Font = Enum.Font.Gotham
 noteEditor.TextXAlignment = Enum.TextXAlignment.Left
 noteEditor.TextYAlignment = Enum.TextYAlignment.Top
-noteEditor.TextWrapped = true
 noteEditor.MultiLine = true
 noteEditor.ClearTextOnFocus = false
-noteEditor.Font = Enum.Font.Gotham
-noteEditor.TextSize = 14
-noteEditor.Parent = notePage
-makeCorner(noteEditor,12)
-makeStroke(noteEditor)
+noteEditor.ZIndex = 30
+noteEditor.Parent = noteFrame
 
-local noteName = Instance.new("TextBox")
-noteName.Size = UDim2.new(1,-170,0,42)
-noteName.BackgroundColor3 = PANEL2
-noteName.BorderSizePixel = 0
-noteName.Text = "1"
-noteName.TextColor3 = WHITE
-noteName.PlaceholderText = "Nama file"
-noteName.Font = Enum.Font.Gotham
-noteName.TextSize = 14
-noteName.Parent = notePage
-makeCorner(noteName,10)
-makeStroke(noteName)
+round(noteEditor,10)
+addStroke(noteEditor,1.2)
+addGradient(noteEditor,0)
 
-local noteSave = makeButton(notePage,"SaveNote","SAVE FILE",UDim2.new(1,-155,0,0),UDim2.fromOffset(155,42))
+local noteSave = makeButton(noteFrame,"SaveNote",UDim2.fromOffset(100,38),UDim2.new(1,-255,1,-48),"SAVE",35)
+local noteNew = makeButton(noteFrame,"NewNote",UDim2.fromOffset(100,38),UDim2.new(1,-145,1,-48),"NEW",35)
+local noteCopy = makeButton(noteFrame,"CopyNote",UDim2.fromOffset(100,38),UDim2.new(1,-35,1,-48),"COPY",35)
 
-local function notePath(id)
-	return NOTE_FILE_PREFIX..tostring(id)..".txt"
-end
+local controlFrame = Instance.new("Frame")
+controlFrame.Name = "ControlFrame"
+controlFrame.Size = UDim2.new(1,-20,1,-20)
+controlFrame.Position = UDim2.fromOffset(10,10)
+controlFrame.BackgroundTransparency = 1
+controlFrame.Visible = false
+controlFrame.ZIndex = 25
+controlFrame.Parent = mainArea
 
-local function loadNote(id)
-	local text = ""
-	pcall(function()
-		if readfile and isfile and isfile(notePath(id)) then
-			text = readfile(notePath(id))
-		end
-	end)
-	noteEditor.Text = text
-end
+local controlTitle = makeLabel(controlFrame,"ControlTitle",UDim2.new(1,-20,0,35),UDim2.fromOffset(10,5),"CONTROL",20,30)
 
-local function refreshNotes()
-	for _,obj in ipairs(noteList:GetChildren()) do
-		if obj:IsA("TextButton") then
-			obj:Destroy()
-		end
-	end
-
-	local found = {}
-
-	pcall(function()
-		if listfiles then
-			for _,path in ipairs(listfiles("")) do
-				if string.find(path,NOTE_FILE_PREFIX,1,true) then
-					table.insert(found,path)
-				end
-			end
-		end
-	end)
-
-	table.sort(found)
-
-	for _,path in ipairs(found) do
-		local id = string.match(path,NOTE_FILE_PREFIX.."(.+)%.txt")
-		if id then
-			local b = makeButton(noteList,"Note_"..id,"FILE "..id,UDim2.fromOffset(0,0),UDim2.new(1,-6,0,36))
-			b.Parent = noteList
-			connect(b.Activated,function()
-				noteName.Text = id
-				loadNote(id)
-			end)
-		end
-	end
-
-	noteList.CanvasSize = UDim2.fromOffset(0,#found*42+8)
-end
-
-connect(noteSave.Activated,function()
-	local id = noteName.Text
-	if id == "" then
-		id = "1"
-	end
-
-	pcall(function()
-		if writefile then
-			writefile(notePath(id),noteEditor.Text)
-		end
-	end)
-
-	refreshNotes()
-end)
-
-local controllerSection = section(controlPage,210)
-
-label(controllerSection,"CONTROL",UDim2.fromOffset(16,12),UDim2.fromOffset(200,25))
-
-local controllerToggle = makeButton(
-	controllerSection,
-	"ControllerToggle",
+local controllerStatus = makeLabel(
+	controlFrame,
+	"ControllerStatus",
+	UDim2.new(1,-20,0,35),
+	UDim2.fromOffset(10,50),
 	"CONTROLLER : OFF",
-	UDim2.fromOffset(16,50),
-	UDim2.new(1,-32,0,50)
+	16,
+	30
 )
 
-controllerToggle.BackgroundColor3 = RED
-
-local airLabel = label(
-	controllerSection,
-	"SETTING AIR CONTROL : "..tostring(config.AirControl),
-	UDim2.fromOffset(16,115),
-	UDim2.new(1,-32,0,25)
+local controlToggle = makeButton(
+	controlFrame,
+	"ControlToggle",
+	UDim2.new(1,-20,0,45),
+	UDim2.fromOffset(10,90),
+	"OFF CONTROLLER W A S D",
+	30
 )
 
-local airMinus = makeButton(
-	controllerSection,
-	"AirMinus",
-	"-",
-	UDim2.fromOffset(16,150),
-	UDim2.fromOffset(65,40)
+local airLabel = makeLabel(
+	controlFrame,
+	"AirControl",
+	UDim2.new(1,-20,0,35),
+	UDim2.fromOffset(10,145),
+	"AIR CONTROL : 20",
+	16,
+	30
 )
 
-local airPlus = makeButton(
-	controllerSection,
-	"AirPlus",
-	"+",
-	UDim2.fromOffset(91,150),
-	UDim2.fromOffset(65,40)
-)
+local airMinus = makeButton(controlFrame,"AirMinus",UDim2.fromOffset(70,38),UDim2.fromOffset(10,185),"-",30)
+local airPlus = makeButton(controlFrame,"AirPlus",UDim2.fromOffset(70,38),UDim2.fromOffset(90,185),"+",30)
 
-local airReset = makeButton(
-	controllerSection,
-	"AirReset",
-	"RESET",
-	UDim2.fromOffset(166,150),
-	UDim2.fromOffset(90,40)
-)
+local playerFrame = Instance.new("Frame")
+playerFrame.Name = "PlayerFrame"
+playerFrame.Size = UDim2.new(1,-20,1,-20)
+playerFrame.Position = UDim2.fromOffset(10,10)
+playerFrame.BackgroundTransparency = 1
+playerFrame.Visible = false
+playerFrame.ZIndex = 25
+playerFrame.Parent = mainArea
 
-local function updateControllerButton()
-	if controllerEnabled then
-		controllerToggle.Text = "CONTROLLER : ON"
-		controllerToggle.BackgroundColor3 = GREEN
-	else
-		controllerToggle.Text = "CONTROLLER : OFF"
-		controllerToggle.BackgroundColor3 = RED
-	end
-end
-
-connect(controllerToggle.Activated,function()
-	controllerEnabled = not controllerEnabled
-	config.ControllerEnabled = controllerEnabled
-	updateControllerButton()
-end)
-
-connect(airMinus.Activated,function()
-	config.AirControl = math.clamp(config.AirControl-1,0,100)
-	airLabel.Text = "SETTING AIR CONTROL : "..tostring(config.AirControl)
-end)
-
-connect(airPlus.Activated,function()
-	config.AirControl = math.clamp(config.AirControl+1,0,100)
-	airLabel.Text = "SETTING AIR CONTROL : "..tostring(config.AirControl)
-end)
-
-connect(airReset.Activated,function()
-	config.AirControl = defaultConfig.AirControl
-	airLabel.Text = "SETTING AIR CONTROL : "..tostring(config.AirControl)
-end)
+local playerTitle = makeLabel(playerFrame,"PlayerTitle",UDim2.new(1,-20,0,35),UDim2.fromOffset(10,5),"PLAYER / SPECTATE",20,30)
 
 local playerList = Instance.new("ScrollingFrame")
 playerList.Name = "PlayerList"
-playerList.Size = UDim2.new(1,0,1,0)
-playerList.BackgroundTransparency = 1
+playerList.Size = UDim2.new(1,-20,1,-55)
+playerList.Position = UDim2.fromOffset(10,45)
+playerList.BackgroundColor3 = Color3.fromRGB(22,22,34)
 playerList.BorderSizePixel = 0
-playerList.ScrollBarThickness = 4
-playerList.Parent = playerPage
+playerList.ScrollBarThickness = 3
+playerList.ZIndex = 30
+playerList.Parent = playerFrame
+
+round(playerList,10)
+addStroke(playerList,1.2)
 
 local playerLayout = Instance.new("UIListLayout")
-playerLayout.Padding = UDim.new(0,8)
+playerLayout.Padding = UDim.new(0,6)
 playerLayout.Parent = playerList
 
-local stopSpectate = makeButton(
-	playerPage,
-	"StopSpectate",
-	"STOP SPECTATE",
-	UDim2.new(1,-170,0,0),
-	UDim2.fromOffset(170,40)
-)
-
-stopSpectate.Visible = false
-
-local function stopSpectating()
-	spectating = nil
-	stopSpectate.Visible = false
-
-	local camera = workspace.CurrentCamera
-	if camera then
-		camera.CameraType = Enum.CameraType.Custom
-		if humanoid then
-			camera.CameraSubject = humanoid
-		end
-	end
+local function setMainPage(page)
+	mainFrame.Visible = page == "MAIN"
+	noteFrame.Visible = page == "NOTE"
+	controlFrame.Visible = page == "CONTROL"
+	playerFrame.Visible = page == "PLAYER"
 end
 
-connect(stopSpectate.Activated,stopSpectating)
-
-local function refreshPlayers()
-	for _,obj in ipairs(playerList:GetChildren()) do
-		if obj:IsA("TextButton") then
-			obj:Destroy()
-		end
-	end
-
-	for _,plr in ipairs(Players:GetPlayers()) do
-		local b = makeButton(
-			playerList,
-			"Player_"..plr.UserId,
-			plr.Name.."  |  "..plr.DisplayName,
-			UDim2.fromOffset(0,0),
-			UDim2.new(1,-6,0,44)
-		)
-
-		b.Parent = playerList
-
-		connect(b.Activated,function()
-			if plr.Character then
-				local targetHumanoid = plr.Character:FindFirstChildOfClass("Humanoid")
-				local camera = workspace.CurrentCamera
-
-				if targetHumanoid and camera then
-					spectating = plr
-					camera.CameraType = Enum.CameraType.Custom
-					camera.CameraSubject = targetHumanoid
-					stopSpectate.Visible = true
-				end
-			end
-		end)
-	end
-
-	playerList.CanvasSize = UDim2.fromOffset(0,#Players:GetPlayers()*52+20)
-end
-
-local settingInfo = section(settingPage,190)
-
-label(settingInfo,"SETTING",UDim2.fromOffset(16,12),UDim2.fromOffset(200,25))
-
-local sensitivityLabel = label(
-	settingInfo,
-	"SENSITIVITY : "..string.format("%.1f",config.Sensitivity).."x",
-	UDim2.fromOffset(16,52),
-	UDim2.new(1,-32,0,25)
-)
-
-local sensitivityMinus = makeButton(settingInfo,"SensitivityMinus","-",UDim2.fromOffset(16,90),UDim2.fromOffset(65,42))
-local sensitivityReset = makeButton(settingInfo,"SensitivityReset","RESET",UDim2.fromOffset(91,90),UDim2.fromOffset(90,42))
-local sensitivityPlus = makeButton(settingInfo,"SensitivityPlus","+",UDim2.fromOffset(187,90),UDim2.fromOffset(65,42))
-
-local saveAll = makeButton(
-	settingPage,
-	"SaveAll",
-	"SAVE CONFIG",
-	UDim2.fromOffset(0,0),
-	UDim2.new(1,0,0,45)
-)
-
-local function applySensitivity()
-	sensitivityLabel.Text = "SENSITIVITY : "..string.format("%.1f",config.Sensitivity).."x"
-
-	pcall(function()
-		UserSettings().GameSettings.MouseSensitivity = config.Sensitivity
-	end)
-end
-
-connect(sensitivityMinus.Activated,function()
-	config.Sensitivity = math.clamp(config.Sensitivity-.1,.1,10)
-	applySensitivity()
+connect(mainButton.Activated,function()
+	setMainPage("MAIN")
 end)
 
-connect(sensitivityPlus.Activated,function()
-	config.Sensitivity = math.clamp(config.Sensitivity+.1,.1,10)
-	applySensitivity()
+connect(noteButton.Activated,function()
+	setMainPage("NOTE")
 end)
 
-connect(sensitivityReset.Activated,function()
-	config.Sensitivity = 1
-	applySensitivity()
+connect(controlButton.Activated,function()
+	setMainPage("CONTROL")
 end)
 
-connect(saveAll.Activated,function()
-	saveConfig()
-	saveAll.Text = "SAVED!"
-	task.delay(1,function()
-		if saveAll.Parent then
-			saveAll.Text = "SAVE CONFIG"
-		end
-	end)
+connect(playerButton.Activated,function()
+	setMainPage("PLAYER")
 end)
-
-local menuButtons = {}
-
-local function createMenuButton(name,text,page)
-	local b = makeButton(
-		menuScroll,
-		name,
-		text,
-		UDim2.fromOffset(0,0),
-		UDim2.new(1,-4,0,48)
-	)
-
-	b.LayoutOrder = #menuButtons+1
-	b.Parent = menuScroll
-
-	table.insert(menuButtons,{button=b,page=page,name=name})
-
-	connect(b.Activated,function()
-		currentPage = page
-
-		for _,data in ipairs(menuButtons) do
-			data.button.BackgroundColor3 = BUTTON
-		end
-
-		b.BackgroundColor3 = PURPLE
-
-		for name2,frame in pairs(pages) do
-			frame.Visible = name2 == page
-		end
-
-		pageTitle.Text = page
-	end)
-
-	return b
-end
-
-local mainMenuButton = createMenuButton("MainButton","MAIN","MAIN")
-createMenuButton("NoteButton","NOTE","NOTE")
-createMenuButton("ControlButton","CONTROL","CONTROL")
-createMenuButton("PlayerButton","PLAYER","PLAYER")
-createMenuButton("SettingButton","SETTING","SETTING")
-
-mainMenuButton.BackgroundColor3 = PURPLE
-
-local closeButton = makeButton(
-	menuScroll,
-	"CloseButton",
-	"CLOSE",
-	UDim2.fromOffset(0,0),
-	UDim2.new(1,-4,0,48)
-)
-
-closeButton.LayoutOrder = 99
-
-local function setMenuVisible(state)
-	header.Visible = state
-	menuFrame.Visible = state
-
-	if state then
-		openButton.Text = "×"
-	else
-		openButton.Text = "☰"
-	end
-end
 
 connect(openButton.Activated,function()
-	setMenuVisible(not menuFrame.Visible)
+	menu.Visible = not menu.Visible
 end)
 
-connect(closeButton.Activated,function()
-	setMenuVisible(false)
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid")
+
+local function applyCharacterSettings()
+	if not humanoid then return end
+	humanoid.WalkSpeed = config.WalkSpeed
+	pcall(function()
+		humanoid.JumpPower = config.JumpPower
+	end)
+end
+
+local function saveConfig()
+	pcall(function()
+		if writefile then
+			writefile(CONFIG_FILE,HttpService:JSONEncode(config))
+		end
+	end)
+end
+
+connect(walkMinus.Activated,function()
+	config.WalkSpeed = math.max(1,config.WalkSpeed-1)
+	applyCharacterSettings()
+	walkSpeedLabel.Text = "WALK SPEED : "..config.WalkSpeed
+	headerLabel.Text = "👾 AldoVz | PING : 0 | FPS : 0 | CHECK : 0 | SPEED : "..config.WalkSpeed
+	saveConfig()
 end)
 
-local controllerGui = Instance.new("ScreenGui")
-controllerGui.Name = "AldoVzController"
-controllerGui.ResetOnSpawn = false
-controllerGui.IgnoreGuiInset = true
-controllerGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-controllerGui.DisplayOrder = 999998
-controllerGui.Enabled = false
-controllerGui.Parent = playerGui
+connect(walkPlus.Activated,function()
+	config.WalkSpeed += 1
+	applyCharacterSettings()
+	walkSpeedLabel.Text = "WALK SPEED : "..config.WalkSpeed
+	headerLabel.Text = "👾 AldoVz | PING : 0 | FPS : 0 | CHECK : 0 | SPEED : "..config.WalkSpeed
+	saveConfig()
+end)
+
+local shiftLocked = false
+
+local shiftButton = Instance.new("ImageButton")
+shiftButton.Name = "ShiftLockButton"
+shiftButton.AnchorPoint = Vector2.new(.5,.5)
+shiftButton.Position = UDim2.new(config.ShiftX,0,config.ShiftY,0)
+shiftButton.Size = UDim2.fromOffset(config.ShiftSize,config.ShiftSize)
+shiftButton.Image = "rbxassetid://6031068426"
+shiftButton.ImageColor3 = Color3.new(1,1,1)
+shiftButton.BackgroundColor3 = Color3.new(1,1,1)
+shiftButton.BackgroundTransparency = .2
+shiftButton.AutoButtonColor = false
+shiftButton.Visible = true
+shiftButton.ZIndex = 100
+shiftButton.Parent = screenGui
+
+round(shiftButton,999)
+addStroke(shiftButton,1.5)
+
+local crosshair = Instance.new("Frame")
+crosshair.Name = "Crosshair"
+crosshair.Size = UDim2.fromOffset(6,6)
+crosshair.Position = UDim2.new(.5,-3,.5,-3)
+crosshair.BackgroundColor3 = Color3.new(1,1,1)
+crosshair.BorderSizePixel = 0
+crosshair.Visible = false
+crosshair.ZIndex = 110
+crosshair.Parent = screenGui
+
+round(crosshair,999)
+
+local function toggleShiftLock()
+	shiftLocked = not shiftLocked
+
+	crosshair.Visible = shiftLocked
+
+	if humanoid then
+		humanoid.AutoRotate = not shiftLocked
+	end
+
+	if shiftLocked then
+		shiftButton.BackgroundColor3 = Color3.fromRGB(170,0,255)
+	else
+		shiftButton.BackgroundColor3 = Color3.new(1,1,1)
+	end
+end
+
+connect(shiftButton.Activated,toggleShiftLock)
+
+connect(shiftSetting.Activated,function()
+	targetSettingMode = "SHIFT"
+	targetLabel.Text = "PILIH SET : SHIFTLOCK"
+	targetButton.Text = "SHIFTLOCK"
+	setMainPage("MAIN")
+end)
+
+connect(jumpSetting.Activated,function()
+	targetSettingMode = "JUMP"
+	targetLabel.Text = "PILIH SET : JUMP"
+	targetButton.Text = "JUMP"
+	setMainPage("MAIN")
+end)
+
+local targetSettingMode = "JUMP"
+
+connect(targetButton.Activated,function()
+	if targetSettingMode == "JUMP" then
+		targetSettingMode = "SHIFT"
+		targetLabel.Text = "PILIH SET : SHIFTLOCK"
+		targetButton.Text = "SHIFTLOCK"
+	else
+		targetSettingMode = "JUMP"
+		targetLabel.Text = "PILIH SET : JUMP"
+		targetButton.Text = "JUMP"
+	end
+end)
+
+local step = .02
+
+local function updateJumpButton()
+	local touchGui = playerGui:FindFirstChild("TouchGui")
+	if not touchGui then return end
+
+	local jump = touchGui:FindFirstChild("JumpButton",true)
+	local camera = workspace.CurrentCamera
+
+	if not jump or not camera then return end
+
+	local size = math.max(40,math.floor(camera.ViewportSize.Y * config.JumpSize))
+
+	pcall(function()
+		jump.AnchorPoint = Vector2.new(.5,.5)
+		jump.Position = UDim2.new(config.JumpX,0,config.JumpY,0)
+		jump.Size = UDim2.fromOffset(size,size)
+	end)
+end
+
+local function updateShiftButton()
+	shiftButton.Position = UDim2.new(config.ShiftX,0,config.ShiftY,0)
+	shiftButton.Size = UDim2.fromOffset(config.ShiftSize,config.ShiftSize)
+end
+
+local function settingMove(dx,dy)
+	if targetSettingMode == "JUMP" then
+		config.JumpX = math.clamp(config.JumpX+dx,.05,.95)
+		config.JumpY = math.clamp(config.JumpY+dy,.05,.95)
+		updateJumpButton()
+	else
+		config.ShiftX = math.clamp(config.ShiftX+dx,.02,.98)
+		config.ShiftY = math.clamp(config.ShiftY+dy,.02,.98)
+		updateShiftButton()
+	end
+	saveConfig()
+end
+
+connect(leftButton.Activated,function()
+	settingMove(-step,0)
+end)
+
+connect(rightButton.Activated,function()
+	settingMove(step,0)
+end)
+
+connect(upButton.Activated,function()
+	settingMove(0,-step)
+end)
+
+connect(downButton.Activated,function()
+	settingMove(0,step)
+end)
+
+connect(sizePlus.Activated,function()
+	if targetSettingMode == "JUMP" then
+		config.JumpSize = math.clamp(config.JumpSize+.05,.05,.5)
+	else
+		config.ShiftSize = math.clamp(config.ShiftSize+5,20,100)
+	end
+	updateJumpButton()
+	updateShiftButton()
+	saveConfig()
+end)
+
+connect(sizeMinus.Activated,function()
+	if targetSettingMode == "JUMP" then
+		config.JumpSize = math.clamp(config.JumpSize-.05,.05,.5)
+	else
+		config.ShiftSize = math.clamp(config.ShiftSize-5,20,100)
+	end
+	updateJumpButton()
+	updateShiftButton()
+	saveConfig()
+end)
+
+connect(resetButton.Activated,function()
+	if targetSettingMode == "JUMP" then
+		config.JumpX = defaultConfig.JumpX
+		config.JumpY = defaultConfig.JumpY
+		config.JumpSize = defaultConfig.JumpSize
+	else
+		config.ShiftX = defaultConfig.ShiftX
+		config.ShiftY = defaultConfig.ShiftY
+		config.ShiftSize = defaultConfig.ShiftSize
+	end
+
+	updateJumpButton()
+	updateShiftButton()
+	saveConfig()
+end)
 
 local controllerFrame = Instance.new("Frame")
 controllerFrame.Name = "ControllerFrame"
+controllerFrame.Size = UDim2.fromOffset(310,310)
 controllerFrame.Position = UDim2.new(0,18,1,-330)
-controllerFrame.Size = UDim2.fromOffset(300,300)
 controllerFrame.BackgroundTransparency = 1
-controllerFrame.Parent = controllerGui
+controllerFrame.Visible = false
+controllerFrame.ZIndex = 70
+controllerFrame.Parent = screenGui
+
+round(controllerFrame,18)
+addStroke(controllerFrame,1.5)
+
+local movement = {
+	W = false,
+	A = false,
+	S = false,
+	D = false
+}
 
 local function controllerButton(name,text,pos)
 	local b = Instance.new("TextButton")
 	b.Name = name
-	b.Text = text
+	b.Size = UDim2.fromOffset(82,82)
 	b.Position = pos
-	b.Size = UDim2.fromScale(.34,.34)
-	b.BackgroundColor3 = WHITE
-	b.BackgroundTransparency = .12
+	b.BackgroundColor3 = Color3.new(1,1,1)
+	b.BackgroundTransparency = .15
+	b.BorderSizePixel = 0
+	b.Text = text
 	b.TextColor3 = Color3.fromRGB(20,20,25)
 	b.Font = Enum.Font.GothamBold
 	b.TextSize = 28
 	b.AutoButtonColor = false
-	b.Active = true
-	b.Selectable = false
-	b.BorderSizePixel = 0
+	b.ZIndex = 80
 	b.Parent = controllerFrame
-	makeCorner(b,14)
+
+	round(b,16)
+	addStroke(b,1.5)
+
 	return b
 end
 
-local btnUp = controllerButton("Up","▲",UDim2.new(.33,0,0,0))
-local btnDown = controllerButton("Down","▼",UDim2.new(.33,0,.66,0))
-local btnLeft = controllerButton("Left","◀",UDim2.new(0,0,.33,0))
-local btnRight = controllerButton("Right","▶",UDim2.new(.66,0,.33,0))
+local btnW = controllerButton("W","▲",UDim2.fromOffset(114,10))
+local btnA = controllerButton("A","◀",UDim2.fromOffset(20,104))
+local btnS = controllerButton("S","▼",UDim2.fromOffset(114,104))
+local btnD = controllerButton("D","▶",UDim2.fromOffset(208,104))
 
-local wLock = Instance.new("TextButton")
-wLock.Name = "WLock"
-wLock.AnchorPoint = Vector2.new(.5,.5)
-wLock.Position = UDim2.new(1,42,.5,0)
-wLock.Size = UDim2.fromOffset(62,62)
-wLock.Text = "W"
-wLock.BackgroundColor3 = RED
-wLock.BackgroundTransparency = .1
-wLock.TextColor3 = WHITE
-wLock.Font = Enum.Font.GothamBold
-wLock.TextSize = 25
-wLock.AutoButtonColor = false
-wLock.Active = true
-wLock.Selectable = false
-wLock.BorderSizePixel = 0
-wLock.Parent = controllerFrame
-makeCorner(wLock,99)
+local wLock = controllerButton("WLock","W",UDim2.fromOffset(114,198))
+wLock.Size = UDim2.fromOffset(82,82)
+
+local function bindController(button,key)
+	connect(button.InputBegan,function(input)
+		local t = input.UserInputType
+		if t ~= Enum.UserInputType.Touch and t ~= Enum.UserInputType.MouseButton1 then return end
+		movement[key] = true
+		button.BackgroundColor3 = Color3.fromRGB(70,150,255)
+	end)
+
+	connect(button.InputEnded,function(input)
+		local t = input.UserInputType
+		if t ~= Enum.UserInputType.Touch and t ~= Enum.UserInputType.MouseButton1 then return end
+		movement[key] = false
+		button.BackgroundColor3 = Color3.new(1,1,1)
+	end)
+end
+
+bindController(btnW,"W")
+bindController(btnA,"A")
+bindController(btnS,"S")
+bindController(btnD,"D")
 
 local wLockEnabled = false
 
 connect(wLock.Activated,function()
 	wLockEnabled = not wLockEnabled
-
-	if wLockEnabled then
-		wLock.BackgroundColor3 = GREEN
-	else
-		wLock.BackgroundColor3 = RED
-	end
 end)
 
-local function setControllerDirection(direction,state)
-	controllerState[direction] = state
+connect(controlToggle.Activated,function()
+	config.ControllerEnabled = not config.ControllerEnabled
+	controllerFrame.Visible = config.ControllerEnabled
 
-	local button =
-		direction == "Forward" and btnUp or
-		direction == "Backward" and btnDown or
-		direction == "Left" and btnLeft or
-		btnRight
-
-	if state then
-		button.BackgroundColor3 = Color3.fromRGB(70,150,255)
+	if config.ControllerEnabled then
+		controlToggle.Text = "ON CONTROLLER W A S D"
+		controllerStatus.Text = "CONTROLLER : ON"
 	else
-		button.BackgroundColor3 = WHITE
-	end
-end
+		controlToggle.Text = "OFF CONTROLLER W A S D"
+		controllerStatus.Text = "CONTROLLER : OFF"
 
-local function releaseInput(input)
-	local data = activeTouches[input]
-	if not data then
-		return
+		for k in pairs(movement) do
+			movement[k] = false
+		end
 	end
 
-	activeTouches[input] = nil
-	setControllerDirection(data.direction,false)
-end
-
-local function bindController(button,direction)
-	connect(button.InputBegan,function(input)
-		if not controllerEnabled then
-			return
-		end
-
-		local t = input.UserInputType
-
-		if t ~= Enum.UserInputType.Touch and t ~= Enum.UserInputType.MouseButton1 then
-			return
-		end
-
-		if activeTouches[input] then
-			return
-		end
-
-		activeTouches[input] = {
-			direction = direction
-		}
-
-		setControllerDirection(direction,true)
-	end)
-
-	connect(button.InputEnded,function(input)
-		releaseInput(input)
-	end)
-end
-
-bindController(btnUp,"Forward")
-bindController(btnDown,"Backward")
-bindController(btnLeft,"Left")
-bindController(btnRight,"Right")
-
-connect(UserInputService.InputEnded,function(input)
-	releaseInput(input)
+	saveConfig()
 end)
 
-local cachedForward = Vector3.new(0,0,-1)
-local cachedRight = Vector3.new(1,0,0)
+connect(controllerButton.Activated,function()
+	config.ControllerEnabled = not config.ControllerEnabled
+	controllerFrame.Visible = config.ControllerEnabled
 
-local function updateCameraVectors()
-	local camera = workspace.CurrentCamera
-	if not camera then
-		return
+	if config.ControllerEnabled then
+		controllerButton.Text = "CONTROLLER : ON"
+	else
+		controllerButton.Text = "CONTROLLER : OFF"
 	end
 
-	local look = camera.CFrame.LookVector
-	local right = camera.CFrame.RightVector
+	saveConfig()
+end)
 
-	local forward = Vector3.new(look.X,0,look.Z)
-	local side = Vector3.new(right.X,0,right.Z)
+local airControl = 20
 
-	if forward.Magnitude > .001 then
-		cachedForward = forward.Unit
-	end
+connect(airMinus.Activated,function()
+	airControl = math.max(0,airControl-1)
+	airLabel.Text = "AIR CONTROL : "..airControl
+end)
 
-	if side.Magnitude > .001 then
-		cachedRight = side.Unit
-	end
+connect(airPlus.Activated,function()
+	airControl += 1
+	airLabel.Text = "AIR CONTROL : "..airControl
+end)
+
+local notes = {}
+local currentNote = 1
+
+local function noteFile(index)
+	return "AldoVz_Note_"..index..".txt"
 end
 
-local smoothX = 0
-local smoothZ = 0
+local function loadNote(index)
+	local file = noteFile(index)
 
-local function getControllerMove()
-	local x = 0
-	local z = 0
+	pcall(function()
+		if isfile and readfile and isfile(file) then
+			notes[index] = readfile(file)
+		end
+	end)
 
-	if controllerState.Forward then
-		z += 1
-	end
-
-	if controllerState.Backward then
-		z -= 1
-	end
-
-	if controllerState.Left then
-		x -= 1
-	end
-
-	if controllerState.Right then
-		x += 1
-	end
-
-	if x == 0 and z == 0 and wLockEnabled then
-		z = 1
-	end
-
-	local targetX = x
-	local targetZ = z
-
-	local speed = .95
-
-	smoothX += (targetX-smoothX)*speed
-	smoothZ += (targetZ-smoothZ)*speed
-
-	if not controllerEnabled then
-		smoothX = 0
-		smoothZ = 0
-		return Vector3.zero
-	end
-
-	if math.abs(smoothX) < .005 then
-		smoothX = 0
-	end
-
-	if math.abs(smoothZ) < .005 then
-		smoothZ = 0
-	end
-
-	if smoothX == 0 and smoothZ == 0 then
-		return Vector3.zero
-	end
-
-	local movement = cachedRight*smoothX + cachedForward*smoothZ
-
-	if movement.Magnitude <= .001 then
-		return Vector3.zero
-	end
-
-	return movement.Unit
+	noteEditor.Text = notes[index] or ""
+	currentNote = index
 end
 
-local function updateControllerVisibility()
-	controllerGui.Enabled = controllerEnabled
+local function saveNote(index)
+	notes[index] = noteEditor.Text
 
-	if not controllerEnabled then
-		controllerState.Forward = false
-		controllerState.Backward = false
-		controllerState.Left = false
-		controllerState.Right = false
-		activeTouches = {}
-		smoothX = 0
-		smoothZ = 0
-
-		btnUp.BackgroundColor3 = WHITE
-		btnDown.BackgroundColor3 = WHITE
-		btnLeft.BackgroundColor3 = WHITE
-		btnRight.BackgroundColor3 = WHITE
-	end
+	pcall(function()
+		if writefile then
+			writefile(noteFile(index),noteEditor.Text)
+		end
+	end)
 end
 
-updateControllerButton()
-updateControllerVisibility()
-
-local frameTime = 0
-local frames = 0
-local fps = 0
-
-connect(RunService.RenderStepped,function(dt)
-	if destroyed then
-		return
+local function refreshNotes()
+	for _,child in ipairs(noteList:GetChildren()) do
+		if child:IsA("TextButton") then
+			child:Destroy()
+		end
 	end
 
-	frameTime += dt
-	frames += 1
+	local count = math.max(1,#notes)
 
-	if frameTime >= 1 then
-		fps = math.floor(frames/frameTime)
-		frames = 0
-		frameTime = 0
-		fpsLabel.Text = "FPS : "..tostring(fps)
+	for i = 1,count do
+		local b = makeButton(
+			noteList,
+			"Note"..i,
+			UDim2.new(1,-10,0,38),
+			UDim2.new(),
+			"NOTE "..i,
+			40
+		)
+
+		b.LayoutOrder = i
+
+		connect(b.Activated,function()
+			loadNote(i)
+		end)
 	end
 
+	noteList.CanvasSize = UDim2.new(0,0,0,count*44+20)
+end
+
+connect(noteNew.Activated,function()
+	local index = #notes+1
+	notes[index] = ""
+	refreshNotes()
+	loadNote(index)
+end)
+
+connect(noteSave.Activated,function()
+	saveNote(currentNote)
+end)
+
+connect(noteCopy.Activated,function()
+	pcall(function()
+		if setclipboard then
+			setclipboard(noteEditor.Text)
+		end
+	end)
+end)
+
+refreshNotes()
+loadNote(1)
+
+local function refreshPlayers()
+	for _,child in ipairs(playerList:GetChildren()) do
+		if child:IsA("TextButton") then
+			child:Destroy()
+		end
+	end
+
+	for _,target in ipairs(Players:GetPlayers()) do
+		if target ~= player then
+			local b = makeButton(
+				playerList,
+				target.Name,
+				UDim2.new(1,-10,0,42),
+				UDim2.new(),
+				target.Name,
+				40
+			)
+
+			b.LayoutOrder = #playerList:GetChildren()
+
+			connect(b.Activated,function()
+				local targetCharacter = target.Character
+				local targetHumanoid = targetCharacter and targetCharacter:FindFirstChildOfClass("Humanoid")
+
+				if targetHumanoid then
+					workspace.CurrentCamera.CameraSubject = targetHumanoid
+				end
+			end)
+		end
+	end
+
+	playerList.CanvasSize = UDim2.new(0,0,0,#Players:GetPlayers()*48+20)
+end
+
+connect(Players.PlayerAdded,refreshPlayers)
+connect(Players.PlayerRemoving,refreshPlayers)
+
+refreshPlayers()
+
+local function getPing()
 	local ping = 0
 
 	pcall(function()
-		if player.GetNetworkPing then
-			ping = math.floor(player:GetNetworkPing()*1000)
+		local network = Stats.Network
+		local serverStats = network.ServerStatsItem
+		local dataPing = serverStats["Data Ping"]
+		if dataPing then
+			ping = math.floor(dataPing:GetValue())
 		end
 	end)
 
-	pingLabel.Text = "PING : "..tostring(ping)
+	return ping
+end
 
-	if not character or not character.Parent then
-		return
+local fpsTime = os.clock()
+local fpsFrames = 0
+local fps = 0
+
+connect(RunService.RenderStepped,function(dt)
+	if destroyed then return end
+
+	fpsFrames += 1
+
+	if os.clock()-fpsTime >= 1 then
+		fps = fpsFrames
+		fpsFrames = 0
+		fpsTime = os.clock()
 	end
 
-	if not humanoid or humanoid.Health <= 0 then
-		return
-	end
+	local ping = getPing()
 
-	updateCameraVectors()
+	headerLabel.Text =
+		"👾 AldoVz | PING : "..ping..
+		" | FPS : "..fps..
+		" | CHECK : 0 | SPEED : "..config.WalkSpeed
 
-	local movement = getControllerMove()
+	if humanoid and humanoid.Parent then
+		humanoid.WalkSpeed = config.WalkSpeed
 
-	local state = humanoid:GetState()
-	local airborne =
-		state == Enum.HumanoidStateType.Freefall or
-		state == Enum.HumanoidStateType.Jumping or
-		state == Enum.HumanoidStateType.FallingDown
-
-	if movement.Magnitude > 0 then
-		if airborne then
-			local airMultiplier = math.clamp(config.AirControl/20,0,5)
-			humanoid:Move(movement*airMultiplier,false)
-		else
-			humanoid:Move(movement,false)
-		end
-	elseif controllerEnabled then
-		humanoid:Move(Vector3.zero,false)
-	end
-
-	humanoid.WalkSpeed = config.WalkSpeed
-
-	if shiftLocked then
 		local camera = workspace.CurrentCamera
-		local root = character:FindFirstChild("HumanoidRootPart")
 
-		if camera and root then
-			local _,y = camera.CFrame:ToOrientation()
-			root.CFrame = CFrame.new(root.Position)*CFrame.Angles(0,y,0)
+		local x = 0
+		local z = 0
+
+		if config.ControllerEnabled then
+			if movement.W then z += 1 end
+			if movement.S then z -= 1 end
+			if movement.A then x -= 1 end
+			if movement.D then x += 1 end
+
+			if x == 0 and z == 0 and wLockEnabled then
+				z = 1
+			end
 		end
 
-		humanoid.AutoRotate = false
-	else
-		humanoid.AutoRotate = true
+		if camera and (x ~= 0 or z ~= 0) then
+			local forward = Vector3.new(camera.CFrame.LookVector.X,0,camera.CFrame.LookVector.Z)
+			local right = Vector3.new(camera.CFrame.RightVector.X,0,camera.CFrame.RightVector.Z)
+
+			if forward.Magnitude > .001 then
+				forward = forward.Unit
+			end
+
+			if right.Magnitude > .001 then
+				right = right.Unit
+			end
+
+			local move = right*x + forward*z
+
+			if move.Magnitude > .001 then
+				local control = humanoid.FloorMaterial == Enum.Material.Air and math.clamp(airControl/20,0,1) or 1
+				humanoid:Move(move.Unit*control,false)
+			end
+		elseif config.ControllerEnabled and humanoid.FloorMaterial == Enum.Material.Air and airControl > 0 then
+			humanoid:Move(Vector3.zero,false)
+		end
+
+		if shiftLocked and camera then
+			local root = character:FindFirstChild("HumanoidRootPart")
+
+			if root then
+				local _,y = camera.CFrame:ToOrientation()
+				root.CFrame = CFrame.new(root.Position)*CFrame.Angles(0,y,0)
+			end
+
+			humanoid.AutoRotate = false
+		else
+			humanoid.AutoRotate = true
+		end
 	end
-
-	humanoid.CameraOffset = Vector3.zero
-end)
-
-connect(RunService.RenderStepped,function()
-	if destroyed then
-		return
-	end
-
-	updateJump()
 end)
 
 connect(player.CharacterAdded,function(newCharacter)
-	if destroyed then
-		return
-	end
-
 	character = newCharacter
 	humanoid = newCharacter:WaitForChild("Humanoid",10)
 
-	smoothX = 0
-	smoothZ = 0
-	activeTouches = {}
-
 	if humanoid then
-		humanoid.WalkSpeed = config.WalkSpeed
+		applyCharacterSettings()
 		humanoid.AutoRotate = not shiftLocked
-		humanoid.CameraOffset = Vector3.zero
 	end
 
-	task.delay(.5,function()
-		if not destroyed then
-			jumpObject = nil
-			updateJump()
-		end
-	end)
+	task.wait(.5)
+	updateJumpButton()
 end)
 
 connect(playerGui.ChildAdded,function(child)
 	if child.Name == "TouchGui" then
-		jumpObject = nil
-		task.delay(.2,function()
-			if not destroyed then
-				updateJump()
-			end
-		end)
+		task.wait(.2)
+		updateJumpButton()
 	end
 end)
 
-connect(Players.PlayerAdded,function()
-	if currentPage == "PLAYER" then
-		task.delay(.1,refreshPlayers)
-	end
-end)
-
-connect(Players.PlayerRemoving,function()
-	if currentPage == "PLAYER" then
-		task.delay(.1,refreshPlayers)
-	end
-
-	if spectating then
-		if spectating == player then
-			stopSpectating()
-		end
-	end
-end)
-
-applySpeed()
-applySensitivity()
-updateShift()
+applyCharacterSettings()
+updateJumpButton()
 updateShiftButton()
-updateJump()
-refreshNotes()
-refreshPlayers()
 
-pages.MAIN.Visible = true
-pages.NOTE.Visible = false
-pages.CONTROL.Visible = false
-pages.PLAYER.Visible = false
-pages.SETTING.Visible = false
+controllerFrame.Visible = config.ControllerEnabled
+controllerButton.Text = config.ControllerEnabled and "CONTROLLER : ON" or "CONTROLLER : OFF"
+controlToggle.Text = config.ControllerEnabled and "ON CONTROLLER W A S D" or "OFF CONTROLLER W A S D"
+controllerStatus.Text = config.ControllerEnabled and "CONTROLLER : ON" or "CONTROLLER : OFF"
 
-task.spawn(function()
-	while not destroyed do
-		task.wait(.15)
+setMainPage("MAIN")
 
-		if controllerEnabled ~= config.ControllerEnabled then
-			controllerEnabled = config.ControllerEnabled
-		end
+_G.AldoVzPremiumCleanup = function()
+	if destroyed then return end
+	destroyed = true
+	disconnectAll()
 
-		updateControllerVisibility()
-
-		if humanoid and humanoid.Parent then
-			humanoid.WalkSpeed = config.WalkSpeed
-		end
-	end
-end)
-
-setMenuVisible(false)
+	pcall(function()
+		screenGui:Destroy()
+	end)
+end
