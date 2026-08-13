@@ -367,35 +367,19 @@ padding.PaddingTop=UDim.new(0,10)
 padding.PaddingBottom=UDim.new(0,10)
 padding.Parent=content
 
+local menuTransparency={}
+local menuTransparencyCaptured=false
 local function captureTransparency()
-    local values={}
+    if menuTransparencyCaptured then return end
+    menuTransparency={}
     for _,obj in ipairs(mainFrame:GetDescendants()) do
         if obj:IsA("GuiObject") then
-            values[obj]={background=obj.BackgroundTransparency,text=(obj:IsA("TextLabel") or obj:IsA("TextButton")) and obj.TextTransparency or nil}
+            menuTransparency[obj]={background=obj.BackgroundTransparency,text=(obj:IsA("TextLabel") or obj:IsA("TextButton")) and obj.TextTransparency or nil}
         elseif obj:IsA("UIStroke") then
-            values[obj]={stroke=obj.Transparency}
+            menuTransparency[obj]={stroke=obj.Transparency}
         end
     end
-    return values
-end
-
-local function tweenMenuObjects(values,hidden)
-    for obj,v in pairs(values) do
-        if obj and obj.Parent then
-            if obj:IsA("GuiObject") then
-                local goal={BackgroundTransparency=hidden and 1 or v.background}
-                if v.text~=nil then goal.TextTransparency=hidden and 1 or v.text end
-                TweenService:Create(obj,TweenInfo.new(hidden and 0.12 or 0.2,Enum.EasingStyle.Quad,hidden and Enum.EasingDirection.In or Enum.EasingDirection.Out),goal):Play()
-            elseif obj:IsA("UIStroke") and v.stroke~=nil then
-                TweenService:Create(obj,TweenInfo.new(hidden and 0.12 or 0.2),{Transparency=hidden and 1 or v.stroke}):Play()
-            end
-        end
-    end
-end
-
-local menuTransparency={}
-local function refreshMenuTransparency()
-    menuTransparency=captureTransparency()
+    menuTransparencyCaptured=true
 end
 local function applyMenuHidden()
     for obj,v in pairs(menuTransparency) do
@@ -403,7 +387,7 @@ local function applyMenuHidden()
             if obj:IsA("GuiObject") then
                 obj.BackgroundTransparency=1
                 if v.text~=nil then obj.TextTransparency=1 end
-            elseif obj:IsA("UIStroke") then
+            elseif obj:IsA("UIStroke") and v.stroke~=nil then
                 obj.Transparency=1
             end
         end
@@ -422,42 +406,34 @@ local function tweenMenuVisible(hidden,duration)
         end
     end
 end
+captureTransparency()
+local menuBusy=false
 local function openMenu()
     if menuBusy or mainFrame.Visible then return end
     menuBusy=true
-    refreshMenuTransparency()
+    applyMenuHidden()
     mainFrame.Visible=true
     mainFrame.Size=UDim2.fromOffset(300,470)
     mainFrame.Position=UDim2.new(0.5,-150,0.5,-235)
-    applyMenuHidden()
     mainFrame.BackgroundTransparency=1
-    TweenService:Create(mainFrame,TweenInfo.new(0.25,Enum.EasingStyle.Quint,Enum.EasingDirection.Out),{
-        Size=UDim2.fromOffset(330,520),
-        Position=UDim2.new(0.5,-165,0.5,-260),
-        BackgroundTransparency=0
-    }):Play()
+    TweenService:Create(mainFrame,TweenInfo.new(0.25,Enum.EasingStyle.Quint,Enum.EasingDirection.Out),{Size=UDim2.fromOffset(330,520),Position=UDim2.new(0.5,-165,0.5,-260),BackgroundTransparency=0}):Play()
     task.defer(function()
         if mainFrame.Visible then tweenMenuVisible(false,0.22) end
     end)
     task.delay(0.3,function() menuBusy=false end)
 end
-
 local function closeMenu()
     if menuBusy or not mainFrame.Visible then return end
     menuBusy=true
-    refreshMenuTransparency()
     tweenMenuVisible(true,0.15)
-    local tween=TweenService:Create(mainFrame,TweenInfo.new(0.18,Enum.EasingStyle.Quad,Enum.EasingDirection.In),{
-        Size=UDim2.fromOffset(300,470),
-        Position=UDim2.new(0.5,-150,0.5,-235),
-        BackgroundTransparency=1
-    })
+    local tween=TweenService:Create(mainFrame,TweenInfo.new(0.18,Enum.EasingStyle.Quad,Enum.EasingDirection.In),{Size=UDim2.fromOffset(300,470),Position=UDim2.new(0.5,-150,0.5,-235),BackgroundTransparency=1})
     tween:Play()
     tween.Completed:Once(function()
         mainFrame.Visible=false
         mainFrame.Size=UDim2.fromOffset(330,520)
         mainFrame.Position=UDim2.new(0.5,-165,0.5,-260)
         mainFrame.BackgroundTransparency=0
+        applyMenuHidden()
         menuBusy=false
     end)
 end
@@ -934,14 +910,46 @@ end)
 Threads[#Threads+1]=trackerThread
 
 local routePoints={}
+local routeMarkers={}
 local checkpoint
 local recordingThread
 local routeThread
+_G.AldoVzMarkers=routeMarkers
+
+local function clearRouteMarkers()
+    for i=#routeMarkers,1,-1 do
+        local marker=routeMarkers[i]
+        if marker then protect(function() marker:Destroy() end) end
+        routeMarkers[i]=nil
+    end
+    table.clear(routeMarkers)
+end
+
+local function createNeonMarker(position)
+    local marker=Instance.new("Part")
+    marker.Name="AldoVz_WaypointNode"
+    marker.Size=Vector3.new(0.6,0.6,0.6)
+    marker.Position=position
+    marker.Anchored=true
+    marker.CanCollide=false
+    marker.CanTouch=false
+    marker.CanQuery=false
+    marker.Material=Enum.Material.Neon
+    marker.Color=Color3.fromRGB(0,255,255)
+    marker.Transparency=0.6
+    marker.CastShadow=false
+    local mesh=Instance.new("SpecialMesh")
+    mesh.MeshType=Enum.MeshType.Sphere
+    mesh.Parent=marker
+    marker.Parent=Workspace
+    routeMarkers[#routeMarkers+1]=marker
+end
 
 local function startRecord()
     if State.recording then return end
     State.recording=true
     table.clear(routePoints)
+    clearRouteMarkers()
     recordingThread=task.spawn(function()
         while State.recording do
             protect(function()
@@ -949,9 +957,10 @@ local function startRecord()
                 if r then
                     routePoints[#routePoints+1]=r.CFrame
                     checkpoint=r.CFrame
+                    createNeonMarker(r.Position)
                 end
             end)
-            task.wait(0.25)
+            task.wait(0.2)
         end
         recordingThread=nil
     end)
@@ -970,10 +979,18 @@ local bodyVelocity
 local function groundSafety(root)
     if not root then return false end
     local hit=safeRay(root.Position,Vector3.new(0,-7,0))
-    local valid=hit and hit.Instance and hit.Instance:IsA("BasePart") and hit.Instance.CanCollide
+    local valid=false
+    if hit and hit.Instance then
+        if hit.Instance:IsA("BasePart") then
+            valid=hit.Instance.CanCollide
+        elseif hit.Instance:IsA("Terrain") then
+            valid=hit.Material~=Enum.Material.Water
+        end
+    end
     if not valid then
         if not bodyVelocity or not bodyVelocity.Parent then
             bodyVelocity=Instance.new("BodyVelocity")
+            bodyVelocity.Name="AldoVz_GroundAnchor"
             bodyVelocity.MaxForce=Vector3.new(100000,0,100000)
             bodyVelocity.Velocity=Vector3.zero
             bodyVelocity.Parent=root
@@ -981,7 +998,7 @@ local function groundSafety(root)
         return false
     end
     if bodyVelocity then
-        bodyVelocity:Destroy()
+        protect(function() bodyVelocity:Destroy() end)
         bodyVelocity=nil
     end
     return true
@@ -1013,50 +1030,74 @@ local function playRoute()
         notify("Route","Record a route first",1.5)
         return
     end
-    if routeThread then return end
+    if State.routePlay or routeThread then
+        stopRoute()
+        task.wait(0.05)
+    end
     State.routePlay=true
     local thread
     thread=task.spawn(function()
         for i=1,#routePoints do
             if not State.routePlay then break end
-            local target=routePoints[i]
-            local reached=false
+            local waypoint=routePoints[i]
+            local targetPosition=waypoint.Position
             local started=os.clock()
-            local lastPosition=nil
             local lastProgress=os.clock()
-            while State.routePlay and not reached do
+            local lastPosition=nil
+            while State.routePlay do
                 local h=getHumanoid()
                 local r=getRoot()
                 if not h or not r then
-                    task.wait(0.5)
+                    task.wait(0.2)
                 else
+                    local horizontalTarget=Vector3.new(targetPosition.X,r.Position.Y,targetPosition.Z)
+                    local delta=horizontalTarget-r.Position
+                    local distance=delta.Magnitude
+                    if distance<=0.5 then
+                        checkpoint=r.CFrame
+                        break
+                    end
+                    local direction=delta.Unit
+                    local targetCFrame=CFrame.lookAt(r.Position,horizontalTarget)
+                    local dt=RunService.Heartbeat:Wait()
+                    if not State.routePlay then break end
                     h:ChangeState(Enum.HumanoidStateType.Running)
-                    h:MoveTo(target.Position)
+                    local configuredSpeed=tonumber(Config.walkSpeed) or 16
+                    local humanoidSpeed=tonumber(h.WalkSpeed) or configuredSpeed
+                    local speed=math.clamp(humanoidSpeed,16,50)
+                    local step=math.max(0,distance-math.min(distance,speed*dt))
+                    local nextPosition=r.Position+direction*(distance-step)
+                    local nextTarget=CFrame.lookAt(nextPosition,Vector3.new(horizontalTarget.X,nextPosition.Y,horizontalTarget.Z))
+                    local alpha=math.clamp((speed*dt)/math.max(distance,0.001),0,1)
+                    local nextCFrame=r.CFrame:Lerp(nextTarget,alpha)
+                    nextCFrame=CFrame.new(nextPosition)*nextCFrame.Rotation
+                    protect(function() r.CFrame=nextCFrame end)
                     local groundValid=groundSafety(r)
-                    if r.Position.Y<Config.safeY or not groundValid then
+                    if r.Position.Y<Config.safeY then
                         if checkpoint then
-                            protect(function()
-                                r.CFrame=checkpoint+Vector3.new(0,5,0)
-                            end)
+                            protect(function() r.CFrame=checkpoint+Vector3.new(0,5,0) end)
                         end
                         State.routePlay=false
                         break
                     end
-                    local distance=(r.Position-target.Position).Magnitude
-                    if distance<=4 then
-                        checkpoint=r.CFrame
-                        reached=true
-                    else
-                        if not lastPosition or (r.Position-lastPosition).Magnitude>0.75 then
-                            lastPosition=r.Position
-                            lastProgress=os.clock()
+                    if not groundValid then
+                        if checkpoint then
+                            protect(function() r.CFrame=checkpoint+Vector3.new(0,3,0) end)
                         end
-                        if os.clock()-started>15 or os.clock()-lastProgress>3 then
-                            if checkpoint then protect(function() r.CFrame=checkpoint+Vector3.new(0,3,0) end) end
-                            break
-                        end
+                        State.routePlay=false
+                        break
                     end
-                    task.wait(0.15)
+                    if not lastPosition or (r.Position-lastPosition).Magnitude>0.5 then
+                        lastPosition=r.Position
+                        lastProgress=os.clock()
+                    end
+                    if os.clock()-started>20 or os.clock()-lastProgress>3 then
+                        if checkpoint then
+                            protect(function() r.CFrame=checkpoint+Vector3.new(0,3,0) end)
+                        end
+                        State.routePlay=false
+                        break
+                    end
                 end
             end
         end
@@ -1088,6 +1129,7 @@ local function saveRoute()
 end
 
 local function loadRoute()
+    stopRoute()
     if type(readfile)~="function" then
         notify("Route","readfile is unavailable",2)
         return
@@ -1096,15 +1138,31 @@ local function loadRoute()
         local data=HttpService:JSONDecode(readfile(ROUTE_FILE))
         if type(data)~="table" then return end
         table.clear(routePoints)
+        clearRouteMarkers()
         for _,e in ipairs(data) do
             if type(e)=="table" and e.px and e.py and e.pz then
                 local pos=Vector3.new(e.px,e.py,e.pz)
                 routePoints[#routePoints+1]=CFrame.new(pos)*CFrame.fromEulerAnglesXYZ(e.rx or 0,e.ry or 0,e.rz or 0)
+                createNeonMarker(pos)
             end
         end
         checkpoint=routePoints[1]
         notify("Route",string.format("%d points loaded",#routePoints),1.5)
     end)
+end
+
+local function removeSavedRoute()
+    stopRoute()
+    stopRecord()
+    table.clear(routePoints)
+    checkpoint=nil
+    clearRouteMarkers()
+    protect(function()
+        if type(isfile)=="function" and isfile(ROUTE_FILE) and type(delfile)=="function" then
+            delfile(ROUTE_FILE)
+        end
+    end)
+    notify("Route","Route file and markers removed",1.5)
 end
 
 local buttons={}
@@ -1280,10 +1338,11 @@ actionButton("▶ Play Route",playRoute,301)
 actionButton("⏹ Stop Route",stopRoute,302)
 actionButton("💾 Save Route JSON",saveRoute,303)
 actionButton("📂 Load Route JSON",loadRoute,304)
+actionButton("🗑️ Remove Route JSON",removeSavedRoute,305)
 actionButton("💾 Save Config",function()
     saveConfig()
     notify("Config","Saved",1.5)
-end,305)
+end,306)
 
 connect(player.CharacterAdded:Connect(function(character)
     task.wait(0.5)
@@ -1324,6 +1383,7 @@ local function cleanup()
     stopMagnet()
     stopRoute()
     stopRecord()
+    clearRouteMarkers()
     State.autoWalk=false
     State.autoClick=false
     State.antiAfk=false
