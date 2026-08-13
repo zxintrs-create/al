@@ -188,6 +188,7 @@ floatButton.BackgroundTransparency=0.05
 floatButton.BorderSizePixel=0
 floatButton.ZIndex=999
 floatButton.AutoButtonColor=false
+floatButton:SetAttribute("Draggable",false)
 floatButton.Parent=sg
 
 local floatCorner=Instance.new("UICorner")
@@ -218,6 +219,7 @@ mainFrame.BorderSizePixel=0
 mainFrame.ClipsDescendants=true
 mainFrame.Visible=false
 mainFrame.ZIndex=998
+mainFrame:SetAttribute("Draggable",false)
 mainFrame.Parent=sg
 
 local mainCorner=Instance.new("UICorner")
@@ -385,27 +387,19 @@ local function closeMenu()
     end)
 end
 
-local dragActive=false
-local dragMoved=false
-local dragStart
-local startPos
-
-connect(floatButton.InputBegan:Connect(function(input)
-    if input.UserInputType==Enum.UserInputType.Touch or input.UserInputType==Enum.UserInputType.MouseButton1 then
-        dragActive=true
-        dragMoved=false
-        dragStart=input.Position
-        startPos=floatButton.Position
+local openButtonBusy=false
+connect(floatButton.Activated:Connect(function()
+    if openButtonBusy then return end
+    openButtonBusy=true
+    if mainFrame.Visible then
+        closeMenu()
+    else
+        openMenu()
     end
+    task.delay(0.32,function()
+        openButtonBusy=false
+    end)
 end))
-
-connect(floatButton.InputChanged:Connect(function(input)
-    if input.UserInputType==Enum.UserInputType.Touch or input.UserInputType==Enum.UserInputType.MouseMovement then
-        dragStart=dragStart or input.Position
-    end
-end))
-
-
 
 local fpsCount=0
 local fpsElapsed=0
@@ -848,9 +842,10 @@ local function startRecord()
                 if r then
                     routePoints[#routePoints+1]=r.CFrame
                     checkpoint=r.CFrame
+                    createRouteMarker(r.Position)
                 end
             end)
-            task.wait(0.25)
+            task.wait(0.2)
         end
         recordingThread=nil
     end)
@@ -912,55 +907,96 @@ local function playRoute()
         notify("Route","Record a route first",1.5)
         return
     end
-    if routeThread then return end
+
+    if routeThread then
+        stopRoute()
+        task.wait(0.05)
+    end
+
+    local character=player.Character
+    local root=character and character:FindFirstChild("HumanoidRootPart")
+    local humanoid=character and character:FindFirstChildOfClass("Humanoid")
+    if not root or not humanoid then
+        notify("Route","Character is not ready",1.5)
+        return
+    end
+
     State.routePlay=true
+
     local thread
     thread=task.spawn(function()
         for i=1,#routePoints do
             if not State.routePlay then break end
-            local target=routePoints[i]
-            local reached=false
-            local started=os.clock()
-            local lastPosition=nil
-            local lastProgress=os.clock()
-            while State.routePlay and not reached do
-                local h=getHumanoid()
-                local r=getRoot()
-                if not h or not r then
-                    task.wait(0.5)
-                else
-                    h:ChangeState(Enum.HumanoidStateType.Running)
-                    h:MoveTo(target.Position)
-                    local groundValid=groundSafety(r)
-                    if r.Position.Y<Config.safeY or not groundValid then
-                        if checkpoint then
-                            protect(function()
-                                r.CFrame=checkpoint+Vector3.new(0,5,0)
-                            end)
-                        end
-                        State.routePlay=false
-                        break
-                    end
-                    local distance=(r.Position-target.Position).Magnitude
-                    if distance<=4 then
-                        checkpoint=r.CFrame
-                        reached=true
-                    else
-                        if not lastPosition or (r.Position-lastPosition).Magnitude>0.75 then
-                            lastPosition=r.Position
-                            lastProgress=os.clock()
-                        end
-                        if os.clock()-started>15 or os.clock()-lastProgress>3 then
-                            if checkpoint then protect(function() r.CFrame=checkpoint+Vector3.new(0,3,0) end) end
-                            break
-                        end
-                    end
-                    task.wait(0.15)
+
+            local targetCF=routePoints[i]
+            if typeof(targetCF)~="CFrame" then
+                continue
+            end
+
+            checkpoint=root.CFrame
+            local targetPos=targetCF.Position
+
+            while State.routePlay do
+                character=player.Character
+                root=character and character:FindFirstChild("HumanoidRootPart")
+                humanoid=character and character:FindFirstChildOfClass("Humanoid")
+
+                if not root or not humanoid then
+                    task.wait(0.1)
+                    continue
                 end
+
+                local deltaTime=RunService.Heartbeat:Wait()
+                if not State.routePlay then break end
+
+                local currentPosition=root.Position
+                local adjustedTarget=Vector3.new(targetPos.X,currentPosition.Y,targetPos.Z)
+                local offset=adjustedTarget-currentPosition
+                local distance=offset.Magnitude
+
+                if distance<=0.5 then
+                    root.CFrame=CFrame.new(adjustedTarget)*targetCF.Rotation
+                    checkpoint=root.CFrame
+                    break
+                end
+
+                if currentPosition.Y<Config.safeY then
+                    if checkpoint then
+                        protect(function()
+                            root.CFrame=checkpoint+Vector3.new(0,3,0)
+                        end)
+                    end
+                    State.routePlay=false
+                    break
+                end
+
+                local speed=math.clamp(tonumber(Config.walkSpeed) or 16,16,50)
+                local step=math.min(speed*math.max(deltaTime,0),distance)
+                local alpha=math.clamp(step/distance,0,1)
+                local lookTarget=Vector3.new(adjustedTarget.X,currentPosition.Y,adjustedTarget.Z)
+                local direction=lookTarget-currentPosition
+
+                local targetFrame
+                if direction.Magnitude>0.001 then
+                    targetFrame=CFrame.lookAt(adjustedTarget,adjustedTarget+direction.Unit)*targetCF.Rotation.Rotation
+                else
+                    targetFrame=CFrame.new(adjustedTarget)*targetCF.Rotation
+                end
+
+                protect(function()
+                    humanoid:ChangeState(Enum.HumanoidStateType.Running)
+                    root.CFrame=root.CFrame:Lerp(targetFrame,alpha)
+                end)
+
+                groundSafety(root)
             end
         end
-        if routeThread==thread then finishRoute() end
+
+        if routeThread==thread then
+            finishRoute()
+        end
     end)
+
     routeThread=thread
     Threads[#Threads+1]=thread
     notify("Route",string.format("Playing %d points",#routePoints),1.5)
@@ -1002,8 +1038,65 @@ local function loadRoute()
             end
         end
         checkpoint=routePoints[1]
+        rebuildRouteMarkers()
         notify("Route",string.format("%d points loaded",#routePoints),1.5)
     end)
+end
+
+
+local routeMarkers={}
+local function clearRouteMarkers()
+    for i=#routeMarkers,1,-1 do
+        local marker=routeMarkers[i]
+        if marker then
+            protect(function() marker:Destroy() end)
+        end
+        routeMarkers[i]=nil
+    end
+end
+
+local function createRouteMarker(position)
+    local marker=Instance.new("Part")
+    marker.Name="AldoVz_WaypointNode"
+    marker.Size=Vector3.new(0.6,0.6,0.6)
+    marker.Position=position
+    marker.Anchored=true
+    marker.CanCollide=false
+    marker.CanTouch=false
+    marker.CanQuery=false
+    marker.Material=Enum.Material.Neon
+    marker.Color=Color3.fromRGB(0,255,255)
+    marker.Transparency=0.6
+    local mesh=Instance.new("SpecialMesh")
+    mesh.MeshType=Enum.MeshType.Sphere
+    mesh.Parent=marker
+    marker.Parent=Workspace
+    routeMarkers[#routeMarkers+1]=marker
+end
+
+local function rebuildRouteMarkers()
+    clearRouteMarkers()
+    for _,cf in ipairs(routePoints) do
+        if typeof(cf)=="CFrame" then
+            createRouteMarker(cf.Position)
+        end
+    end
+end
+
+local function removeRoute()
+    stopRoute()
+    stopRecord()
+    table.clear(routePoints)
+    checkpoint=nil
+    clearRouteMarkers()
+    if type(isfile)=="function" and type(delfile)=="function" then
+        protect(function()
+            if isfile(ROUTE_FILE) then
+                delfile(ROUTE_FILE)
+            end
+        end)
+    end
+    notify("Route","Route, markers and saved file removed",1.5)
 end
 
 local buttons={}
@@ -1223,6 +1316,7 @@ local function cleanup()
     stopMagnet()
     stopRoute()
     stopRecord()
+    clearRouteMarkers()
     State.autoWalk=false
     State.autoClick=false
     State.antiAfk=false
@@ -1243,4 +1337,5 @@ end
 
 _G.AldoVzHubV3Cleanup=cleanup
 notify("👾 AldoVz","Loaded",2)
-print("[AVz]")
+print("[LET THE AldoVz ART FLY]")
+print("[Alay gasih 👆🗿]")
