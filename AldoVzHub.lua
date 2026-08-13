@@ -405,31 +405,7 @@ connect(floatButton.InputChanged:Connect(function(input)
     end
 end))
 
-connect(UserInputService.InputChanged:Connect(function(input)
-    if not dragActive then return end
-    if input.UserInputType~=Enum.UserInputType.Touch and input.UserInputType~=Enum.UserInputType.MouseMovement then return end
-    local delta=input.Position-(dragStart or input.Position)
-    if delta.Magnitude>6 then dragMoved=true end
-    local camera=Workspace.CurrentCamera
-    if camera then
-        local vp=camera.ViewportSize
-        local x=startPos.X.Offset+delta.X
-        local y=startPos.Y.Offset+delta.Y
-        floatButton.Position=UDim2.fromOffset(math.clamp(x,0,math.max(0,vp.X-50)),math.clamp(y,0,math.max(0,vp.Y-50)))
-    end
-end))
 
-connect(UserInputService.InputEnded:Connect(function(input)
-    if input.UserInputType==Enum.UserInputType.Touch or input.UserInputType==Enum.UserInputType.MouseButton1 then
-        if dragActive and not dragMoved then
-            if mainFrame.Visible then closeMenu() else openMenu() end
-        end
-        dragActive=false
-        dragMoved=false
-        dragStart=nil
-        startPos=nil
-    end
-end))
 
 local fpsCount=0
 local fpsElapsed=0
