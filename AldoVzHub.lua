@@ -444,6 +444,50 @@ local function safeRay(origin,direction)
     return Workspace:Raycast(origin,direction,params)
 end
 
+local jumpConnection
+local lastJumpTime=0
+local function startSmartAutoJump()
+    if jumpConnection then return end
+    State.smartJump=true
+    jumpConnection=connect(RunService.RenderStepped:Connect(function()
+        if not State.smartJump then return end
+        protect(function()
+            local h=getHumanoid()
+            local r=getRoot()
+            if not h or not r then return end
+            if h.Health<=0 then return end
+            local state=h:GetState()
+            if state==Enum.HumanoidStateType.Jumping or state==Enum.HumanoidStateType.Freefall or state==Enum.HumanoidStateType.FallingDown then return end
+            if h.FloorMaterial==Enum.Material.Air then return end
+            local moveDirection=h.MoveDirection
+            local direction=moveDirection.Magnitude>0.05 and moveDirection.Unit or r.CFrame.LookVector
+            local base=r.Position+Vector3.new(0,0.5,0)
+            local hit=nil
+            local offsets={Vector3.new(0,0,0),Vector3.new(0,0.8,0),Vector3.new(0,-0.6,0)}
+            for _,offset in ipairs(offsets) do
+                local result=safeRay(base+offset,direction*3.5)
+                if result and result.Instance and result.Instance.CanCollide then
+                    hit=result
+                    break
+                end
+            end
+            if hit and os.clock()-lastJumpTime>=0.45 then
+                lastJumpTime=os.clock()
+                h.Jump=true
+                h:ChangeState(Enum.HumanoidStateType.Jumping)
+            end
+        end)
+    end))
+end
+
+local function stopSmartAutoJump()
+    State.smartJump=false
+    if jumpConnection then
+        disconnect(jumpConnection)
+        jumpConnection=nil
+    end
+end
+
 local autoWalkConnection
 local function startAutoWalk()
     if autoWalkConnection then return end
@@ -455,10 +499,6 @@ local function startAutoWalk()
             local r=getRoot()
             if not h or not r then return end
             h:Move(Vector3.new(0,0,-1),true)
-            if State.smartJump then
-                local hit=safeRay(r.Position+Vector3.new(0,1,0),r.CFrame.LookVector*5)
-                if hit and hit.Instance and hit.Instance.CanCollide then h.Jump=true end
-            end
         end)
     end))
 end
@@ -470,6 +510,8 @@ local function stopAutoWalk()
         autoWalkConnection=nil
     end
 end
+
+if State.smartJump then startSmartAutoJump() end
 
 local autoClickThread
 local function startAutoClick()
@@ -831,19 +873,29 @@ local checkpoint
 local recordingThread
 local routeThread
 
+local function addRouteWaypoint(action)
+    local r=getRoot()
+    if not r then return false end
+    local cf=r.CFrame
+    local last=routePoints[#routePoints]
+    if last and typeof(last.cf)=="CFrame" and (last.cf.Position-cf.Position).Magnitude<0.25 and last.action==action then
+        return false
+    end
+    routePoints[#routePoints+1]={cf=cf,action=action=="Jump" and "Jump" or "Walk"}
+    checkpoint=cf
+    createRouteMarker(cf.Position,action=="Jump" and "Jump" or "Walk")
+    return true
+end
+
 local function startRecord()
     if State.recording then return end
     State.recording=true
     table.clear(routePoints)
+    clearRouteMarkers()
     recordingThread=task.spawn(function()
         while State.recording do
             protect(function()
-                local r=getRoot()
-                if r then
-                    routePoints[#routePoints+1]=r.CFrame
-                    checkpoint=r.CFrame
-                    createRouteMarker(r.Position)
-                end
+                addRouteWaypoint("Walk")
             end)
             task.wait(0.2)
         end
@@ -925,16 +977,20 @@ local function playRoute()
 
     local thread
     thread=task.spawn(function()
+        local previousAutoRotate=humanoid.AutoRotate
+        humanoid.AutoRotate=true
+
         for i=1,#routePoints do
             if not State.routePlay then break end
 
-            local targetCF=routePoints[i]
-            if typeof(targetCF)~="CFrame" then
+            local node=routePoints[i]
+            if type(node)~="table" or typeof(node.cf)~="CFrame" then
                 continue
             end
 
+            local targetPos=node.cf.Position
+            local action=node.action or "Walk"
             checkpoint=root.CFrame
-            local targetPos=targetCF.Position
 
             while State.routePlay do
                 character=player.Character
@@ -949,22 +1005,31 @@ local function playRoute()
                 local deltaTime=RunService.Heartbeat:Wait()
                 if not State.routePlay then break end
 
-                local currentPosition=root.Position
-                local adjustedTarget=Vector3.new(targetPos.X,currentPosition.Y,targetPos.Z)
-                local offset=adjustedTarget-currentPosition
+                local current=root.Position
+                local target=Vector3.new(targetPos.X,current.Y,targetPos.Z)
+                local offset=target-current
                 local distance=offset.Magnitude
 
-                if distance<=0.5 then
-                    root.CFrame=CFrame.new(adjustedTarget)*targetCF.Rotation
+                if distance<=0.55 then
+                    root.CFrame=CFrame.lookAt(target, target + (i < #routePoints and (Vector3.new(routePoints[i+1].cf.Position.X,target.Y,routePoints[i+1].cf.Position.Z)-target).Unit or root.CFrame.LookVector))
+                    if action=="Jump" then
+                        protect(function()
+                            humanoid.Jump=true
+                            humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+                        end)
+                    end
+                    for _,marker in ipairs(routeMarkers) do
+                        if marker and marker.Parent and (marker.Position-targetPos).Magnitude<0.6 then
+                            marker.Color=Color3.fromRGB(0,255,90)
+                        end
+                    end
                     checkpoint=root.CFrame
                     break
                 end
 
-                if currentPosition.Y<Config.safeY then
+                if current.Y<Config.safeY then
                     if checkpoint then
-                        protect(function()
-                            root.CFrame=checkpoint+Vector3.new(0,3,0)
-                        end)
+                        protect(function() root.CFrame=checkpoint+Vector3.new(0,3,0) end)
                     end
                     State.routePlay=false
                     break
@@ -973,25 +1038,28 @@ local function playRoute()
                 local speed=math.clamp(tonumber(Config.walkSpeed) or 16,16,50)
                 local step=math.min(speed*math.max(deltaTime,0),distance)
                 local alpha=math.clamp(step/distance,0,1)
-                local lookTarget=Vector3.new(adjustedTarget.X,currentPosition.Y,adjustedTarget.Z)
-                local direction=lookTarget-currentPosition
-
-                local targetFrame
-                if direction.Magnitude>0.001 then
-                    targetFrame=CFrame.lookAt(adjustedTarget,adjustedTarget+direction.Unit)*targetCF.Rotation.Rotation
-                else
-                    targetFrame=CFrame.new(adjustedTarget)*targetCF.Rotation
+                local nextDirection=offset.Unit
+                if nextDirection.Magnitude < 0.001 then
+                    nextDirection=root.CFrame.LookVector
                 end
 
+                -- Let Roblox Humanoid handle natural facing/turning; only position is interpolated.
+                -- This avoids snapping the root rotation at corners.
                 protect(function()
+                    humanoid.AutoRotate=true
                     humanoid:ChangeState(Enum.HumanoidStateType.Running)
-                    root.CFrame=root.CFrame:Lerp(targetFrame,alpha)
+                    humanoid:Move(nextDirection,false)
+                    local nextPosition=current+offset*alpha
+                    root.CFrame=CFrame.lookAt(nextPosition, nextPosition+nextDirection)
                 end)
 
                 groundSafety(root)
             end
         end
 
+        if humanoid then
+            protect(function() humanoid.AutoRotate=previousAutoRotate end)
+        end
         if routeThread==thread then
             finishRoute()
         end
@@ -999,7 +1067,7 @@ local function playRoute()
 
     routeThread=thread
     Threads[#Threads+1]=thread
-    notify("Route",string.format("Playing %d points",#routePoints),1.5)
+    notify("Route",string.format("Playing %d waypoints",#routePoints),1.5)
 end
 
 local function saveRoute()
@@ -1013,9 +1081,11 @@ local function saveRoute()
     end
     protect(function()
         local data={}
-        for _,cf in ipairs(routePoints) do
-            local x,y,z=cf:ToEulerAnglesXYZ()
-            data[#data+1]={px=cf.Position.X,py=cf.Position.Y,pz=cf.Position.Z,rx=x,ry=y,rz=z}
+        for _,node in ipairs(routePoints) do
+            if type(node)=="table" and typeof(node.cf)=="CFrame" then
+                local x,y,z=node.cf:ToEulerAnglesXYZ()
+                data[#data+1]={px=node.cf.Position.X,py=node.cf.Position.Y,pz=node.cf.Position.Z,rx=x,ry=y,rz=z,action=node.action or "Walk"}
+            end
         end
         writefile(ROUTE_FILE,HttpService:JSONEncode(data))
         notify("Route",string.format("%d points saved",#data),1.5)
@@ -1034,10 +1104,13 @@ local function loadRoute()
         for _,e in ipairs(data) do
             if type(e)=="table" and e.px and e.py and e.pz then
                 local pos=Vector3.new(e.px,e.py,e.pz)
-                routePoints[#routePoints+1]=CFrame.new(pos)*CFrame.fromEulerAnglesXYZ(e.rx or 0,e.ry or 0,e.rz or 0)
+                routePoints[#routePoints+1]={
+                    cf=CFrame.new(pos)*CFrame.fromEulerAnglesXYZ(e.rx or 0,e.ry or 0,e.rz or 0),
+                    action=e.action=="Jump" and "Jump" or "Walk"
+                }
             end
         end
-        checkpoint=routePoints[1]
+        checkpoint=routePoints[1] and routePoints[1].cf
         rebuildRouteMarkers()
         notify("Route",string.format("%d points loaded",#routePoints),1.5)
     end)
@@ -1055,30 +1128,32 @@ local function clearRouteMarkers()
     end
 end
 
-local function createRouteMarker(position)
+local function createRouteMarker(position,action,visited)
     local marker=Instance.new("Part")
-    marker.Name="AldoVz_WaypointNode"
-    marker.Size=Vector3.new(0.6,0.6,0.6)
+    marker.Name=action=="Jump" and "AldoVz_JumpWaypoint" or "AldoVz_WalkWaypoint"
+    marker.Size=Vector3.new(0.7,0.7,0.7)
     marker.Position=position
     marker.Anchored=true
     marker.CanCollide=false
     marker.CanTouch=false
     marker.CanQuery=false
     marker.Material=Enum.Material.Neon
-    marker.Color=Color3.fromRGB(0,255,255)
-    marker.Transparency=0.6
+    marker.Color=visited and Color3.fromRGB(0,255,90) or (action=="Jump" and Color3.fromRGB(170,0,255) or Color3.fromRGB(0,170,255))
+    marker.Transparency=0.25
     local mesh=Instance.new("SpecialMesh")
     mesh.MeshType=Enum.MeshType.Sphere
     mesh.Parent=marker
     marker.Parent=Workspace
+    marker:SetAttribute("RouteAction",action or "Walk")
+    marker:SetAttribute("Visited",visited==true)
     routeMarkers[#routeMarkers+1]=marker
 end
 
 local function rebuildRouteMarkers()
     clearRouteMarkers()
-    for _,cf in ipairs(routePoints) do
-        if typeof(cf)=="CFrame" then
-            createRouteMarker(cf.Position)
+    for _,node in ipairs(routePoints) do
+        if type(node)=="table" and typeof(node.cf)=="CFrame" then
+            createRouteMarker(node.cf.Position,node.action or "Walk")
         end
     end
 end
@@ -1147,7 +1222,7 @@ end
 makeToggle("🚶 Auto-Walk",function() return State.autoWalk end,startAutoWalk,stopAutoWalk)
 makeToggle("👆 Auto-Click Tool",function() return State.autoClick end,startAutoClick,stopAutoClick)
 makeToggle("⏰ Anti-AFK",function() return State.antiAfk end,startAntiAfk,stopAntiAfk)
-makeToggle("🦘 Smart Auto-Jump",function() return State.smartJump end,function() State.smartJump=true end,function() State.smartJump=false end)
+makeToggle("🦘 Smart Auto-Jump",function() return State.smartJump end,startSmartAutoJump,stopSmartAutoJump)
 makeToggle("⚡ Speed/Jump",function() return State.speedBypass end,startSpeed,stopSpeed)
 makeToggle("👤 Player ESP",function() return State.playerEsp end,startPlayerESP,stopPlayerESP)
 makeToggle("🗺️ Item ESP",function() return State.itemEsp end,startItemESP,stopItemESP)
@@ -1268,14 +1343,34 @@ recordButton=actionButton("● Record Route",function()
     end
 end,300)
 
-actionButton("▶ Play Route",playRoute,301)
-actionButton("⏹ Stop Route",stopRoute,302)
-actionButton("💾 Save Route JSON",saveRoute,303)
-actionButton("📂 Load Route JSON",loadRoute,304)
+actionButton("🔵 Add Walk Point",function()
+    if not State.recording then
+        notify("Route","Start Record first",1.5)
+        return
+    end
+    if addRouteWaypoint("Walk") then
+        notify("Route","Walk waypoint added",0.8)
+    end
+end,301)
+
+actionButton("🟣 Add Jump Point",function()
+    if not State.recording then
+        notify("Route","Start Record first",1.5)
+        return
+    end
+    if addRouteWaypoint("Jump") then
+        notify("Route","Jump waypoint added",0.8)
+    end
+end,302)
+
+actionButton("▶ Play Route",playRoute,303)
+actionButton("⏹ Stop Route",stopRoute,304)
+actionButton("💾 Save Route JSON",saveRoute,305)
+actionButton("📂 Load Route JSON",loadRoute,306)
 actionButton("💾 Save Config",function()
     saveConfig()
     notify("Config","Saved",1.5)
-end,305)
+end,307)
 
 connect(player.CharacterAdded:Connect(function(character)
     task.wait(0.5)
@@ -1308,6 +1403,7 @@ for _,update in ipairs(buttons) do update() end
 
 local function cleanup()
     stopAutoWalk()
+    stopSmartAutoJump()
     stopAutoClick()
     stopAntiAfk()
     stopSpeed()
@@ -1337,5 +1433,4 @@ end
 
 _G.AldoVzHubV3Cleanup=cleanup
 notify("👾 AldoVz","Loaded",2)
-print("[LET THE AldoVz ART FLY]")
-print("[Alay gasih 👆🗿]")
+print("[AVz]")
