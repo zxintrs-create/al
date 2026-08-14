@@ -17,9 +17,9 @@ local defaultConfig = {
 	Sensitivity = 1.0
 }
 
--- image id stting
-local SHIFT_LOCK_IMAGE = "rbxassetid://137886634947855"
-local OPEN_MENU_IMAGE = "rbxassetid://136616143786672"
+-- image id
+local SHIFT_LOCK_IMAGE = "rbxassetid://136616143786672"
+local OPEN_MENU_IMAGE = "rbxassetid://137886634947855"
 
 local config = {}
 for k, v in pairs(defaultConfig) do
@@ -886,3 +886,5 @@ updateCameraVectors()
 updateWLock()
 updateJump()
 updateShift()
+
+print("[ALDO VORA ZURE]")
