@@ -86,8 +86,8 @@ local menuTween=nil
 
 local dragging=false
 local dragMoved=false
-local dragStart
-local dragStartPosition
+local dragStart=nil
+local dragStartPosition=nil
 
 local RouteVisualFolder
 local RouteCarrier
@@ -128,11 +128,9 @@ local function safeWriteFile(path,data)
 		return false
 	end
 
-	local ok=pcall(function()
+	return pcall(function()
 		writefile(path,data)
 	end)
-
-	return ok
 end
 
 local function safeReadFile(path)
@@ -406,6 +404,10 @@ local function createVisualContainer()
 end
 
 local function createMarker(name,position,size,color)
+	if not RouteVisualFolder then
+		createVisualContainer()
+	end
+
 	local part=Instance.new("Part")
 	part.Name=name
 	part.Shape=Enum.PartType.Ball
@@ -779,35 +781,6 @@ local function getNearestRouteIndex(position,startIndex)
 	end
 
 	return bestIndex
-end
-
-local function getRouteDistanceByPosition(position,startIndex)
-	local index=getNearestRouteIndex(
-		position,
-		startIndex
-	)
-
-	local baseDistance=routeLengths[index] or 0
-
-	local p=getPointPosition(
-		route[index]
-	)
-
-	local localDistance=(
-		Vector3.new(
-			position.X,
-			0,
-			position.Z
-		)
-		-
-		Vector3.new(
-			p.X,
-			0,
-			p.Z
-		)
-	).Magnitude
-
-	return baseDistance+localDistance,index
 end
 
 local function buildJumpEvents()
@@ -1313,36 +1286,62 @@ local function startPlayback()
 			local duration=getRouteDuration()
 
 			if playbackElapsed>=duration then
-				playbackElapsed=duration
-
 				local finalPoint=route[#route]
-				local finalMove=getPointMove(finalPoint)
+				local finalPosition=getPointPosition(finalPoint)
+				local currentPosition=Root.Position
 
-				if finalMove.Magnitude<0.03 then
-					finalMove=getPointLook(finalPoint)
-				end
+				local endVector=Vector3.new(
+					finalPosition.X-currentPosition.X,
+					0,
+					finalPosition.Z-currentPosition.Z
+				)
 
-				if finalMove.Magnitude>0.03 then
-					playbackDirection=finalMove.Unit
+				local endDistance=endVector.Magnitude
+
+				if endDistance>0.10 then
+					local endDirection=endVector.Unit
+
+					local endBlend=math.clamp(
+						endDistance/3,
+						0,
+						1
+					)
+
+					playbackDirection=endDirection
 
 					pcall(function()
 						Humanoid:Move(
-							playbackDirection,
+							endDirection*endBlend,
 							false
 						)
 					end)
-				else
-					pcall(function()
-						Humanoid:Move(
-							Vector3.zero,
-							false
-						)
-					end)
+
+					if PlaybackMarker then
+						PlaybackMarker.Position=
+							currentPosition:Lerp(
+								finalPosition,
+								math.clamp(
+									1-endDistance/3,
+									0,
+									1
+								)
+							)
+					end
+
+					playbackElapsed=duration
+					return
 				end
+
+				pcall(function()
+					Humanoid:Move(
+						Vector3.zero,
+						false
+					)
+				end)
 
 				if PlaybackMarker then
 					PlaybackMarker.Position=
-						getPointPosition(finalPoint)
+						finalPosition
 				end
 
 				stopPlayback()
@@ -1421,6 +1420,7 @@ local function startPlayback()
 
 					if sample.Jump
 						or targetSample.Position.Y-currentPosition.Y>1.35 then
+
 						triggerJump()
 					end
 				end
@@ -1457,7 +1457,9 @@ local function startPlayback()
 				Humanoid.PlatformStand=false
 			end
 
-			if CONFIG.AntiLag and safeDt>0.065 then
+			if CONFIG.AntiLag
+				and safeDt>0.065 then
+
 				task.defer(
 					function()
 						if isPlaying
@@ -1565,6 +1567,7 @@ local function connectRoute()
 	local lastPosition=getPointPosition(last)
 
 	local delta=firstPosition-lastPosition
+
 	local horizontalDistance=
 		Vector3.new(
 			delta.X,
@@ -1583,9 +1586,13 @@ local function connectRoute()
 	rebuildRouteLengths()
 
 	local duration=getRouteDuration()
+
 	local averageSpeed=
 		totalRouteLength/
-		math.max(duration,0.1)
+		math.max(
+			duration,
+			0.1
+		)
 
 	local addedTime=
 		horizontalDistance/
@@ -1874,6 +1881,7 @@ Avatar.Position=UDim2.new(0,14,0,75)
 Avatar.BackgroundColor3=COLORS.Card
 Avatar.BorderSizePixel=0
 Avatar.Parent=Main
+
 corner(Avatar,14)
 
 local avatarOK,avatarURL=pcall(function()
@@ -1922,6 +1930,7 @@ Tabs.Size=UDim2.new(0,90,1,0)
 Tabs.BackgroundColor3=COLORS.Panel
 Tabs.BorderSizePixel=0
 Tabs.Parent=Content
+
 corner(Tabs,14)
 
 local Pages=Instance.new("Frame")
@@ -2176,6 +2185,7 @@ local function createToggle(parent,text,initial,callback)
 		state and COLORS.Success
 		or Color3.fromRGB(55,57,70)
 	indicator.Parent=button
+
 	corner(indicator,20)
 
 	local dot=Instance.new("Frame")
@@ -2186,6 +2196,7 @@ local function createToggle(parent,text,initial,callback)
 		or UDim2.new(0,3,0.5,-8)
 	dot.BackgroundColor3=Color3.fromRGB(255,255,255)
 	dot.Parent=indicator
+
 	corner(dot,20)
 
 	local function update()
@@ -2279,6 +2290,7 @@ AutoStatus.Font=Enum.Font.GothamBold
 AutoStatus.TextSize=11
 AutoStatus.TextColor3=COLORS.Success
 AutoStatus.Parent=AutoPage
+
 corner(AutoStatus,10)
 
 createButton(
@@ -2574,6 +2586,7 @@ PlayerList.Size=UDim2.new(1,-8,0,180)
 PlayerList.BackgroundColor3=COLORS.Panel
 PlayerList.BorderSizePixel=0
 PlayerList.Parent=CharacterPage
+
 corner(PlayerList,10)
 
 local PlayerScroll=Instance.new("ScrollingFrame")
@@ -2778,6 +2791,7 @@ ChatBox.ScrollBarThickness=3
 ChatBox.AutomaticCanvasSize=Enum.AutomaticSize.Y
 ChatBox.CanvasSize=UDim2.new()
 ChatBox.Parent=ChatPage
+
 corner(ChatBox,12)
 
 local ChatLayout=Instance.new("UIListLayout")
@@ -2795,6 +2809,7 @@ MessageInput.TextColor3=COLORS.Text
 MessageInput.PlaceholderColor3=COLORS.SubText
 MessageInput.ClearTextOnFocus=false
 MessageInput.Parent=ChatPage
+
 corner(MessageInput,10)
 
 createButton(
