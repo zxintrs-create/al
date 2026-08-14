@@ -18,7 +18,6 @@ local defaultConfig = {
 	Sensitivity = 1.0
 }
 
--- id image setting
 local SHIFT_LOCK_IMAGE_ID = "136616143786672"
 local OPEN_MENU_IMAGE_ID = "112921115907036"
 
@@ -172,13 +171,13 @@ local humanoid = character:WaitForChild("Humanoid")
 _G.ShiftLocked = false
 
 local MAIN_COLOR = Color3.fromRGB(255,255,255)
-local PRESSED_COLOR = Color3.fromRGB(70,150,255)
+local PRESSED_COLOR = Color3.fromRGB(35,35,35)
 
-local WLOCK_OFF = Color3.fromRGB(220,70,70)
-local WLOCK_ON = Color3.fromRGB(70,200,100)
+local WLOCK_OFF = Color3.fromRGB(35,35,35)
+local WLOCK_ON = Color3.fromRGB(235,235,235)
 
 local SHIFT_OFF = Color3.fromRGB(255,255,255)
-local SHIFT_ON = Color3.fromRGB(170,0,255)
+local SHIFT_ON = Color3.fromRGB(35,35,35)
 
 local moveState = {
 	Forward = false,
@@ -217,25 +216,6 @@ local function updateWLock()
 	end
 end
 
-local function clearMovement()
-	moveState.Forward = false
-	moveState.Backward = false
-	moveState.Left = false
-	moveState.Right = false
-
-	for input in pairs(activeInputs) do
-		activeInputs[input] = nil
-	end
-
-	for button,color in pairs(buttonDefaults) do
-		if button and button.Parent then
-			button.BackgroundColor3 = color
-		end
-	end
-
-	updateWLock()
-end
-
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "DeltaMobileControls"
 screenGui.ResetOnSpawn = false
@@ -248,7 +228,7 @@ local crosshair = Instance.new("Frame")
 crosshair.Name = "ShiftLockCrosshair"
 crosshair.Size = UDim2.fromOffset(6,6)
 crosshair.Position = UDim2.new(.5,-3,.5,-3)
-crosshair.BackgroundColor3 = Color3.new(1,1,1)
+crosshair.BackgroundColor3 = Color3.fromRGB(255,255,255)
 crosshair.BorderSizePixel = 0
 crosshair.Visible = false
 crosshair.ZIndex = 1000000
@@ -319,7 +299,7 @@ sc.Parent = btnShiftLock
 
 local ss = Instance.new("UIStroke")
 ss.Thickness = 2
-ss.Color = Color3.new(0,0,0)
+ss.Color = Color3.fromRGB(0,0,0)
 ss.Transparency = .3
 ss.Parent = btnShiftLock
 
@@ -441,7 +421,7 @@ modeButton.Size = UDim2.new(1,0,.15,0)
 modeButton.Text = "MODE: KELINCAHAN"
 
 modeButton.BackgroundColor3 =
-	Color3.fromRGB(70,200,100)
+	Color3.fromRGB(35,35,35)
 
 modeButton.BackgroundTransparency = .15
 modeButton.TextColor3 = Color3.new(1,1,1)
@@ -466,11 +446,11 @@ connect(
 		if isDelayMode then
 			modeButton.Text = "MODE: DELAY (JEJAK)"
 			modeButton.BackgroundColor3 =
-				Color3.fromRGB(220,120,40)
+				Color3.fromRGB(180,180,180)
 		else
 			modeButton.Text = "MODE: KELINCAHAN"
 			modeButton.BackgroundColor3 =
-				Color3.fromRGB(70,200,100)
+				Color3.fromRGB(35,35,35)
 		end
 	end
 )
@@ -735,7 +715,7 @@ local function makeButton(
 	b.Text = text
 
 	b.BackgroundColor3 =
-		bg or Color3.fromRGB(245,245,245)
+		bg or Color3.fromRGB(255,255,255)
 
 	b.BackgroundTransparency = .05
 
@@ -765,7 +745,7 @@ menu.Position = UDim2.new(1,-72,1,-72)
 menu.Size = UDim2.fromOffset(60,60)
 
 menu.BackgroundColor3 =
-	Color3.fromRGB(245,245,245)
+	Color3.fromRGB(255,255,255)
 
 menu.BackgroundTransparency = .05
 menu.ImageTransparency = 0
@@ -793,7 +773,7 @@ settings.Size = UDim2.fromOffset(300,560)
 settings.Position = UDim2.new(.5,-150,.5,-280)
 
 settings.BackgroundColor3 =
-	Color3.fromRGB(245,245,245)
+	Color3.fromRGB(255,255,255)
 
 settings.BackgroundTransparency = .05
 settings.BorderSizePixel = 0
@@ -810,7 +790,7 @@ cameraSection.Size = UDim2.new(1,-20,0,160)
 cameraSection.Position = UDim2.fromOffset(10,10)
 
 cameraSection.BackgroundColor3 =
-	Color3.fromRGB(225,225,225)
+	Color3.fromRGB(230,230,230)
 
 cameraSection.BorderSizePixel = 0
 cameraSection.ZIndex = 41
@@ -836,7 +816,7 @@ local sensLabel = Instance.new("TextLabel")
 sensLabel.Size = UDim2.new(1,0,0,30)
 sensLabel.Position = UDim2.fromOffset(0,40)
 sensLabel.TextColor3 =
-	Color3.fromRGB(60,60,60)
+	Color3.fromRGB(55,55,55)
 
 sensLabel.Font = Enum.Font.Gotham
 sensLabel.TextSize = 14
@@ -929,7 +909,7 @@ jumpSection.Size = UDim2.new(1,-20,0,320)
 jumpSection.Position = UDim2.fromOffset(10,180)
 
 jumpSection.BackgroundColor3 =
-	Color3.fromRGB(225,225,225)
+	Color3.fromRGB(230,230,230)
 
 jumpSection.BorderSizePixel = 0
 jumpSection.ZIndex = 41
@@ -945,7 +925,7 @@ local modeSwitchBtn = makeButton(
 	UDim2.new(.05,0,0,10),
 	UDim2.new(.9,0,0,36),
 	"TARGET: JUMP BUTTON",
-	Color3.fromRGB(70,150,255),
+	Color3.fromRGB(35,35,35),
 	43
 )
 
@@ -962,7 +942,7 @@ connect(
 				"TARGET: SHIFT LOCK"
 
 			modeSwitchBtn.BackgroundColor3 =
-				Color3.fromRGB(170,0,255)
+				Color3.fromRGB(35,35,35)
 		else
 			targetSettingMode = "JUMP"
 
@@ -970,7 +950,7 @@ connect(
 				"TARGET: JUMP BUTTON"
 
 			modeSwitchBtn.BackgroundColor3 =
-				Color3.fromRGB(70,150,255)
+				Color3.fromRGB(35,35,35)
 		end
 	end
 )
@@ -1373,7 +1353,7 @@ local saveButton = makeButton(
 	UDim2.new(.05,0,1,-45),
 	UDim2.fromOffset(130,38),
 	"SAVE",
-	Color3.fromRGB(70,200,100),
+	Color3.fromRGB(35,35,35),
 	43
 )
 
@@ -1386,7 +1366,7 @@ local closeButton = makeButton(
 	UDim2.new(.95,-130,1,-45),
 	UDim2.fromOffset(130,38),
 	"CLOSE",
-	Color3.fromRGB(230,90,90),
+	Color3.fromRGB(35,35,35),
 	43
 )
 
@@ -1485,6 +1465,217 @@ connect(
 		if child.Name == "TouchGui" then
 			jumpButton = nil
 			refresh()
+		end
+	end
+)
+
+local gradientObjects = {}
+
+local function createBlackWhiteGradient(object,rotation)
+	if not object or not object.Parent then
+		return
+	end
+
+	local oldGradient =
+		object:FindFirstChild("BlackWhiteAnimatedGradient")
+
+	if oldGradient then
+		oldGradient:Destroy()
+	end
+
+	local gradient = Instance.new("UIGradient")
+	gradient.Name = "BlackWhiteAnimatedGradient"
+
+	gradient.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(
+			0,
+			Color3.fromRGB(0,0,0)
+		),
+
+		ColorSequenceKeypoint.new(
+			0.25,
+			Color3.fromRGB(90,90,90)
+		),
+
+		ColorSequenceKeypoint.new(
+			0.5,
+			Color3.fromRGB(255,255,255)
+		),
+
+		ColorSequenceKeypoint.new(
+			0.75,
+			Color3.fromRGB(90,90,90)
+		),
+
+		ColorSequenceKeypoint.new(
+			1,
+			Color3.fromRGB(0,0,0)
+		)
+	})
+
+	gradient.Rotation = rotation or 0
+	gradient.Offset = Vector2.new(-1,0)
+	gradient.Parent = object
+
+	table.insert(
+		gradientObjects,
+		gradient
+	)
+end
+
+createBlackWhiteGradient(
+	btnUp,
+	25
+)
+
+createBlackWhiteGradient(
+	btnDown,
+	25
+)
+
+createBlackWhiteGradient(
+	btnLeft,
+	25
+)
+
+createBlackWhiteGradient(
+	btnRight,
+	25
+)
+
+createBlackWhiteGradient(
+	btnWLock,
+	45
+)
+
+createBlackWhiteGradient(
+	btnShiftLock,
+	45
+)
+
+createBlackWhiteGradient(
+	modeButton,
+	15
+)
+
+createBlackWhiteGradient(
+	menu,
+	45
+)
+
+createBlackWhiteGradient(
+	settings,
+	15
+)
+
+createBlackWhiteGradient(
+	cameraSection,
+	15
+)
+
+createBlackWhiteGradient(
+	jumpSection,
+	15
+)
+
+createBlackWhiteGradient(
+	sensMinus,
+	25
+)
+
+createBlackWhiteGradient(
+	sensReset,
+	25
+)
+
+createBlackWhiteGradient(
+	sensPlus,
+	25
+)
+
+createBlackWhiteGradient(
+	modeSwitchBtn,
+	25
+)
+
+createBlackWhiteGradient(
+	moveUp,
+	25
+)
+
+createBlackWhiteGradient(
+	moveLeft,
+	25
+)
+
+createBlackWhiteGradient(
+	moveRight,
+	25
+)
+
+createBlackWhiteGradient(
+	moveDown,
+	25
+)
+
+createBlackWhiteGradient(
+	sizePlus,
+	25
+)
+
+createBlackWhiteGradient(
+	sizeMinus,
+	25
+)
+
+createBlackWhiteGradient(
+	center,
+	25
+)
+
+createBlackWhiteGradient(
+	saveButton,
+	25
+)
+
+createBlackWhiteGradient(
+	closeButton,
+	25
+)
+
+local gradientPosition = -1
+
+connect(
+	RunService.RenderStepped,
+	function()
+		if destroyed then
+			return
+		end
+
+		gradientPosition += 0.008
+
+		if gradientPosition > 1 then
+			gradientPosition = -1
+		end
+
+		for i = #gradientObjects,1,-1 do
+			local gradient =
+				gradientObjects[i]
+
+			if gradient
+				and gradient.Parent then
+
+				gradient.Offset =
+					Vector2.new(
+						gradientPosition,
+						0
+					)
+			else
+				table.remove(
+					gradientObjects,
+					i
+				)
+			end
 		end
 	end
 )
