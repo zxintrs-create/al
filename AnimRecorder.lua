@@ -1,25 +1,34 @@
 local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
 local GuiService = game:GetService("GuiService")
 local CoreGui = game:GetService("CoreGui")
 
 local Player = Players.LocalPlayer
-if not Player then
+local Camera = workspace.CurrentCamera
+
+if not Player or not Camera then
 	return
 end
 
-local NAME = "VZ_GameplayTouchGuard"
-local EDGE = 36
-local STROKE = 3
+local NAME = "VZ_DPI600_TouchGuard"
+
+local X_INSET = 0.062
+local Y_INSET = 0.028
+
+local BORDER_THICKNESS = 3
+local GLOW_THICKNESS = 8
+local CORNER = 42
 
 local function getParent()
-	local ok, hui = pcall(function()
-		return type(gethui) == "function" and gethui() or nil
+	local ok, result = pcall(function()
+		if type(gethui) == "function" then
+			return gethui()
+		end
 	end)
 
-	if ok and hui then
-		return hui
+	if ok and result then
+		return result
 	end
 
 	return CoreGui
@@ -39,173 +48,226 @@ ScreenGui.Name = NAME
 ScreenGui.IgnoreGuiInset = true
 ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
-ScreenGui.DisplayOrder = 2147483646
+ScreenGui.DisplayOrder = 2147483647
 ScreenGui.Parent = Parent
 
-local function Guard(name)
-	local b = Instance.new("TextButton")
-	b.Name = name
-	b.BackgroundTransparency = 1
-	b.BorderSizePixel = 0
-	b.Text = ""
-	b.TextTransparency = 1
-	b.AutoButtonColor = false
-	b.Active = true
-	b.Selectable = false
-	b.Modal = true
-	b.ZIndex = 2147483647
-	b.Parent = ScreenGui
+local function createGuard(name)
+	local button = Instance.new("TextButton")
 
-	b.Activated:Connect(function()
+	button.Name = name
+	button.BackgroundTransparency = 1
+	button.BorderSizePixel = 0
+	button.Text = ""
+	button.TextTransparency = 1
+	button.AutoButtonColor = false
+	button.Active = true
+	button.Selectable = false
+	button.Modal = true
+	button.ZIndex = 2147483647
+
+	button.Parent = ScreenGui
+
+	button.Activated:Connect(function()
 	end)
 
-	return b
+	return button
 end
 
-local Top = Guard("Top")
-local Bottom = Guard("Bottom")
-local Left = Guard("Left")
-local Right = Guard("Right")
+local TopGuard = createGuard("TopEdgeGuard")
+local BottomGuard = createGuard("BottomEdgeGuard")
+local LeftGuard = createGuard("LeftEdgeGuard")
+local RightGuard = createGuard("RightEdgeGuard")
 
 local Border = Instance.new("Frame")
-Border.Name = "TouchSafeBorder"
+Border.Name = "DPI600Border"
 Border.BackgroundTransparency = 1
 Border.BorderSizePixel = 0
 Border.ZIndex = 2147483645
 Border.Parent = ScreenGui
 
 local Corner = Instance.new("UICorner")
-Corner.CornerRadius = UDim.new(0, 45)
+Corner.CornerRadius = UDim.new(0, CORNER)
 Corner.Parent = Border
 
 local Stroke = Instance.new("UIStroke")
 Stroke.Name = "UIStroke"
-Stroke.Thickness = STROKE
+Stroke.Thickness = BORDER_THICKNESS
 Stroke.Transparency = 0.08
 Stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 Stroke.Parent = Border
 
 local Gradient = Instance.new("UIGradient")
 Gradient.Name = "UIGradient"
+
 Gradient.Color = ColorSequence.new({
-	ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 0, 0)),
-	ColorSequenceKeypoint.new(0.18, Color3.fromRGB(255, 255, 255)),
-	ColorSequenceKeypoint.new(0.36, Color3.fromRGB(0, 0, 0)),
-	ColorSequenceKeypoint.new(0.54, Color3.fromRGB(255, 255, 255)),
-	ColorSequenceKeypoint.new(0.72, Color3.fromRGB(0, 0, 0)),
-	ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 255, 255))
+	ColorSequenceKeypoint.new(0.00, Color3.fromRGB(0, 0, 0)),
+	ColorSequenceKeypoint.new(0.16, Color3.fromRGB(255, 255, 255)),
+	ColorSequenceKeypoint.new(0.32, Color3.fromRGB(0, 0, 0)),
+	ColorSequenceKeypoint.new(0.48, Color3.fromRGB(255, 255, 255)),
+	ColorSequenceKeypoint.new(0.64, Color3.fromRGB(0, 0, 0)),
+	ColorSequenceKeypoint.new(0.80, Color3.fromRGB(255, 255, 255)),
+	ColorSequenceKeypoint.new(1.00, Color3.fromRGB(0, 0, 0))
 })
+
 Gradient.Offset = Vector2.new(-1, 0)
 Gradient.Parent = Stroke
 
 local Glow = Instance.new("UIStroke")
 Glow.Name = "NeonGlow"
-Glow.Thickness = 8
-Glow.Transparency = 0.78
+Glow.Thickness = GLOW_THICKNESS
+Glow.Transparency = 0.82
 Glow.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 Glow.Parent = Border
 
 local GlowGradient = Instance.new("UIGradient")
 GlowGradient.Name = "NeonGradient"
+
 GlowGradient.Color = ColorSequence.new({
-	ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 220, 255)),
-	ColorSequenceKeypoint.new(0.25, Color3.fromRGB(0, 130, 255)),
-	ColorSequenceKeypoint.new(0.5, Color3.fromRGB(80, 70, 255)),
-	ColorSequenceKeypoint.new(0.75, Color3.fromRGB(255, 0, 210)),
-	ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 0, 120))
+	ColorSequenceKeypoint.new(0.00, Color3.fromRGB(0, 220, 255)),
+	ColorSequenceKeypoint.new(0.20, Color3.fromRGB(0, 150, 255)),
+	ColorSequenceKeypoint.new(0.40, Color3.fromRGB(40, 80, 255)),
+	ColorSequenceKeypoint.new(0.60, Color3.fromRGB(120, 40, 255)),
+	ColorSequenceKeypoint.new(0.80, Color3.fromRGB(255, 0, 220)),
+	ColorSequenceKeypoint.new(1.00, Color3.fromRGB(255, 0, 120))
 })
+
 GlowGradient.Offset = Vector2.new(-1, 0)
 GlowGradient.Parent = Glow
 
-TweenService:Create(
+local StrokeAnimation = TweenService:Create(
 	Gradient,
-	TweenInfo.new(2.5, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, -1),
-	{Offset = Vector2.new(1, 0)}
-):Play()
+	TweenInfo.new(
+		2.4,
+		Enum.EasingStyle.Linear,
+		Enum.EasingDirection.InOut,
+		-1,
+		false
+	),
+	{
+		Offset = Vector2.new(1, 0)
+	}
+)
 
-TweenService:Create(
+local GlowAnimation = TweenService:Create(
 	GlowGradient,
-	TweenInfo.new(3.5, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, -1),
-	{Offset = Vector2.new(1, 0)}
-):Play()
+	TweenInfo.new(
+		3.2,
+		Enum.EasingStyle.Linear,
+		Enum.EasingDirection.InOut,
+		-1,
+		false
+	),
+	{
+		Offset = Vector2.new(1, 0)
+	}
+)
 
-local enabled = true
-local gameplay = true
+StrokeAnimation:Play()
+GlowAnimation:Play()
 
-local function setVisible(state)
-	enabled = state
+local Enabled = true
+local GameplayMode = true
 
-	Top.Active = state
-	Bottom.Active = state
-	Left.Active = state
-	Right.Active = state
+local function setGuardState(state)
+	Enabled = state
+
+	TopGuard.Active = state
+	BottomGuard.Active = state
+	LeftGuard.Active = state
+	RightGuard.Active = state
 
 	Border.Visible = state
 end
 
-local function update()
-	local size = ScreenGui.AbsoluteSize
-	local w = size.X
-	local h = size.Y
+local function getViewport()
+	local viewport = Camera.ViewportSize
 
-	Top.Position = UDim2.fromOffset(0, 0)
-	Top.Size = UDim2.fromOffset(w, EDGE)
+	if viewport.X <= 0 or viewport.Y <= 0 then
+		return 0, 0
+	end
 
-	Bottom.Position = UDim2.fromOffset(0, math.max(0, h - EDGE))
-	Bottom.Size = UDim2.fromOffset(w, EDGE)
+	return viewport.X, viewport.Y
+end
 
-	Left.Position = UDim2.fromOffset(0, EDGE)
-	Left.Size = UDim2.fromOffset(
-		EDGE,
-		math.max(0, h - EDGE * 2)
+local function updateLayout()
+	local width, height = getViewport()
+
+	if width <= 0 or height <= 0 then
+		return
+	end
+
+	local left = math.floor(width * X_INSET)
+	local right = math.floor(width * X_INSET)
+	local top = math.floor(height * Y_INSET)
+	local bottom = math.floor(height * Y_INSET)
+
+	local gameplayWidth = math.max(1, width - left - right)
+	local gameplayHeight = math.max(1, height - top - bottom)
+
+	TopGuard.Position = UDim2.fromOffset(0, 0)
+	TopGuard.Size = UDim2.fromOffset(width, top)
+
+	BottomGuard.Position = UDim2.fromOffset(0, height - bottom)
+	BottomGuard.Size = UDim2.fromOffset(width, bottom)
+
+	LeftGuard.Position = UDim2.fromOffset(0, top)
+	LeftGuard.Size = UDim2.fromOffset(
+		left,
+		gameplayHeight
 	)
 
-	Right.Position = UDim2.fromOffset(math.max(0, w - EDGE), EDGE)
-	Right.Size = UDim2.fromOffset(
-		EDGE,
-		math.max(0, h - EDGE * 2)
+	RightGuard.Position = UDim2.fromOffset(
+		width - right,
+		top
+	)
+
+	RightGuard.Size = UDim2.fromOffset(
+		right,
+		gameplayHeight
 	)
 
 	Border.Position = UDim2.fromOffset(
-		EDGE / 2,
-		EDGE / 2
+		left,
+		top
 	)
 
 	Border.Size = UDim2.fromOffset(
-		math.max(0, w - EDGE),
-		math.max(0, h - EDGE)
+		gameplayWidth,
+		gameplayHeight
 	)
 end
 
-ScreenGui:GetPropertyChangedSignal("AbsoluteSize"):Connect(update)
-update()
-
-local function textBoxFocused()
-	local focused = UserInputService:GetFocusedTextBox()
-	return focused ~= nil
+local function isTyping()
+	return UserInputService:GetFocusedTextBox() ~= nil
 end
 
 local function refresh()
 	if not UserInputService.TouchEnabled then
-		setVisible(false)
+		setGuardState(false)
 		return
 	end
 
-	if not gameplay then
-		setVisible(false)
+	if not GameplayMode then
+		setGuardState(false)
 		return
 	end
 
-	if textBoxFocused() then
-		setVisible(false)
+	if isTyping() then
+		setGuardState(false)
 		return
 	end
 
-	setVisible(true)
+	setGuardState(true)
 end
 
+updateLayout()
+
+Camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+	updateLayout()
+end)
+
 UserInputService.TextBoxFocused:Connect(function()
-	setVisible(false)
+	setGuardState(false)
 end)
 
 UserInputService.TextBoxFocusReleased:Connect(function()
@@ -214,63 +276,70 @@ end)
 
 pcall(function()
 	GuiService.MenuOpened:Connect(function()
-		gameplay = false
-		setVisible(false)
+		GameplayMode = false
+		setGuardState(false)
 	end)
 
 	GuiService.MenuClosed:Connect(function()
-		gameplay = true
+		GameplayMode = true
 		task.defer(refresh)
 	end)
 end)
 
 Player.CharacterAdded:Connect(function()
 	task.wait(0.5)
-	gameplay = true
+	GameplayMode = true
+	updateLayout()
 	refresh()
 end)
 
-task.spawn(function()
-	while ScreenGui.Parent do
-		task.wait(0.5)
-
-		if gameplay and not textBoxFocused() then
-			if not enabled then
-				setVisible(true)
-			end
-		elseif enabled then
-			setVisible(false)
-		end
-	end
-end)
-
 _G.VZTouchGuard = {
-	Enable = function()
-		gameplay = true
-		refresh()
+	Enabled = true,
+
+	SetEnabled = function(state)
+		if state then
+			GameplayMode = true
+			refresh()
+		else
+			GameplayMode = false
+			setGuardState(false)
+		end
 	end,
 
-	Disable = function()
-		gameplay = false
-		setVisible(false)
-	end,
-
-	SetEdge = function(value)
+	SetXInset = function(value)
 		value = tonumber(value)
 
 		if not value then
 			return
 		end
 
-		EDGE = math.clamp(math.floor(value), 20, 70)
-		update()
+		X_INSET = math.clamp(value / 100, 0.01, 0.15)
+		updateLayout()
 	end,
 
-	GetEdge = function()
-		return EDGE
+	SetYInset = function(value)
+		value = tonumber(value)
+
+		if not value then
+			return
+		end
+
+		Y_INSET = math.clamp(value / 100, 0.01, 0.10)
+		updateLayout()
+	end,
+
+	Reset = function()
+		X_INSET = 0.062
+		Y_INSET = 0.028
+		updateLayout()
 	end,
 
 	Destroy = function()
+		pcall(function()
+			StrokeAnimation:Cancel()
+			GlowAnimation:Cancel()
+		end)
+
 		pcall(function()
 			ScreenGui:Destroy()
 		end)
