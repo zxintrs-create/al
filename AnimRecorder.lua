@@ -21,7 +21,8 @@ local CONFIG={
 	AntiJitter=true,
 	AntiGlitch=true,
 	AntiLag=true,
-	AntiOutTrack=true
+	AntiOutTrack=true,
+	Loop=false
 }
 
 local COLORS={
@@ -47,6 +48,7 @@ local savedRoutes={}
 
 local isRecording=false
 local isPlaying=false
+local isReturningToStart=false
 
 local recordConnection
 local playbackConnection
@@ -948,6 +950,7 @@ local function stopPlayback()
 	playbackLastPosition=nil
 	playbackDirection=Vector3.zero
 	playbackJumpCursor=1
+	isReturningToStart=false
 
 	if Humanoid and Humanoid.Parent then
 		pcall(function()
@@ -1122,6 +1125,7 @@ local function startRecording()
 	playbackLastPosition=nil
 	playbackDirection=Vector3.zero
 	playbackJumpCursor=1
+	isReturningToStart=false
 
 	recordStart=os.clock()
 	lastRecordClock=0
@@ -1179,6 +1183,8 @@ local function initializePlayback()
 	playbackElapsed=0
 	playbackLastPosition=Root.Position
 	playbackDirection=getPointMove(route[1])
+	playbackJumpCursor=1
+	isReturningToStart=false
 
 	if playbackDirection.Magnitude<0.03 then
 		playbackDirection=getPointLook(route[1])
@@ -1201,8 +1207,6 @@ local function initializePlayback()
 			playbackDirection=flat.Unit
 		end
 	end
-
-	playbackJumpCursor=1
 
 	return true
 end
@@ -1244,7 +1248,9 @@ local function startPlayback()
 	isPlaying=true
 
 	setAutoStatus(
-		"STATUS : PLAYING • START → END",
+		CONFIG.Loop
+		and "STATUS : LOOP • START → END → START"
+		or "STATUS : PLAYING • START → END",
 		COLORS.Success
 	)
 
@@ -1278,16 +1284,207 @@ local function startPlayback()
 				0.1
 			)
 
-			local previousElapsed=
-				playbackElapsed
+			local previousElapsed=playbackElapsed
+			local duration=getRouteDuration()
+
+			if isReturningToStart then
+				local startPosition=
+					getPointPosition(route[1])
+
+				local currentPosition=Root.Position
+
+				local returnVector=Vector3.new(
+					startPosition.X-currentPosition.X,
+					0,
+					startPosition.Z-currentPosition.Z
+				)
+
+				local returnDistance=returnVector.Magnitude
+
+				if returnDistance<=1.25 then
+					playbackElapsed=0
+					playbackIndex=1
+					playbackJumpCursor=1
+					playbackLastPosition=Root.Position
+					isReturningToStart=false
+
+					local startMove=getPointMove(route[1])
+
+					if startMove.Magnitude<0.03 then
+						startMove=getPointLook(route[1])
+					end
+
+					if startMove.Magnitude>0.03 then
+						playbackDirection=startMove.Unit
+					end
+
+					if PlaybackMarker then
+						PlaybackMarker.Position=
+							startPosition
+					end
+
+					setAutoStatus(
+						"STATUS : LOOP • START → END",
+						COLORS.Success
+					)
+
+					pcall(function()
+						Humanoid:Move(
+							playbackDirection,
+							false
+						)
+					end)
+
+					return
+				end
+
+				local returnDirection=returnVector.Unit
+
+				local currentDirection=playbackDirection
+
+				local smoothAlpha=
+					CONFIG.NaturalAnimation
+					and 0.16
+					or 0.12
+
+				if currentDirection.Magnitude>0.03 then
+					currentDirection=(
+						currentDirection*(1-smoothAlpha)
+						+
+						returnDirection*smoothAlpha
+					)
+
+					if currentDirection.Magnitude>0.03 then
+						currentDirection=currentDirection.Unit
+					end
+				else
+					currentDirection=returnDirection
+				end
+
+				playbackDirection=currentDirection
+
+				pcall(function()
+					Humanoid:Move(
+						playbackDirection,
+						false
+					)
+				end)
+
+				if PlaybackMarker then
+					PlaybackMarker.Position=
+						currentPosition
+				end
+
+				if Humanoid.PlatformStand then
+					Humanoid.PlatformStand=false
+				end
+
+				return
+			end
 
 			playbackElapsed+=safeDt
 
-			local duration=getRouteDuration()
-
 			if playbackElapsed>=duration then
+				if CONFIG.Loop then
+					isReturningToStart=true
+
+					local endPosition=
+						getPointPosition(route[#route])
+
+					local startPosition=
+						getPointPosition(route[1])
+
+					local currentPosition=Root.Position
+
+					local fromEnd=Vector3.new(
+						endPosition.X-currentPosition.X,
+						0,
+						endPosition.Z-currentPosition.Z
+					)
+
+					local toStart=Vector3.new(
+						startPosition.X-currentPosition.X,
+						0,
+						startPosition.Z-currentPosition.Z
+					)
+
+					local distanceToStart=
+						toStart.Magnitude
+
+					if distanceToStart<=1.25 then
+						playbackElapsed=0
+						playbackIndex=1
+						playbackJumpCursor=1
+						playbackLastPosition=Root.Position
+						isReturningToStart=false
+
+						local startMove=
+							getPointMove(route[1])
+
+						if startMove.Magnitude<0.03 then
+							startMove=getPointLook(route[1])
+						end
+
+						if startMove.Magnitude>0.03 then
+							playbackDirection=startMove.Unit
+						end
+
+						if PlaybackMarker then
+							PlaybackMarker.Position=
+								startPosition
+						end
+
+						return
+					end
+
+					local returnDirection=toStart.Unit
+
+					local currentDirection=playbackDirection
+
+					local endBlend=
+						CONFIG.NaturalAnimation
+						and 0.18
+						or 0.12
+
+					if currentDirection.Magnitude>0.03 then
+						currentDirection=(
+							currentDirection*(1-endBlend)
+							+
+							returnDirection*endBlend
+						)
+
+						if currentDirection.Magnitude>0.03 then
+							currentDirection=currentDirection.Unit
+						end
+					else
+						currentDirection=returnDirection
+					end
+
+					playbackDirection=currentDirection
+
+					pcall(function()
+						Humanoid:Move(
+							playbackDirection,
+							false
+						)
+					end)
+
+					if PlaybackMarker then
+						PlaybackMarker.Position=
+							currentPosition
+					end
+
+					if Humanoid.PlatformStand then
+						Humanoid.PlatformStand=false
+					end
+
+					return
+				end
+
 				local finalPoint=route[#route]
-				local finalPosition=getPointPosition(finalPoint)
+				local finalPosition=
+					getPointPosition(finalPoint)
+
 				local currentPosition=Root.Position
 
 				local endVector=Vector3.new(
@@ -1329,6 +1526,7 @@ local function startPlayback()
 					end
 
 					playbackElapsed=duration
+
 					return
 				end
 
@@ -1374,6 +1572,7 @@ local function startPlayback()
 
 			if CONFIG.AntiLag
 				and safeDt>0.05 then
+
 				lookAheadTime+=0.06
 			end
 
@@ -1463,6 +1662,7 @@ local function startPlayback()
 				task.defer(
 					function()
 						if isPlaying
+							and not isReturningToStart
 							and Humanoid
 							and Humanoid.Parent
 							and playbackDirection.Magnitude>0.03 then
@@ -1641,7 +1841,7 @@ local function saveCurrentRoute()
 	buildJumpEvents()
 
 	savedRoutes.Main={
-		Version=2,
+		Version=3,
 		Points=route,
 		Jumps=jumpEvents
 	}
@@ -1695,6 +1895,7 @@ local function loadCurrentRoute()
 	playbackIndex=1
 	playbackElapsed=0
 	playbackJumpCursor=1
+	isReturningToStart=false
 
 	rebuildRouteVisuals()
 
@@ -1719,6 +1920,7 @@ local function removeSavedRoute()
 	playbackIndex=1
 	playbackElapsed=0
 	playbackJumpCursor=1
+	isReturningToStart=false
 
 	clearRouteVisuals()
 
@@ -2336,6 +2538,7 @@ createButton(
 		playbackElapsed=0
 		playbackJumpCursor=1
 		playbackDirection=Vector3.zero
+		isReturningToStart=false
 
 		if PlaybackMarker
 			and route[1] then
@@ -2377,8 +2580,28 @@ createButton(
 
 createSection(
 	AutoPage,
-	"PLAYBACK PROTECTION",
-	"Movement stability"
+	"PLAYBACK",
+	"Loop and movement stability"
+)
+
+createToggle(
+	AutoPage,
+	"LOOP AUTO WALK",
+	CONFIG.Loop,
+	function(v)
+		CONFIG.Loop=v
+		isReturningToStart=false
+		saveConfig()
+
+		if isPlaying then
+			setAutoStatus(
+				v
+				and "STATUS : LOOP • START → END → START"
+				or "STATUS : PLAYING • START → END",
+				COLORS.Success
+			)
+		end
+	end
 )
 
 createToggle(
@@ -2966,6 +3189,9 @@ createButton(
 		CONFIG.AntiGlitch=true
 		CONFIG.AntiLag=true
 		CONFIG.AntiOutTrack=true
+		CONFIG.Loop=false
+
+		isReturningToStart=false
 
 		setAntiAFK(false)
 		applyGradient()
