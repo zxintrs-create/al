@@ -21,55 +21,88 @@ local defaultConfig = {
 local SHIFT_LOCK_IMAGE_ID = "136616143786672"
 local OPEN_MENU_IMAGE_ID = "112921115907036"
 
-local SHIFT_LOCK_IMAGE = "rbxassetid://" .. SHIFT_LOCK_IMAGE_ID
-local OPEN_MENU_IMAGE = "rbxassetid://" .. OPEN_MENU_IMAGE_ID
-
 local config = {}
 
 for k, v in pairs(defaultConfig) do
 	config[k] = v
 end
 
-local function getImageAsset(id)
-	return "rbxassetid://" .. tostring(id)
+local destroyed = false
+local connections = {}
+local animatedGradients = {}
+
+local function connect(signal, callback)
+	local connection
+
+	pcall(function()
+		connection = signal:Connect(callback)
+	end)
+
+	if connection then
+		table.insert(connections, connection)
+	end
+
+	return connection
 end
 
-local function getImageThumbnail(id)
-	return "rbxthumb://type=Asset&id=" .. tostring(id) .. "&w=420&h=420"
+local function disconnectAll()
+	for i = #connections, 1, -1 do
+		pcall(function()
+			connections[i]:Disconnect()
+		end)
+	end
+
+	table.clear(connections)
 end
 
-local function applyImage(button, assetId)
-	if not button then
+local function destroyGuiFrom(parent, name)
+	if not parent then
 		return
 	end
 
-	pcall(function()
-		button.Image = getImageAsset(assetId)
-		button.ImageTransparency = 0
-		button.ImageColor3 = Color3.fromRGB(255, 255, 255)
-		button.ScaleType = Enum.ScaleType.Fit
-		button.ResampleMode = Enum.ResamplerMode.Default
-	end)
+	local gui = parent:FindFirstChild(name)
 
-	task.delay(1.5, function()
-		if not button or not button.Parent then
-			return
-		end
-
-		local loaded = false
-
+	if gui then
 		pcall(function()
-			loaded = button.IsLoaded
+			gui:Destroy()
 		end)
+	end
+end
 
-		if not loaded then
-			pcall(function()
-				button.Image = getImageThumbnail(assetId)
-				button.ImageTransparency = 0
-				button.ImageColor3 = Color3.fromRGB(255, 255, 255)
-				button.ScaleType = Enum.ScaleType.Fit
-			end)
-		end
+local function destroyOldGui()
+	destroyGuiFrom(playerGui, "DeltaMobileControls")
+	destroyGuiFrom(playerGui, "DeltaMobileErgo")
+
+	pcall(function()
+		local coreGui = game:GetService("CoreGui")
+		destroyGuiFrom(coreGui, "DeltaMobileControls")
+		destroyGuiFrom(coreGui, "DeltaMobileErgo")
+	end)
+end
+
+if _G.DeltaMobileControlsCleanup then
+	pcall(_G.DeltaMobileControlsCleanup)
+end
+
+destroyOldGui()
+
+_G.DeltaMobileControlsCleanup = function()
+	if destroyed then
+		return
+	end
+
+	destroyed = true
+
+	disconnectAll()
+	table.clear(animatedGradients)
+
+	destroyGuiFrom(playerGui, "DeltaMobileControls")
+	destroyGuiFrom(playerGui, "DeltaMobileErgo")
+
+	pcall(function()
+		local coreGui = game:GetService("CoreGui")
+		destroyGuiFrom(coreGui, "DeltaMobileControls")
+		destroyGuiFrom(coreGui, "DeltaMobileErgo")
 	end)
 end
 
@@ -104,76 +137,24 @@ end
 
 loadConfig()
 
-if _G.DeltaMobileControlsCleanup then
-	pcall(_G.DeltaMobileControlsCleanup)
-end
-
-local connections = {}
-local animatedGradients = {}
-local destroyed = false
-
-local function connect(signal, callback)
-	local connection
-
-	pcall(function()
-		connection = signal:Connect(callback)
-	end)
-
-	if connection then
-		table.insert(connections, connection)
-	end
-
-	return connection
-end
-
-local function disconnectAll()
-	for i = #connections, 1, -1 do
-		pcall(function()
-			connections[i]:Disconnect()
-		end)
-	end
-
-	table.clear(connections)
-end
-
-local function destroyGui(name)
-	local gui = playerGui:FindFirstChild(name)
-
-	if gui then
-		pcall(function()
-			gui:Destroy()
-		end)
-	end
-end
-
-_G.DeltaMobileControlsCleanup = function()
-	if destroyed then
-		return
-	end
-
-	destroyed = true
-
-	disconnectAll()
-	table.clear(animatedGradients)
-
-	destroyGui("DeltaMobileControls")
-	destroyGui("DeltaMobileErgo")
-end
-
-destroyGui("DeltaMobileControls")
-destroyGui("DeltaMobileErgo")
-
 local character = player.Character or player.CharacterAdded:Wait()
 local humanoid = character:WaitForChild("Humanoid")
 
 _G.ShiftLocked = false
 
 local BLACK = Color3.fromRGB(8, 8, 8)
-local DARK = Color3.fromRGB(20, 20, 20)
+local DARK = Color3.fromRGB(22, 22, 22)
+local DARKER = Color3.fromRGB(14, 14, 14)
+
 local WHITE = Color3.fromRGB(245, 245, 245)
 local PURE_WHITE = Color3.fromRGB(255, 255, 255)
 
-local PRESSED_COLOR = Color3.fromRGB(55, 55, 55)
+local ACTIVE_COLOR = Color3.fromRGB(45, 145, 255)
+local ACTIVE_COLOR_2 = Color3.fromRGB(35, 115, 210)
+
+local PRESSED_COLOR = Color3.fromRGB(65, 65, 65)
+local PRESSED_TRANSPARENCY = 0.02
+local NORMAL_TRANSPARENCY = 0.08
 
 local moveState = {
 	Forward = false,
@@ -183,8 +164,26 @@ local moveState = {
 	WLock = false
 }
 
-local buttonDefaults = {}
 local activeInputs = {}
+local buttonDefaults = {}
+
+local function addCorner(object, radius)
+	if not object then
+		return
+	end
+
+	local old = object:FindFirstChildOfClass("UICorner")
+
+	if old then
+		old:Destroy()
+	end
+
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, radius or 12)
+	corner.Parent = object
+
+	return corner
+end
 
 local function addAnimatedStroke(object, thickness)
 	if not object then
@@ -211,7 +210,7 @@ local function addAnimatedStroke(object, thickness)
 
 	gradient.Color = ColorSequence.new({
 		ColorSequenceKeypoint.new(0.00, Color3.fromRGB(0, 0, 0)),
-		ColorSequenceKeypoint.new(0.20, Color3.fromRGB(80, 80, 80)),
+		ColorSequenceKeypoint.new(0.20, Color3.fromRGB(70, 70, 70)),
 		ColorSequenceKeypoint.new(0.40, Color3.fromRGB(255, 255, 255)),
 		ColorSequenceKeypoint.new(0.60, Color3.fromRGB(80, 80, 80)),
 		ColorSequenceKeypoint.new(0.80, Color3.fromRGB(0, 0, 0)),
@@ -227,11 +226,34 @@ local function addAnimatedStroke(object, thickness)
 	return stroke
 end
 
-local function addCorner(object, radius)
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, radius or 12)
-	corner.Parent = object
-	return corner
+local function getImageAsset(id)
+	return "rbxassetid://" .. tostring(id)
+end
+
+local function applyImage(button, assetId)
+	if not button then
+		return
+	end
+
+	pcall(function()
+		button.Image = getImageAsset(assetId)
+		button.ImageTransparency = 0
+		button.ImageColor3 = PURE_WHITE
+		button.ScaleType = Enum.ScaleType.Fit
+		button.ResampleMode = Enum.ResamplerMode.Default
+	end)
+end
+
+local function setImageVisible(button)
+	if not button or not button.Parent then
+		return
+	end
+
+	pcall(function()
+		button.ImageTransparency = 0
+		button.ImageColor3 = PURE_WHITE
+		button.ScaleType = Enum.ScaleType.Fit
+	end)
 end
 
 local function setImageState(button, enabled)
@@ -240,12 +262,16 @@ local function setImageState(button, enabled)
 	end
 
 	pcall(function()
+		button.ImageTransparency = 0
+
 		if enabled then
-			button.ImageColor3 = Color3.fromRGB(0, 0, 0)
-			button.ImageTransparency = 0
+			button.ImageColor3 = PURE_WHITE
+			button.BackgroundColor3 = ACTIVE_COLOR
+			button.BackgroundTransparency = 0.02
 		else
-			button.ImageColor3 = Color3.fromRGB(255, 255, 255)
-			button.ImageTransparency = 0
+			button.ImageColor3 = PURE_WHITE
+			button.BackgroundColor3 = BLACK
+			button.BackgroundTransparency = 0.05
 		end
 	end)
 end
@@ -255,11 +281,30 @@ local function visual(button, pressed)
 		return
 	end
 
-	if pressed then
-		button.BackgroundColor3 = PRESSED_COLOR
-	else
-		button.BackgroundColor3 =
-			buttonDefaults[button] or DARK
+	pcall(function()
+		if pressed then
+			button.BackgroundColor3 = PRESSED_COLOR
+			button.BackgroundTransparency = PRESSED_TRANSPARENCY
+			button.TextColor3 = PURE_WHITE
+		else
+			button.BackgroundColor3 =
+				buttonDefaults[button] or DARK
+
+			button.BackgroundTransparency =
+				NORMAL_TRANSPARENCY
+
+			button.TextColor3 = PURE_WHITE
+		end
+	end)
+end
+
+local function clearMovement()
+	for direction in pairs(moveState) do
+		moveState[direction] = false
+	end
+
+	for input in pairs(activeInputs) do
+		activeInputs[input] = nil
 	end
 end
 
@@ -267,17 +312,21 @@ local btnWLock
 local btnShiftLock
 
 local function updateWLock()
-	if btnWLock and btnWLock.Parent then
-		if moveState.WLock then
-			btnWLock.BackgroundColor3 = PURE_WHITE
-			btnWLock.TextColor3 = BLACK
-			btnWLock.Text = "W"
-		else
-			btnWLock.BackgroundColor3 = BLACK
-			btnWLock.TextColor3 = PURE_WHITE
-			btnWLock.Text = "W"
-		end
+	if not btnWLock or not btnWLock.Parent then
+		return
 	end
+
+	if moveState.WLock then
+		btnWLock.BackgroundColor3 = ACTIVE_COLOR
+		btnWLock.BackgroundTransparency = 0.02
+		btnWLock.TextColor3 = PURE_WHITE
+	else
+		btnWLock.BackgroundColor3 = BLACK
+		btnWLock.BackgroundTransparency = 0.05
+		btnWLock.TextColor3 = PURE_WHITE
+	end
+
+	btnWLock.Text = "W"
 end
 
 local screenGui = Instance.new("ScreenGui")
@@ -299,7 +348,6 @@ crosshair.ZIndex = 1000000
 crosshair.Parent = screenGui
 
 addCorner(crosshair, 6)
-
 addAnimatedStroke(crosshair, 1.5)
 
 local function toggleShiftLock()
@@ -310,13 +358,10 @@ local function toggleShiftLock()
 	_G.ShiftLocked = not _G.ShiftLocked
 
 	if btnShiftLock and btnShiftLock.Parent then
-		if _G.ShiftLocked then
-			btnShiftLock.BackgroundColor3 = PURE_WHITE
-			setImageState(btnShiftLock, true)
-		else
-			btnShiftLock.BackgroundColor3 = BLACK
-			setImageState(btnShiftLock, false)
-		end
+		setImageState(
+			btnShiftLock,
+			_G.ShiftLocked
+		)
 	end
 
 	crosshair.Visible = _G.ShiftLocked
@@ -344,10 +389,12 @@ btnShiftLock.Size = UDim2.fromOffset(
 )
 
 btnShiftLock.BackgroundColor3 = BLACK
-btnShiftLock.BackgroundTransparency = .08
+btnShiftLock.BackgroundTransparency = 0.05
+
 btnShiftLock.ImageTransparency = 0
 btnShiftLock.ImageColor3 = PURE_WHITE
 btnShiftLock.ScaleType = Enum.ScaleType.Fit
+
 btnShiftLock.AutoButtonColor = false
 btnShiftLock.Active = true
 btnShiftLock.Selectable = false
@@ -360,8 +407,9 @@ applyImage(
 	SHIFT_LOCK_IMAGE_ID
 )
 
-addCorner(btnShiftLock, 999)
+setImageVisible(btnShiftLock)
 
+addCorner(btnShiftLock, 999)
 addAnimatedStroke(btnShiftLock, 2.5)
 
 connect(
@@ -386,7 +434,7 @@ local function createMoveButton(name, pos, size, text)
 	b.Text = text
 
 	b.BackgroundColor3 = BLACK
-	b.BackgroundTransparency = .08
+	b.BackgroundTransparency = NORMAL_TRANSPARENCY
 
 	b.TextColor3 = PURE_WHITE
 	b.Font = Enum.Font.GothamBold
@@ -440,10 +488,11 @@ btnWLock.Name = "WLock"
 btnWLock.AnchorPoint = Vector2.new(.5, .5)
 btnWLock.Position = UDim2.new(1, 42, .5, 0)
 btnWLock.Size = UDim2.fromOffset(62, 62)
+
 btnWLock.Text = "W"
 
 btnWLock.BackgroundColor3 = BLACK
-btnWLock.BackgroundTransparency = .05
+btnWLock.BackgroundTransparency = 0.05
 
 btnWLock.TextColor3 = PURE_WHITE
 btnWLock.Font = Enum.Font.GothamBold
@@ -477,13 +526,16 @@ local modeButton = Instance.new("TextButton")
 modeButton.Name = "ToggleDelay"
 modeButton.Position = UDim2.new(0, 0, -.20, 0)
 modeButton.Size = UDim2.new(1, 0, .15, 0)
+
 modeButton.Text = "MODE: KELINCAHAN"
 
 modeButton.BackgroundColor3 = BLACK
-modeButton.BackgroundTransparency = .08
+modeButton.BackgroundTransparency = NORMAL_TRANSPARENCY
+
 modeButton.TextColor3 = PURE_WHITE
 modeButton.Font = Enum.Font.GothamBold
 modeButton.TextSize = 16
+
 modeButton.AutoButtonColor = false
 modeButton.Active = true
 modeButton.Selectable = false
@@ -497,15 +549,21 @@ addAnimatedStroke(modeButton, 2)
 connect(
 	modeButton.Activated,
 	function()
+		if destroyed then
+			return
+		end
+
 		isDelayMode = not isDelayMode
 
 		if isDelayMode then
 			modeButton.Text = "MODE: DELAY (JEJAK)"
-			modeButton.BackgroundColor3 = PURE_WHITE
-			modeButton.TextColor3 = BLACK
+			modeButton.BackgroundColor3 = ACTIVE_COLOR
+			modeButton.BackgroundTransparency = 0.02
+			modeButton.TextColor3 = PURE_WHITE
 		else
 			modeButton.Text = "MODE: KELINCAHAN"
 			modeButton.BackgroundColor3 = BLACK
+			modeButton.BackgroundTransparency = NORMAL_TRANSPARENCY
 			modeButton.TextColor3 = PURE_WHITE
 		end
 	end
@@ -533,7 +591,11 @@ local function releaseInput(input)
 	end
 
 	activeInputs[input] = nil
-	setDirection(data.direction, false)
+
+	setDirection(
+		data.direction,
+		false
+	)
 end
 
 local function bindDirection(button, direction)
@@ -560,7 +622,10 @@ local function bindDirection(button, direction)
 				button = button
 			}
 
-			setDirection(direction, true)
+			setDirection(
+				direction,
+				true
+			)
 		end
 	)
 
@@ -579,13 +644,6 @@ bindDirection(btnRight, "Right")
 
 connect(
 	UserInputService.InputEnded,
-	function(input)
-		releaseInput(input)
-	end
-)
-
-connect(
-	UserInputService.TouchEnded,
 	function(input)
 		releaseInput(input)
 	end
@@ -703,9 +761,7 @@ connect(
 			return
 		end
 
-		local count = #animatedGradients
-
-		for i = count, 1, -1 do
+		for i = #animatedGradients, 1, -1 do
 			local gradient = animatedGradients[i]
 
 			if gradient and gradient.Parent then
@@ -721,7 +777,10 @@ connect(
 					0
 				)
 			else
-				table.remove(animatedGradients, i)
+				table.remove(
+					animatedGradients,
+					i
+				)
 			end
 		end
 	end
@@ -753,7 +812,6 @@ connect(
 
 		if _G.ShiftLocked then
 			local camera = workspace.CurrentCamera
-
 			local root =
 				character:FindFirstChild("HumanoidRootPart")
 
@@ -786,15 +844,7 @@ gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 gui.DisplayOrder = 1000000
 gui.Parent = playerGui
 
-local function makeButton(
-	parent,
-	name,
-	pos,
-	size,
-	text,
-	bg,
-	z
-)
+local function makeButton(parent, name, pos, size, text, bg, z)
 	local b = Instance.new("TextButton")
 
 	b.Name = name
@@ -802,14 +852,10 @@ local function makeButton(
 	b.Size = size
 	b.Text = text
 
-	b.BackgroundColor3 =
-		bg or BLACK
+	b.BackgroundColor3 = bg or BLACK
+	b.BackgroundTransparency = NORMAL_TRANSPARENCY
 
-	b.BackgroundTransparency = .05
-
-	b.TextColor3 =
-		PURE_WHITE
-
+	b.TextColor3 = PURE_WHITE
 	b.Font = Enum.Font.GothamBold
 	b.TextSize = 22
 
@@ -820,6 +866,8 @@ local function makeButton(
 	b.ZIndex = z or 41
 	b.Parent = parent
 
+	buttonDefaults[b] = b.BackgroundColor3
+
 	addCorner(b, 12)
 	addAnimatedStroke(b, 2)
 
@@ -828,14 +876,20 @@ end
 
 local menu = Instance.new("ImageButton")
 menu.Name = "OpenMenu"
-menu.Position = UDim2.new(1, -72, 1, -72)
-menu.Size = UDim2.fromOffset(60, 60)
+
+menu.Position =
+	UDim2.new(1, -72, 1, -72)
+
+menu.Size =
+	UDim2.fromOffset(60, 60)
 
 menu.BackgroundColor3 = BLACK
-menu.BackgroundTransparency = .05
+menu.BackgroundTransparency = 0.05
+
 menu.ImageTransparency = 0
 menu.ImageColor3 = PURE_WHITE
 menu.ScaleType = Enum.ScaleType.Fit
+
 menu.AutoButtonColor = false
 menu.Active = true
 menu.Selectable = false
@@ -848,16 +902,23 @@ applyImage(
 	OPEN_MENU_IMAGE_ID
 )
 
+setImageVisible(menu)
+
 addCorner(menu, 999)
 addAnimatedStroke(menu, 2.5)
 
 local settings = Instance.new("Frame")
 settings.Name = "SettingsFrame"
-settings.Size = UDim2.fromOffset(300, 560)
-settings.Position = UDim2.new(.5, -150, .5, -280)
+
+settings.Size =
+	UDim2.fromOffset(300, 560)
+
+settings.Position =
+	UDim2.new(.5, -150, .5, -280)
 
 settings.BackgroundColor3 = BLACK
 settings.BackgroundTransparency = .04
+
 settings.BorderSizePixel = 0
 settings.Visible = false
 settings.ZIndex = 40
@@ -867,8 +928,11 @@ addCorner(settings, 16)
 addAnimatedStroke(settings, 2.5)
 
 local cameraSection = Instance.new("Frame")
-cameraSection.Size = UDim2.new(1, -20, 0, 160)
-cameraSection.Position = UDim2.fromOffset(10, 10)
+cameraSection.Size =
+	UDim2.new(1, -20, 0, 160)
+
+cameraSection.Position =
+	UDim2.fromOffset(10, 10)
 
 cameraSection.BackgroundColor3 =
 	Color3.fromRGB(28, 28, 28)
@@ -881,22 +945,36 @@ addCorner(cameraSection, 12)
 addAnimatedStroke(cameraSection, 1.5)
 
 local cameraTitle = Instance.new("TextLabel")
-cameraTitle.Size = UDim2.new(1, 0, 0, 40)
-cameraTitle.Text = "CAMERA SENSI SETTING"
-cameraTitle.TextColor3 = PURE_WHITE
-cameraTitle.Font = Enum.Font.GothamBold
+cameraTitle.Size =
+	UDim2.new(1, 0, 0, 40)
+
+cameraTitle.Text =
+	"CAMERA SENSI SETTING"
+
+cameraTitle.TextColor3 =
+	PURE_WHITE
+
+cameraTitle.Font =
+	Enum.Font.GothamBold
+
 cameraTitle.TextSize = 18
 cameraTitle.BackgroundTransparency = 1
 cameraTitle.ZIndex = 42
 cameraTitle.Parent = cameraSection
 
 local sensLabel = Instance.new("TextLabel")
-sensLabel.Size = UDim2.new(1, 0, 0, 30)
-sensLabel.Position = UDim2.fromOffset(0, 40)
+sensLabel.Size =
+	UDim2.new(1, 0, 0, 30)
+
+sensLabel.Position =
+	UDim2.fromOffset(0, 40)
+
 sensLabel.TextColor3 =
 	Color3.fromRGB(210, 210, 210)
 
-sensLabel.Font = Enum.Font.Gotham
+sensLabel.Font =
+	Enum.Font.Gotham
+
 sensLabel.TextSize = 14
 sensLabel.BackgroundTransparency = 1
 sensLabel.ZIndex = 42
@@ -983,8 +1061,11 @@ connect(
 applySensitivity()
 
 local jumpSection = Instance.new("Frame")
-jumpSection.Size = UDim2.new(1, -20, 0, 320)
-jumpSection.Position = UDim2.fromOffset(10, 180)
+jumpSection.Size =
+	UDim2.new(1, -20, 0, 320)
+
+jumpSection.Position =
+	UDim2.fromOffset(10, 180)
 
 jumpSection.BackgroundColor3 =
 	Color3.fromRGB(28, 28, 28)
@@ -1006,9 +1087,6 @@ local modeSwitchBtn = makeButton(
 	43
 )
 
-modeSwitchBtn.TextColor3 =
-	PURE_WHITE
-
 connect(
 	modeSwitchBtn.Activated,
 	function()
@@ -1019,10 +1097,10 @@ connect(
 				"TARGET: SHIFT LOCK"
 
 			modeSwitchBtn.BackgroundColor3 =
-				PURE_WHITE
+				ACTIVE_COLOR
 
-			modeSwitchBtn.TextColor3 =
-				BLACK
+			modeSwitchBtn.BackgroundTransparency = 0.02
+			modeSwitchBtn.TextColor3 = PURE_WHITE
 		else
 			targetSettingMode = "JUMP"
 
@@ -1031,6 +1109,9 @@ connect(
 
 			modeSwitchBtn.BackgroundColor3 =
 				BLACK
+
+			modeSwitchBtn.BackgroundTransparency =
+				NORMAL_TRANSPARENCY
 
 			modeSwitchBtn.TextColor3 =
 				PURE_WHITE
@@ -1236,6 +1317,8 @@ local function updateShift()
 				config.ShiftSize,
 				config.ShiftSize
 			)
+
+		setImageVisible(btnShiftLock)
 	end
 end
 
@@ -1286,6 +1369,10 @@ local function bindHold(button, dx, dy)
 	connect(
 		button.InputBegan,
 		function(input)
+			if destroyed then
+				return
+			end
+
 			local t = input.UserInputType
 
 			if t ~= Enum.UserInputType.Touch
@@ -1294,7 +1381,11 @@ local function bindHold(button, dx, dy)
 			end
 
 			holding[button] = true
-			applyMoveStep(dx, dy)
+
+			applyMoveStep(
+				dx,
+				dy
+			)
 		end
 	)
 
@@ -1411,19 +1502,15 @@ connect(
 	center.Activated,
 	function()
 		if targetSettingMode == "JUMP" then
-			config.JumpX =
-				defaultConfig.JumpX
-
-			config.JumpY =
-				defaultConfig.JumpY
+			config.JumpX = defaultConfig.JumpX
+			config.JumpY = defaultConfig.JumpY
+			config.JumpSize = defaultConfig.JumpSize
 
 			updateJump()
 		else
-			config.ShiftX =
-				defaultConfig.ShiftX
-
-			config.ShiftY =
-				defaultConfig.ShiftY
+			config.ShiftX = defaultConfig.ShiftX
+			config.ShiftY = defaultConfig.ShiftY
+			config.ShiftSize = defaultConfig.ShiftSize
 
 			updateShift()
 		end
@@ -1458,8 +1545,9 @@ connect(
 		local old = saveButton.Text
 
 		saveButton.Text = "SAVED!"
-		saveButton.BackgroundColor3 = PURE_WHITE
-		saveButton.TextColor3 = BLACK
+		saveButton.BackgroundColor3 = ACTIVE_COLOR
+		saveButton.BackgroundTransparency = 0.02
+		saveButton.TextColor3 = PURE_WHITE
 
 		task.delay(
 			1,
@@ -1469,26 +1557,39 @@ connect(
 
 					saveButton.Text = old
 					saveButton.BackgroundColor3 = BLACK
-					saveButton.TextColor3 = PURE_WHITE
+					saveButton.BackgroundTransparency =
+						NORMAL_TRANSPARENCY
+					saveButton.TextColor3 =
+						PURE_WHITE
 				end
 			end
 		)
 	end
 )
 
+local function updateMenuVisual()
+	if settings.Visible then
+		menu.BackgroundColor3 = ACTIVE_COLOR
+		menu.BackgroundTransparency = 0.02
+	else
+		menu.BackgroundColor3 = BLACK
+		menu.BackgroundTransparency = 0.05
+	end
+
+	setImageVisible(menu)
+end
+
 connect(
 	menu.Activated,
 	function()
+		if destroyed then
+			return
+		end
+
 		settings.Visible =
 			not settings.Visible
 
-		if settings.Visible then
-			menu.BackgroundColor3 = PURE_WHITE
-			setImageState(menu, true)
-		else
-			menu.BackgroundColor3 = BLACK
-			setImageState(menu, false)
-		end
+		updateMenuVisual()
 	end
 )
 
@@ -1496,20 +1597,22 @@ connect(
 	closeButton.Activated,
 	function()
 		settings.Visible = false
-
-		menu.BackgroundColor3 = BLACK
-		setImageState(menu, false)
+		updateMenuVisual()
 	end
 )
 
 local function refresh()
 	task.defer(function()
+		if destroyed then
+			return
+		end
+
 		updateJump()
 		updateShift()
 	end)
 
 	task.delay(
-		.2,
+		0.25,
 		function()
 			if not destroyed then
 				updateJump()
@@ -1556,12 +1659,30 @@ connect(
 	function(child)
 		if child.Name == "TouchGui" then
 			jumpButton = nil
-			refresh()
+
+			task.defer(function()
+				if not destroyed then
+					refresh()
+				end
+			end)
 		end
+	end
+)
+
+connect(
+	workspace:GetPropertyChangedSignal("CurrentCamera"),
+	function()
+		task.defer(function()
+			if not destroyed then
+				updateJump()
+				updateShift()
+			end
+		end)
 	end
 )
 
 updateCameraVectors()
 updateWLock()
+updateMenuVisual()
 updateJump()
 updateShift()
