@@ -97,7 +97,6 @@ local function loadConfig()
 				for k,v in pairs(data) do
 					if defaultConfig[k] ~= nil
 						and type(v) == type(defaultConfig[k]) then
-
 						config[k] = v
 					end
 				end
@@ -170,14 +169,19 @@ local humanoid = character:WaitForChild("Humanoid")
 
 _G.ShiftLocked = false
 
-local MAIN_COLOR = Color3.fromRGB(255,255,255)
-local PRESSED_COLOR = Color3.fromRGB(35,35,35)
+local WHITE = Color3.fromRGB(255,255,255)
+local LIGHT = Color3.fromRGB(215,215,215)
+local MID = Color3.fromRGB(120,120,120)
+local DARK = Color3.fromRGB(25,25,25)
+local BLACK = Color3.fromRGB(0,0,0)
 
-local WLOCK_OFF = Color3.fromRGB(35,35,35)
-local WLOCK_ON = Color3.fromRGB(235,235,235)
+local PRESSED_COLOR = Color3.fromRGB(90,90,90)
 
-local SHIFT_OFF = Color3.fromRGB(255,255,255)
-local SHIFT_ON = Color3.fromRGB(35,35,35)
+local WLOCK_OFF = Color3.fromRGB(20,20,20)
+local WLOCK_ON = Color3.fromRGB(255,255,255)
+
+local SHIFT_OFF = Color3.fromRGB(20,20,20)
+local SHIFT_ON = Color3.fromRGB(255,255,255)
 
 local moveState = {
 	Forward = false,
@@ -190,6 +194,118 @@ local moveState = {
 local buttonDefaults = {}
 local activeInputs = {}
 
+local animatedObjects = {}
+
+local function addAnimatedGradient(object, rotationSpeed, offsetSpeed)
+	if not object or not object:IsA("GuiObject") then
+		return nil
+	end
+
+	local gradient = Instance.new("UIGradient")
+	gradient.Name = "BlackWhiteAnimatedGradient"
+
+	gradient.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0,Color3.fromRGB(0,0,0)),
+		ColorSequenceKeypoint.new(.25,Color3.fromRGB(55,55,55)),
+		ColorSequenceKeypoint.new(.5,Color3.fromRGB(255,255,255)),
+		ColorSequenceKeypoint.new(.75,Color3.fromRGB(80,80,80)),
+		ColorSequenceKeypoint.new(1,Color3.fromRGB(0,0,0))
+	})
+
+	gradient.Rotation = 0
+	gradient.Offset = Vector2.new(-1,0)
+	gradient.Parent = object
+
+	table.insert(animatedObjects,{
+		gradient = gradient,
+		rotationSpeed = rotationSpeed or 18,
+		offsetSpeed = offsetSpeed or .35
+	})
+
+	return gradient
+end
+
+local function addAnimatedStroke(object, thickness)
+	if not object or not object:IsA("GuiObject") then
+		return nil
+	end
+
+	local stroke = Instance.new("UIStroke")
+	stroke.Name = "AnimatedBlackWhiteStroke"
+	stroke.Thickness = thickness or 2
+	stroke.Transparency = 0
+	stroke.Color = WHITE
+	stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	stroke.Parent = object
+
+	local gradient
+
+	pcall(function()
+		gradient = Instance.new("UIGradient")
+		gradient.Name = "BlackWhiteStrokeGradient"
+
+		gradient.Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0,BLACK),
+			ColorSequenceKeypoint.new(.25,LIGHT),
+			ColorSequenceKeypoint.new(.5,WHITE),
+			ColorSequenceKeypoint.new(.75,LIGHT),
+			ColorSequenceKeypoint.new(1,BLACK)
+		})
+
+		gradient.Rotation = 0
+		gradient.Offset = Vector2.new(-1,0)
+		gradient.Parent = stroke
+	end)
+
+	if gradient then
+		table.insert(animatedObjects,{
+			gradient = gradient,
+			rotationSpeed = 28,
+			offsetSpeed = .55
+		})
+	end
+
+	return stroke
+end
+
+connect(
+	RunService.RenderStepped,
+	function(delta)
+		if destroyed then
+			return
+		end
+
+		for i = #animatedObjects,1,-1 do
+			local data = animatedObjects[i]
+			local gradient = data.gradient
+
+			if not gradient or not gradient.Parent then
+				table.remove(animatedObjects,i)
+			else
+				local rotation =
+					gradient.Rotation +
+					data.rotationSpeed * delta
+
+				if rotation >= 360 then
+					rotation -= 360
+				end
+
+				gradient.Rotation = rotation
+
+				local x =
+					gradient.Offset.X +
+					data.offsetSpeed * delta
+
+				if x > 1 then
+					x = -1
+				end
+
+				gradient.Offset = Vector2.new(x,0)
+			end
+		end
+	end
+)
+
 local function visual(button,pressed)
 	if not button or not button.Parent then
 		return
@@ -199,7 +315,7 @@ local function visual(button,pressed)
 		button.BackgroundColor3 = PRESSED_COLOR
 	else
 		button.BackgroundColor3 =
-			buttonDefaults[button] or MAIN_COLOR
+			buttonDefaults[button] or DARK
 	end
 end
 
@@ -209,11 +325,32 @@ local btnShiftLock
 local function updateWLock()
 	if btnWLock and btnWLock.Parent then
 		if moveState.WLock then
-			btnWLock.BackgroundColor3 = WLOCK_ON
+			btnWLock.BackgroundColor3 = WHITE
+			btnWLock.TextColor3 = BLACK
 		else
-			btnWLock.BackgroundColor3 = WLOCK_OFF
+			btnWLock.BackgroundColor3 = BLACK
+			btnWLock.TextColor3 = WHITE
 		end
 	end
+end
+
+local function clearMovement()
+	moveState.Forward = false
+	moveState.Backward = false
+	moveState.Left = false
+	moveState.Right = false
+
+	for input in pairs(activeInputs) do
+		activeInputs[input] = nil
+	end
+
+	for button,color in pairs(buttonDefaults) do
+		if button and button.Parent then
+			button.BackgroundColor3 = color
+		end
+	end
+
+	updateWLock()
 end
 
 local screenGui = Instance.new("ScreenGui")
@@ -226,9 +363,9 @@ screenGui.Parent = playerGui
 
 local crosshair = Instance.new("Frame")
 crosshair.Name = "ShiftLockCrosshair"
-crosshair.Size = UDim2.fromOffset(6,6)
-crosshair.Position = UDim2.new(.5,-3,.5,-3)
-crosshair.BackgroundColor3 = Color3.fromRGB(255,255,255)
+crosshair.Size = UDim2.fromOffset(8,8)
+crosshair.Position = UDim2.new(.5,-4,.5,-4)
+crosshair.BackgroundColor3 = WHITE
 crosshair.BorderSizePixel = 0
 crosshair.Visible = false
 crosshair.ZIndex = 1000000
@@ -237,6 +374,8 @@ crosshair.Parent = screenGui
 local cc = Instance.new("UICorner")
 cc.CornerRadius = UDim.new(1,0)
 cc.Parent = crosshair
+
+addAnimatedStroke(crosshair,1.5)
 
 local function toggleShiftLock()
 	if destroyed then
@@ -247,9 +386,11 @@ local function toggleShiftLock()
 
 	if btnShiftLock and btnShiftLock.Parent then
 		if _G.ShiftLocked then
-			btnShiftLock.BackgroundColor3 = SHIFT_ON
+			btnShiftLock.BackgroundColor3 = WHITE
+			btnShiftLock.ImageColor3 = WHITE
 		else
-			btnShiftLock.BackgroundColor3 = SHIFT_OFF
+			btnShiftLock.BackgroundColor3 = BLACK
+			btnShiftLock.ImageColor3 = WHITE
 		end
 	end
 
@@ -264,6 +405,7 @@ end
 btnShiftLock = Instance.new("ImageButton")
 btnShiftLock.Name = "ShiftLockButton"
 btnShiftLock.AnchorPoint = Vector2.new(.5,.5)
+
 btnShiftLock.Position = UDim2.new(
 	config.ShiftX,
 	0,
@@ -276,10 +418,11 @@ btnShiftLock.Size = UDim2.fromOffset(
 	config.ShiftSize
 )
 
-btnShiftLock.BackgroundColor3 = SHIFT_OFF
-btnShiftLock.BackgroundTransparency = .2
+btnShiftLock.BackgroundColor3 = BLACK
+btnShiftLock.BackgroundTransparency = .05
+
 btnShiftLock.ImageTransparency = 0
-btnShiftLock.ImageColor3 = Color3.fromRGB(255,255,255)
+btnShiftLock.ImageColor3 = WHITE
 btnShiftLock.ScaleType = Enum.ScaleType.Fit
 btnShiftLock.AutoButtonColor = false
 btnShiftLock.Active = true
@@ -297,11 +440,8 @@ local sc = Instance.new("UICorner")
 sc.CornerRadius = UDim.new(1,0)
 sc.Parent = btnShiftLock
 
-local ss = Instance.new("UIStroke")
-ss.Thickness = 2
-ss.Color = Color3.fromRGB(0,0,0)
-ss.Transparency = .3
-ss.Parent = btnShiftLock
+addAnimatedGradient(btnShiftLock,22,.45)
+addAnimatedStroke(btnShiftLock,2)
 
 connect(
 	btnShiftLock.Activated,
@@ -324,10 +464,10 @@ local function createMoveButton(name,pos,size,text)
 	b.Size = size
 	b.Text = text
 
-	b.BackgroundColor3 = MAIN_COLOR
-	b.BackgroundTransparency = .15
+	b.BackgroundColor3 = DARK
+	b.BackgroundTransparency = .12
 
-	b.TextColor3 = Color3.fromRGB(20,20,20)
+	b.TextColor3 = WHITE
 	b.Font = Enum.Font.GothamBold
 	b.TextSize = 28
 
@@ -343,6 +483,9 @@ local function createMoveButton(name,pos,size,text)
 	local corner = Instance.new("UICorner")
 	corner.CornerRadius = UDim.new(0,14)
 	corner.Parent = b
+
+	addAnimatedGradient(b,20,.40)
+	addAnimatedStroke(b,2)
 
 	return b
 end
@@ -382,10 +525,10 @@ btnWLock.Position = UDim2.new(1,42,.5,0)
 btnWLock.Size = UDim2.fromOffset(62,62)
 btnWLock.Text = "W"
 
-btnWLock.BackgroundColor3 = WLOCK_OFF
-btnWLock.BackgroundTransparency = .10
+btnWLock.BackgroundColor3 = BLACK
+btnWLock.BackgroundTransparency = .05
 
-btnWLock.TextColor3 = Color3.new(1,1,1)
+btnWLock.TextColor3 = WHITE
 btnWLock.Font = Enum.Font.GothamBold
 btnWLock.TextSize = 25
 
@@ -399,6 +542,9 @@ btnWLock.Parent = mainFrame
 local wc = Instance.new("UICorner")
 wc.CornerRadius = UDim.new(1,0)
 wc.Parent = btnWLock
+
+addAnimatedGradient(btnWLock,24,.50)
+addAnimatedStroke(btnWLock,2)
 
 connect(
 	btnWLock.Activated,
@@ -420,11 +566,10 @@ modeButton.Position = UDim2.new(0,0,-.20,0)
 modeButton.Size = UDim2.new(1,0,.15,0)
 modeButton.Text = "MODE: KELINCAHAN"
 
-modeButton.BackgroundColor3 =
-	Color3.fromRGB(35,35,35)
+modeButton.BackgroundColor3 = BLACK
+modeButton.BackgroundTransparency = .08
 
-modeButton.BackgroundTransparency = .15
-modeButton.TextColor3 = Color3.new(1,1,1)
+modeButton.TextColor3 = WHITE
 modeButton.Font = Enum.Font.GothamBold
 modeButton.TextSize = 16
 modeButton.AutoButtonColor = false
@@ -438,6 +583,9 @@ local mc = Instance.new("UICorner")
 mc.CornerRadius = UDim.new(0,8)
 mc.Parent = modeButton
 
+addAnimatedGradient(modeButton,18,.35)
+addAnimatedStroke(modeButton,2)
+
 connect(
 	modeButton.Activated,
 	function()
@@ -445,12 +593,8 @@ connect(
 
 		if isDelayMode then
 			modeButton.Text = "MODE: DELAY (JEJAK)"
-			modeButton.BackgroundColor3 =
-				Color3.fromRGB(180,180,180)
 		else
 			modeButton.Text = "MODE: KELINCAHAN"
-			modeButton.BackgroundColor3 =
-				Color3.fromRGB(35,35,35)
 		end
 	end
 )
@@ -715,12 +859,11 @@ local function makeButton(
 	b.Text = text
 
 	b.BackgroundColor3 =
-		bg or Color3.fromRGB(255,255,255)
+		bg or DARK
 
-	b.BackgroundTransparency = .05
+	b.BackgroundTransparency = .08
 
-	b.TextColor3 =
-		Color3.fromRGB(20,20,20)
+	b.TextColor3 = WHITE
 
 	b.Font = Enum.Font.GothamBold
 	b.TextSize = 22
@@ -736,6 +879,9 @@ local function makeButton(
 	c.CornerRadius = UDim.new(0,12)
 	c.Parent = b
 
+	addAnimatedGradient(b,20,.42)
+	addAnimatedStroke(b,2)
+
 	return b
 end
 
@@ -744,12 +890,11 @@ menu.Name = "OpenMenu"
 menu.Position = UDim2.new(1,-72,1,-72)
 menu.Size = UDim2.fromOffset(60,60)
 
-menu.BackgroundColor3 =
-	Color3.fromRGB(255,255,255)
+menu.BackgroundColor3 = BLACK
+menu.BackgroundTransparency = .03
 
-menu.BackgroundTransparency = .05
 menu.ImageTransparency = 0
-menu.ImageColor3 = Color3.fromRGB(255,255,255)
+menu.ImageColor3 = WHITE
 menu.ScaleType = Enum.ScaleType.Fit
 menu.AutoButtonColor = false
 menu.Active = true
@@ -767,15 +912,17 @@ local menuCorner = Instance.new("UICorner")
 menuCorner.CornerRadius = UDim.new(1,0)
 menuCorner.Parent = menu
 
+addAnimatedGradient(menu,24,.50)
+addAnimatedStroke(menu,2)
+
 local settings = Instance.new("Frame")
 settings.Name = "SettingsFrame"
 settings.Size = UDim2.fromOffset(300,560)
 settings.Position = UDim2.new(.5,-150,.5,-280)
 
-settings.BackgroundColor3 =
-	Color3.fromRGB(255,255,255)
+settings.BackgroundColor3 = BLACK
+settings.BackgroundTransparency = .08
 
-settings.BackgroundTransparency = .05
 settings.BorderSizePixel = 0
 settings.Visible = false
 settings.ZIndex = 40
@@ -785,12 +932,15 @@ local settingsCorner = Instance.new("UICorner")
 settingsCorner.CornerRadius = UDim.new(0,16)
 settingsCorner.Parent = settings
 
+addAnimatedGradient(settings,15,.30)
+addAnimatedStroke(settings,2.5)
+
 local cameraSection = Instance.new("Frame")
 cameraSection.Size = UDim2.new(1,-20,0,160)
 cameraSection.Position = UDim2.fromOffset(10,10)
 
-cameraSection.BackgroundColor3 =
-	Color3.fromRGB(230,230,230)
+cameraSection.BackgroundColor3 = DARK
+cameraSection.BackgroundTransparency = .05
 
 cameraSection.BorderSizePixel = 0
 cameraSection.ZIndex = 41
@@ -800,11 +950,13 @@ local cameraCorner = Instance.new("UICorner")
 cameraCorner.CornerRadius = UDim.new(0,12)
 cameraCorner.Parent = cameraSection
 
+addAnimatedGradient(cameraSection,18,.35)
+addAnimatedStroke(cameraSection,2)
+
 local cameraTitle = Instance.new("TextLabel")
 cameraTitle.Size = UDim2.new(1,0,0,40)
 cameraTitle.Text = "CAMERA SENSI SETTING"
-cameraTitle.TextColor3 =
-	Color3.fromRGB(20,20,20)
+cameraTitle.TextColor3 = WHITE
 
 cameraTitle.Font = Enum.Font.GothamBold
 cameraTitle.TextSize = 18
@@ -815,8 +967,7 @@ cameraTitle.Parent = cameraSection
 local sensLabel = Instance.new("TextLabel")
 sensLabel.Size = UDim2.new(1,0,0,30)
 sensLabel.Position = UDim2.fromOffset(0,40)
-sensLabel.TextColor3 =
-	Color3.fromRGB(55,55,55)
+sensLabel.TextColor3 = LIGHT
 
 sensLabel.Font = Enum.Font.Gotham
 sensLabel.TextSize = 14
@@ -842,7 +993,7 @@ local sensMinus = makeButton(
 	UDim2.new(.06,0,0,85),
 	UDim2.fromOffset(76,42),
 	"-",
-	nil,
+	DARK,
 	43
 )
 
@@ -852,7 +1003,7 @@ local sensReset = makeButton(
 	UDim2.new(.5,-42,0,85),
 	UDim2.fromOffset(84,42),
 	"RESET",
-	nil,
+	DARK,
 	43
 )
 
@@ -862,7 +1013,7 @@ local sensPlus = makeButton(
 	UDim2.new(.94,-76,0,85),
 	UDim2.fromOffset(76,42),
 	"+",
-	nil,
+	DARK,
 	43
 )
 
@@ -908,8 +1059,8 @@ local jumpSection = Instance.new("Frame")
 jumpSection.Size = UDim2.new(1,-20,0,320)
 jumpSection.Position = UDim2.fromOffset(10,180)
 
-jumpSection.BackgroundColor3 =
-	Color3.fromRGB(230,230,230)
+jumpSection.BackgroundColor3 = DARK
+jumpSection.BackgroundTransparency = .05
 
 jumpSection.BorderSizePixel = 0
 jumpSection.ZIndex = 41
@@ -919,18 +1070,20 @@ local jumpCorner = Instance.new("UICorner")
 jumpCorner.CornerRadius = UDim.new(0,12)
 jumpCorner.Parent = jumpSection
 
+addAnimatedGradient(jumpSection,18,.35)
+addAnimatedStroke(jumpSection,2)
+
 local modeSwitchBtn = makeButton(
 	jumpSection,
 	"ToggleTargetMode",
 	UDim2.new(.05,0,0,10),
 	UDim2.new(.9,0,0,36),
 	"TARGET: JUMP BUTTON",
-	Color3.fromRGB(35,35,35),
+	DARK,
 	43
 )
 
-modeSwitchBtn.TextColor3 =
-	Color3.new(1,1,1)
+modeSwitchBtn.TextColor3 = WHITE
 
 connect(
 	modeSwitchBtn.Activated,
@@ -940,17 +1093,11 @@ connect(
 
 			modeSwitchBtn.Text =
 				"TARGET: SHIFT LOCK"
-
-			modeSwitchBtn.BackgroundColor3 =
-				Color3.fromRGB(35,35,35)
 		else
 			targetSettingMode = "JUMP"
 
 			modeSwitchBtn.Text =
 				"TARGET: JUMP BUTTON"
-
-			modeSwitchBtn.BackgroundColor3 =
-				Color3.fromRGB(35,35,35)
 		end
 	end
 )
@@ -961,7 +1108,7 @@ local moveUp = makeButton(
 	UDim2.new(.5,-34,0,55),
 	UDim2.fromOffset(68,46),
 	"↑",
-	nil,
+	DARK,
 	43
 )
 
@@ -971,7 +1118,7 @@ local moveLeft = makeButton(
 	UDim2.new(.10,0,0,102),
 	UDim2.fromOffset(68,46),
 	"←",
-	nil,
+	DARK,
 	43
 )
 
@@ -981,7 +1128,7 @@ local moveRight = makeButton(
 	UDim2.new(.90,-68,0,102),
 	UDim2.fromOffset(68,46),
 	"→",
-	nil,
+	DARK,
 	43
 )
 
@@ -991,7 +1138,7 @@ local moveDown = makeButton(
 	UDim2.new(.5,-34,0,149),
 	UDim2.fromOffset(68,46),
 	"↓",
-	nil,
+	DARK,
 	43
 )
 
@@ -1001,7 +1148,7 @@ local sizePlus = makeButton(
 	UDim2.new(.06,0,0,207),
 	UDim2.fromOffset(88,34),
 	"SIZE +",
-	nil,
+	DARK,
 	43
 )
 
@@ -1011,7 +1158,7 @@ local sizeMinus = makeButton(
 	UDim2.new(.94,-88,0,207),
 	UDim2.fromOffset(88,34),
 	"SIZE -",
-	nil,
+	DARK,
 	43
 )
 
@@ -1021,7 +1168,7 @@ local center = makeButton(
 	UDim2.new(.5,-44,0,207),
 	UDim2.fromOffset(88,34),
 	"RESET",
-	nil,
+	DARK,
 	43
 )
 
@@ -1353,12 +1500,11 @@ local saveButton = makeButton(
 	UDim2.new(.05,0,1,-45),
 	UDim2.fromOffset(130,38),
 	"SAVE",
-	Color3.fromRGB(35,35,35),
+	DARK,
 	43
 )
 
-saveButton.TextColor3 =
-	Color3.new(1,1,1)
+saveButton.TextColor3 = WHITE
 
 local closeButton = makeButton(
 	settings,
@@ -1366,12 +1512,11 @@ local closeButton = makeButton(
 	UDim2.new(.95,-130,1,-45),
 	UDim2.fromOffset(130,38),
 	"CLOSE",
-	Color3.fromRGB(35,35,35),
+	DARK,
 	43
 )
 
-closeButton.TextColor3 =
-	Color3.new(1,1,1)
+closeButton.TextColor3 = WHITE
 
 connect(
 	saveButton.Activated,
@@ -1465,217 +1610,6 @@ connect(
 		if child.Name == "TouchGui" then
 			jumpButton = nil
 			refresh()
-		end
-	end
-)
-
-local gradientObjects = {}
-
-local function createBlackWhiteGradient(object,rotation)
-	if not object or not object.Parent then
-		return
-	end
-
-	local oldGradient =
-		object:FindFirstChild("BlackWhiteAnimatedGradient")
-
-	if oldGradient then
-		oldGradient:Destroy()
-	end
-
-	local gradient = Instance.new("UIGradient")
-	gradient.Name = "BlackWhiteAnimatedGradient"
-
-	gradient.Color = ColorSequence.new({
-		ColorSequenceKeypoint.new(
-			0,
-			Color3.fromRGB(0,0,0)
-		),
-
-		ColorSequenceKeypoint.new(
-			0.25,
-			Color3.fromRGB(90,90,90)
-		),
-
-		ColorSequenceKeypoint.new(
-			0.5,
-			Color3.fromRGB(255,255,255)
-		),
-
-		ColorSequenceKeypoint.new(
-			0.75,
-			Color3.fromRGB(90,90,90)
-		),
-
-		ColorSequenceKeypoint.new(
-			1,
-			Color3.fromRGB(0,0,0)
-		)
-	})
-
-	gradient.Rotation = rotation or 0
-	gradient.Offset = Vector2.new(-1,0)
-	gradient.Parent = object
-
-	table.insert(
-		gradientObjects,
-		gradient
-	)
-end
-
-createBlackWhiteGradient(
-	btnUp,
-	25
-)
-
-createBlackWhiteGradient(
-	btnDown,
-	25
-)
-
-createBlackWhiteGradient(
-	btnLeft,
-	25
-)
-
-createBlackWhiteGradient(
-	btnRight,
-	25
-)
-
-createBlackWhiteGradient(
-	btnWLock,
-	45
-)
-
-createBlackWhiteGradient(
-	btnShiftLock,
-	45
-)
-
-createBlackWhiteGradient(
-	modeButton,
-	15
-)
-
-createBlackWhiteGradient(
-	menu,
-	45
-)
-
-createBlackWhiteGradient(
-	settings,
-	15
-)
-
-createBlackWhiteGradient(
-	cameraSection,
-	15
-)
-
-createBlackWhiteGradient(
-	jumpSection,
-	15
-)
-
-createBlackWhiteGradient(
-	sensMinus,
-	25
-)
-
-createBlackWhiteGradient(
-	sensReset,
-	25
-)
-
-createBlackWhiteGradient(
-	sensPlus,
-	25
-)
-
-createBlackWhiteGradient(
-	modeSwitchBtn,
-	25
-)
-
-createBlackWhiteGradient(
-	moveUp,
-	25
-)
-
-createBlackWhiteGradient(
-	moveLeft,
-	25
-)
-
-createBlackWhiteGradient(
-	moveRight,
-	25
-)
-
-createBlackWhiteGradient(
-	moveDown,
-	25
-)
-
-createBlackWhiteGradient(
-	sizePlus,
-	25
-)
-
-createBlackWhiteGradient(
-	sizeMinus,
-	25
-)
-
-createBlackWhiteGradient(
-	center,
-	25
-)
-
-createBlackWhiteGradient(
-	saveButton,
-	25
-)
-
-createBlackWhiteGradient(
-	closeButton,
-	25
-)
-
-local gradientPosition = -1
-
-connect(
-	RunService.RenderStepped,
-	function()
-		if destroyed then
-			return
-		end
-
-		gradientPosition += 0.008
-
-		if gradientPosition > 1 then
-			gradientPosition = -1
-		end
-
-		for i = #gradientObjects,1,-1 do
-			local gradient =
-				gradientObjects[i]
-
-			if gradient
-				and gradient.Parent then
-
-				gradient.Offset =
-					Vector2.new(
-						gradientPosition,
-						0
-					)
-			else
-				table.remove(
-					gradientObjects,
-					i
-				)
-			end
 		end
 	end
 )
