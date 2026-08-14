@@ -20,7 +20,7 @@ local defaultConfig = {
 
 -- id image setting
 local SHIFT_LOCK_IMAGE_ID = "136616143786672"
-local OPEN_MENU_IMAGE_ID = "137886634947855"
+local OPEN_MENU_IMAGE_ID = "112921115907036"
 
 local SHIFT_LOCK_IMAGE = "rbxassetid://" .. SHIFT_LOCK_IMAGE_ID
 local OPEN_MENU_IMAGE = "rbxassetid://" .. OPEN_MENU_IMAGE_ID
