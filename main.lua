@@ -1694,6 +1694,7 @@ local GuiService = game:GetService("GuiService")
 local CoreGui = game:GetService("CoreGui")
 
 local Player = Players.LocalPlayer
+
 if not Player then
 	return
 end
@@ -1718,6 +1719,7 @@ local Parent = getParent()
 
 pcall(function()
 	local old = Parent:FindFirstChild(NAME)
+
 	if old then
 		old:Destroy()
 	end
@@ -1733,6 +1735,7 @@ ScreenGui.Parent = Parent
 
 local function Guard(name)
 	local b = Instance.new("TextButton")
+
 	b.Name = name
 	b.BackgroundTransparency = 1
 	b.BorderSizePixel = 0
@@ -1784,6 +1787,7 @@ Gradient.Color = ColorSequence.new({
 	ColorSequenceKeypoint.new(0.72, Color3.fromRGB(0, 0, 0)),
 	ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 255, 255))
 })
+
 Gradient.Offset = Vector2.new(-1, 0)
 Gradient.Parent = Stroke
 
@@ -1803,19 +1807,34 @@ GlowGradient.Color = ColorSequence.new({
 	ColorSequenceKeypoint.new(0.75, Color3.fromRGB(255, 0, 210)),
 	ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 0, 120))
 })
+
 GlowGradient.Offset = Vector2.new(-1, 0)
 GlowGradient.Parent = Glow
 
 TweenService:Create(
 	Gradient,
-	TweenInfo.new(2.5, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, -1),
-	{Offset = Vector2.new(1, 0)}
+	TweenInfo.new(
+		2.5,
+		Enum.EasingStyle.Linear,
+		Enum.EasingDirection.InOut,
+		-1
+	),
+	{
+		Offset = Vector2.new(1, 0)
+	}
 ):Play()
 
 TweenService:Create(
 	GlowGradient,
-	TweenInfo.new(3.5, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, -1),
-	{Offset = Vector2.new(1, 0)}
+	TweenInfo.new(
+		3.5,
+		Enum.EasingStyle.Linear,
+		Enum.EasingDirection.InOut,
+		-1
+	),
+	{
+		Offset = Vector2.new(1, 0)
+	}
 ):Play()
 
 local enabled = true
@@ -1840,37 +1859,63 @@ local function update()
 	Top.Position = UDim2.fromOffset(0, 0)
 	Top.Size = UDim2.fromOffset(w, EDGE)
 
-	Bottom.Position = UDim2.fromOffset(0, math.max(0, h - EDGE))
-	Bottom.Size = UDim2.fromOffset(w, EDGE)
+	Bottom.Position =
+		UDim2.fromOffset(
+			0,
+			math.max(0, h - EDGE)
+		)
 
-	Left.Position = UDim2.fromOffset(0, EDGE)
-	Left.Size = UDim2.fromOffset(
-		EDGE,
-		math.max(0, h - EDGE * 2)
-	)
+	Bottom.Size =
+		UDim2.fromOffset(
+			w,
+			EDGE
+		)
 
-	Right.Position = UDim2.fromOffset(math.max(0, w - EDGE), EDGE)
-	Right.Size = UDim2.fromOffset(
-		EDGE,
-		math.max(0, h - EDGE * 2)
-	)
+	Left.Position =
+		UDim2.fromOffset(
+			0,
+			EDGE
+		)
 
-	Border.Position = UDim2.fromOffset(
-		EDGE / 2,
-		EDGE / 2
-	)
+	Left.Size =
+		UDim2.fromOffset(
+			EDGE,
+			math.max(0, h - EDGE * 2)
+		)
 
-	Border.Size = UDim2.fromOffset(
-		math.max(0, w - EDGE),
-		math.max(0, h - EDGE)
-	)
+	Right.Position =
+		UDim2.fromOffset(
+			math.max(0, w - EDGE),
+			EDGE
+		)
+
+	Right.Size =
+		UDim2.fromOffset(
+			EDGE,
+			math.max(0, h - EDGE * 2)
+		)
+
+	Border.Position =
+		UDim2.fromOffset(
+			EDGE / 2,
+			EDGE / 2
+		)
+
+	Border.Size =
+		UDim2.fromOffset(
+			math.max(0, w - EDGE),
+			math.max(0, h - EDGE)
+		)
 end
 
 ScreenGui:GetPropertyChangedSignal("AbsoluteSize"):Connect(update)
+
 update()
 
 local function textBoxFocused()
-	local focused = UserInputService:GetFocusedTextBox()
+	local focused =
+		UserInputService:GetFocusedTextBox()
+
 	return focused ~= nil
 end
 
@@ -1915,6 +1960,7 @@ end)
 
 Player.CharacterAdded:Connect(function()
 	task.wait(0.5)
+
 	gameplay = true
 	refresh()
 end)
@@ -1951,7 +1997,13 @@ _G.VZTouchGuard = {
 			return
 		end
 
-		EDGE = math.clamp(math.floor(value), 20, 70)
+		EDGE =
+			math.clamp(
+				math.floor(value),
+				20,
+				70
+			)
+
 		update()
 	end,
 
