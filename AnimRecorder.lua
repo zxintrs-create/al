@@ -1,74 +1,76 @@
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local TweenService = game:GetService("TweenService")
-local UserInputService = game:GetService("UserInputService")
-local TextChatService = game:GetService("TextChatService")
-local HttpService = game:GetService("HttpService")
+local Players=game:GetService("Players")
+local RunService=game:GetService("RunService")
+local TweenService=game:GetService("TweenService")
+local UserInputService=game:GetService("UserInputService")
+local TextChatService=game:GetService("TextChatService")
+local HttpService=game:GetService("HttpService")
+local VirtualUser=game:GetService("VirtualUser")
 
-local LocalPlayer = Players.LocalPlayer
-local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+local LocalPlayer=Players.LocalPlayer
+local PlayerGui=LocalPlayer:WaitForChild("PlayerGui")
 
-local CONFIG_FILE = "VoraZureConfig.json"
-local ROUTE_FILE = "VoraZureRoutes.json"
+local CONFIG_FILE="VoraZureConfig.json"
+local ROUTE_FILE="VoraZureRoutes.json"
+local PLAYBACK_BIND="VoraZure_AutoWalk_Playback"
 
-local CONFIG = {
-    Language = "Indonesia",
-    Gradient = 0,
-    WalkSpeed = 0,
-    JumpPower = 50,
-    AntiAFK = false,
-    NaturalAnimation = true,
-    AntiJitter = true,
-    AntiGlitch = true,
-    AntiLag = true,
-    AntiOutTrack = true
+local CONFIG={
+    Language="Indonesia",
+    Gradient=0,
+    WalkSpeed=0,
+    JumpPower=50,
+    AntiAFK=false,
+    NaturalAnimation=true,
+    AntiJitter=true,
+    AntiGlitch=true,
+    AntiLag=true,
+    AntiOutTrack=true
 }
 
-local COLORS = {
-    Background = Color3.fromRGB(8, 9, 15),
-    Panel = Color3.fromRGB(14, 15, 24),
-    Panel2 = Color3.fromRGB(20, 21, 32),
-    Card = Color3.fromRGB(24, 25, 38),
-    Text = Color3.fromRGB(245, 245, 255),
-    SubText = Color3.fromRGB(155, 158, 180),
-    Accent = Color3.fromRGB(135, 75, 255),
-    Accent2 = Color3.fromRGB(65, 180, 255),
-    Success = Color3.fromRGB(80, 220, 145),
-    Danger = Color3.fromRGB(255, 75, 100),
-    Warning = Color3.fromRGB(255, 190, 75)
+local COLORS={
+    Background=Color3.fromRGB(8,9,15),
+    Panel=Color3.fromRGB(14,15,24),
+    Panel2=Color3.fromRGB(20,21,32),
+    Card=Color3.fromRGB(24,25,38),
+    Text=Color3.fromRGB(245,245,255),
+    SubText=Color3.fromRGB(155,158,180),
+    Accent=Color3.fromRGB(135,75,255),
+    Accent2=Color3.fromRGB(65,180,255),
+    Success=Color3.fromRGB(80,220,145),
+    Danger=Color3.fromRGB(255,75,100),
+    Warning=Color3.fromRGB(255,190,75)
 }
 
 local Character
 local Humanoid
 local Root
 
-local route = {}
-local savedRoutes = {}
+local route={}
+local savedRoutes={}
 
-local isRecording = false
-local isPlaying = false
-local playbackIndex = 1
-local playbackClock = 0
-local playbackStartClock = 0
-local lastPlaybackJumpTime = -1
-local previousRecordState
-local pendingJump = false
+local isRecording=false
+local isPlaying=false
+local playbackTime=0
+local playbackIndex=1
+local recordStart=0
+local lastSampleTime=0
+local lastRecordPosition=nil
+local lastRecordMove=Vector3.zero
+local lastRecordState=nil
+local jumpEvents={}
+local playbackJumpCursor=1
+local selectedPlayer=nil
+local spectating=false
 
 local recordConnection
-local playbackConnection
+local playbackHeartbeat
 local antiAFKConnection
 local characterConnection
-local jumpRequestConnection
-
-local selectedGradient = 0
-local selectedPlayer
 
 local ScreenGui
 local Main
 local Gradient
 local OpenButton
 local Floating
-
 local AutoStatus
 local FPSLabel
 local PingLabel
@@ -76,49 +78,43 @@ local SpeedValue
 local JumpValue
 local LanguageButton
 
-local menuOpen = true
-local menuTween
-local dragMoved = false
-local spectating = false
-
-local PLAYBACK_BIND_NAME = "VoraZureAutoWalkPlayback"
-local PLAYBACK_PRIORITY = 500
+local menuOpen=true
+local menuTween=nil
+local dragMoved=false
 
 local function refreshCharacter()
-    Character = LocalPlayer.Character
+    Character=LocalPlayer.Character
 
     if not Character then
-        Humanoid = nil
-        Root = nil
+        Humanoid=nil
+        Root=nil
         return false
     end
 
-    Humanoid = Character:FindFirstChildOfClass("Humanoid")
-    Root = Character:FindFirstChild("HumanoidRootPart")
+    Humanoid=Character:FindFirstChildOfClass("Humanoid")
+    Root=Character:FindFirstChild("HumanoidRootPart")
 
-    return Humanoid ~= nil and Root ~= nil
+    return Humanoid~=nil and Root~=nil
 end
 
 refreshCharacter()
 
-local function safeWriteFile(path, data)
-    if type(writefile) ~= "function" then
+local function safeWriteFile(path,data)
+    if type(writefile)~="function" then
         return false
     end
 
-    local ok = pcall(function()
-        writefile(path, data)
+    return pcall(function()
+        writefile(path,data)
     end)
-
-    return ok
 end
 
 local function safeReadFile(path)
-    if type(isfile) ~= "function" or type(readfile) ~= "function" then
+    if type(isfile)~="function" or type(readfile)~="function" then
         return nil
     end
 
-    local ok, result = pcall(function()
+    local ok,result=pcall(function()
         if isfile(path) then
             return readfile(path)
         end
@@ -133,7 +129,7 @@ local function safeReadFile(path)
 end
 
 local function safeDeleteFile(path)
-    if type(isfile) ~= "function" or type(delfile) ~= "function" then
+    if type(isfile)~="function" or type(delfile)~="function" then
         return
     end
 
@@ -145,80 +141,184 @@ local function safeDeleteFile(path)
 end
 
 local function saveConfig()
-    local ok, encoded = pcall(function()
+    local ok,data=pcall(function()
         return HttpService:JSONEncode(CONFIG)
     end)
 
     if ok then
-        safeWriteFile(CONFIG_FILE, encoded)
+        safeWriteFile(CONFIG_FILE,data)
     end
 end
 
 local function loadConfig()
-    local data = safeReadFile(CONFIG_FILE)
+    local data=safeReadFile(CONFIG_FILE)
 
     if not data then
-        selectedGradient = 0
         return
     end
 
-    local ok, decoded = pcall(function()
+    local ok,decoded=pcall(function()
         return HttpService:JSONDecode(data)
     end)
 
-    if ok and type(decoded) == "table" then
-        for key, value in pairs(decoded) do
-            if CONFIG[key] ~= nil and typeof(value) == typeof(CONFIG[key]) then
-                CONFIG[key] = value
+    if ok and type(decoded)=="table" then
+        for key,value in pairs(decoded) do
+            if CONFIG[key]~=nil and typeof(value)==typeof(CONFIG[key]) then
+                CONFIG[key]=value
             end
         end
     end
 
-    selectedGradient = math.clamp(tonumber(CONFIG.Gradient) or 0, 0, 4)
+    CONFIG.Gradient=math.clamp(
+        tonumber(CONFIG.Gradient) or 0,
+        0,
+        4
+    )
 end
 
 local function saveRoutes()
-    local ok, encoded = pcall(function()
+    local ok,data=pcall(function()
         return HttpService:JSONEncode(savedRoutes)
     end)
 
     if ok then
-        safeWriteFile(ROUTE_FILE, encoded)
+        safeWriteFile(ROUTE_FILE,data)
     end
 end
 
 local function loadRoutes()
-    local data = safeReadFile(ROUTE_FILE)
+    local data=safeReadFile(ROUTE_FILE)
 
     if not data then
         return
     end
 
-    local ok, decoded = pcall(function()
+    local ok,decoded=pcall(function()
         return HttpService:JSONDecode(data)
     end)
 
-    if ok and type(decoded) == "table" then
-        savedRoutes = decoded
+    if ok and type(decoded)=="table" then
+        savedRoutes=decoded
     end
 end
 
 loadConfig()
 loadRoutes()
 
-pcall(function()
-    local old = PlayerGui:FindFirstChild("VoraZureMobileHub")
-    if old then
-        old:Destroy()
+local function stopPlayback()
+    if not isPlaying then
+        return
+    end
+
+    isPlaying=false
+
+    pcall(function()
+        RunService:UnbindFromRenderStep(PLAYBACK_BIND)
+    end)
+
+    if playbackHeartbeat then
+        playbackHeartbeat:Disconnect()
+        playbackHeartbeat=nil
+    end
+
+    playbackTime=0
+    playbackIndex=1
+    playbackJumpCursor=1
+
+    if Humanoid and Humanoid.Parent then
+        pcall(function()
+            Humanoid:Move(Vector3.zero,false)
+        end)
+    end
+
+    if AutoStatus then
+        AutoStatus.Text="STATUS : IDLE • "..tostring(#route).." POINTS"
+        AutoStatus.TextColor3=COLORS.Success
+    end
+end
+
+local function stopRecording()
+    if not isRecording then
+        return
+    end
+
+    isRecording=false
+
+    if recordConnection then
+        recordConnection:Disconnect()
+        recordConnection=nil
+    end
+
+    if Root and Root.Parent and Humanoid then
+        local pos=Root.Position
+        local velocity=Root.AssemblyLinearVelocity
+        local state=Humanoid:GetState()
+        local move=Humanoid.MoveDirection
+        local look=Root.CFrame.LookVector
+
+        route[#route+1]={
+            Time=os.clock()-recordStart,
+            Position={
+                X=pos.X,
+                Y=pos.Y,
+                Z=pos.Z
+            },
+            MoveDirection={
+                X=move.X,
+                Y=move.Y,
+                Z=move.Z
+            },
+            Look={
+                X=look.X,
+                Y=look.Y,
+                Z=look.Z
+            },
+            Velocity={
+                X=velocity.X,
+                Y=velocity.Y,
+                Z=velocity.Z
+            },
+            State=state.Name,
+            Jump=false
+        }
+    end
+
+    if AutoStatus then
+        AutoStatus.Text="STATUS : RECORD COMPLETE • "..tostring(#route).." POINTS"
+        AutoStatus.TextColor3=COLORS.Success
+    end
+end
+
+characterConnection=LocalPlayer.CharacterAdded:Connect(function(character)
+    if isRecording then
+        stopRecording()
+    end
+
+    if isPlaying then
+        stopPlayback()
+    end
+
+    Character=character
+    Humanoid=character:WaitForChild("Humanoid",10)
+    Root=character:WaitForChild("HumanoidRootPart",10)
+
+    task.wait(0.15)
+
+    if Humanoid then
+        Humanoid.WalkSpeed=CONFIG.WalkSpeed>0 and CONFIG.WalkSpeed or 16
+
+        if Humanoid.UseJumpPower then
+            Humanoid.JumpPower=CONFIG.JumpPower
+        end
     end
 end)
 
-local function tween(object, properties, duration)
+local function tween(object,properties,duration)
     if not object or not object.Parent then
         return nil
     end
 
-    local ok, result = pcall(function()
+    local ok,result=pcall(function()
         return TweenService:Create(
             object,
             TweenInfo.new(
@@ -237,102 +337,100 @@ local function tween(object, properties, duration)
     return nil
 end
 
-local function corner(object, radius)
-    local c = Instance.new("UICorner")
-    c.CornerRadius = UDim.new(0, radius or 10)
-    c.Parent = object
+local function corner(object,radius)
+    local c=Instance.new("UICorner")
+    c.CornerRadius=UDim.new(0,radius or 10)
+    c.Parent=object
     return c
 end
 
-local function stroke(object, transparency)
-    local s = Instance.new("UIStroke")
-    s.Color = Color3.fromRGB(90, 95, 130)
-    s.Transparency = transparency or 0.65
-    s.Thickness = 1
-    s.Parent = object
+local function stroke(object,transparency)
+    local s=Instance.new("UIStroke")
+    s.Color=Color3.fromRGB(90,95,130)
+    s.Transparency=transparency or 0.65
+    s.Thickness=1
+    s.Parent=object
     return s
 end
 
-local function padding(object, amount)
-    local p = Instance.new("UIPadding")
-    p.PaddingTop = UDim.new(0, amount)
-    p.PaddingBottom = UDim.new(0, amount)
-    p.PaddingLeft = UDim.new(0, amount)
-    p.PaddingRight = UDim.new(0, amount)
-    p.Parent = object
+local function padding(object,amount)
+    local p=Instance.new("UIPadding")
+    p.PaddingTop=UDim.new(0,amount)
+    p.PaddingBottom=UDim.new(0,amount)
+    p.PaddingLeft=UDim.new(0,amount)
+    p.PaddingRight=UDim.new(0,amount)
+    p.Parent=object
     return p
 end
 
-ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "VoraZureMobileHub"
-ScreenGui.ResetOnSpawn = false
-ScreenGui.IgnoreGuiInset = true
-ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-ScreenGui.Parent = PlayerGui
+pcall(function()
+    local old=PlayerGui:FindFirstChild("VoraZureMobileHub")
 
-Main = Instance.new("Frame")
-Main.Name = "Main"
-Main.Size = UDim2.new(0, 390, 0, 590)
-Main.Position = UDim2.new(0.5, -195, 0.5, -295)
-Main.BackgroundColor3 = COLORS.Background
-Main.BorderSizePixel = 0
-Main.Parent = ScreenGui
-
-corner(Main, 18)
-stroke(Main, 0.35)
-
-local MainScale = Instance.new("UIScale")
-MainScale.Scale = 1
-MainScale.Parent = Main
-
-local function updateUIScale()
-    local camera = workspace.CurrentCamera
-
-    if not camera then
-        return
+    if old then
+        old:Destroy()
     end
+end)
 
-    local viewport = camera.ViewportSize
-    local scaleX = viewport.X / 430
-    local scaleY = viewport.Y / 670
-    MainScale.Scale = math.clamp(math.min(scaleX, scaleY), 0.72, 1)
-end
+ScreenGui=Instance.new("ScreenGui")
+ScreenGui.Name="VoraZureMobileHub"
+ScreenGui.ResetOnSpawn=false
+ScreenGui.IgnoreGuiInset=true
+ScreenGui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
+ScreenGui.DisplayOrder=999999
+ScreenGui.Parent=PlayerGui
 
-updateUIScale()
+Main=Instance.new("Frame")
+Main.Name="Main"
+Main.Size=UDim2.new(0,390,0,590)
+Main.Position=UDim2.new(0.5,-195,0.5,-295)
+Main.BackgroundColor3=COLORS.Background
+Main.BorderSizePixel=0
+Main.Parent=ScreenGui
 
-Gradient = Instance.new("UIGradient")
-Gradient.Rotation = 25
-Gradient.Parent = Main
+corner(Main,18)
+stroke(Main,0.35)
+
+local MainScale=Instance.new("UIScale")
+MainScale.Scale=1
+MainScale.Parent=Main
+
+Gradient=Instance.new("UIGradient")
+Gradient.Rotation=25
+Gradient.Parent=Main
 
 local function applyGradient()
-    selectedGradient = math.clamp(tonumber(selectedGradient) or 0, 0, 4)
+    local index=math.clamp(
+        tonumber(CONFIG.Gradient) or 0,
+        0,
+        4
+    )
 
-    if selectedGradient == 0 then
-        Gradient.Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, Color3.fromRGB(90, 45, 170)),
-            ColorSequenceKeypoint.new(0.5, Color3.fromRGB(35, 100, 190)),
-            ColorSequenceKeypoint.new(1, Color3.fromRGB(155, 50, 180))
+    if index==0 then
+        Gradient.Color=ColorSequence.new({
+            ColorSequenceKeypoint.new(0,Color3.fromRGB(90,45,170)),
+            ColorSequenceKeypoint.new(0.5,Color3.fromRGB(35,100,190)),
+            ColorSequenceKeypoint.new(1,Color3.fromRGB(155,50,180))
         })
-    elseif selectedGradient == 1 then
-        Gradient.Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, Color3.fromRGB(125, 40, 220)),
-            ColorSequenceKeypoint.new(1, Color3.fromRGB(40, 180, 255))
+    elseif index==1 then
+        Gradient.Color=ColorSequence.new({
+            ColorSequenceKeypoint.new(0,Color3.fromRGB(125,40,220)),
+            ColorSequenceKeypoint.new(1,Color3.fromRGB(40,180,255))
         })
-    elseif selectedGradient == 2 then
-        Gradient.Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 50, 145)),
-            ColorSequenceKeypoint.new(1, Color3.fromRGB(95, 50, 255))
+    elseif index==2 then
+        Gradient.Color=ColorSequence.new({
+            ColorSequenceKeypoint.new(0,Color3.fromRGB(255,50,145)),
+            ColorSequenceKeypoint.new(1,Color3.fromRGB(95,50,255))
         })
-    elseif selectedGradient == 3 then
-        Gradient.Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, Color3.fromRGB(40, 220, 170)),
-            ColorSequenceKeypoint.new(1, Color3.fromRGB(40, 100, 255))
+    elseif index==3 then
+        Gradient.Color=ColorSequence.new({
+            ColorSequenceKeypoint.new(0,Color3.fromRGB(40,220,170)),
+            ColorSequenceKeypoint.new(1,Color3.fromRGB(40,100,255))
         })
     else
-        Gradient.Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 145, 50)),
-            ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 55, 105)),
-            ColorSequenceKeypoint.new(1, Color3.fromRGB(120, 50, 255))
+        Gradient.Color=ColorSequence.new({
+            ColorSequenceKeypoint.new(0,Color3.fromRGB(255,145,50)),
+            ColorSequenceKeypoint.new(0.5,Color3.fromRGB(255,55,105)),
+            ColorSequenceKeypoint.new(1,Color3.fromRGB(120,50,255))
         })
     end
 end
@@ -341,85 +439,81 @@ applyGradient()
 
 task.spawn(function()
     while ScreenGui and ScreenGui.Parent do
-        if Gradient and Gradient.Parent then
-            Gradient.Offset = Vector2.new(-1, 0)
+        Gradient.Offset=Vector2.new(-1,0)
 
-            local animation = tween(
-                Gradient,
-                {
-                    Offset = Vector2.new(1, 0)
-                },
-                4
-            )
+        local t=tween(
+            Gradient,
+            {
+                Offset=Vector2.new(1,0)
+            },
+            4
+        )
 
-            if animation then
-                animation:Play()
-                animation.Completed:Wait()
-            else
-                task.wait(4)
-            end
+        if t then
+            t:Play()
+            t.Completed:Wait()
         else
-            task.wait(1)
+            task.wait(4)
         end
     end
 end)
 
-local TopBar = Instance.new("Frame")
-TopBar.Size = UDim2.new(1, 0, 0, 66)
-TopBar.BackgroundTransparency = 1
-TopBar.Parent = Main
+local TopBar=Instance.new("Frame")
+TopBar.Size=UDim2.new(1,0,0,66)
+TopBar.BackgroundTransparency=1
+TopBar.Parent=Main
 
-local Title = Instance.new("TextLabel")
-Title.BackgroundTransparency = 1
-Title.Position = UDim2.new(0, 20, 0, 8)
-Title.Size = UDim2.new(0, 220, 0, 28)
-Title.Font = Enum.Font.GothamBold
-Title.Text = "👑 VORA ZURE"
-Title.TextSize = 20
-Title.TextColor3 = COLORS.Text
-Title.TextXAlignment = Enum.TextXAlignment.Left
-Title.Parent = TopBar
+local Title=Instance.new("TextLabel")
+Title.BackgroundTransparency=1
+Title.Position=UDim2.new(0,20,0,8)
+Title.Size=UDim2.new(0,220,0,28)
+Title.Font=Enum.Font.GothamBold
+Title.Text="👑 VORA ZURE"
+Title.TextSize=20
+Title.TextColor3=COLORS.Text
+Title.TextXAlignment=Enum.TextXAlignment.Left
+Title.Parent=TopBar
 
-local Status = Instance.new("TextLabel")
-Status.BackgroundTransparency = 1
-Status.Position = UDim2.new(0, 21, 0, 36)
-Status.Size = UDim2.new(0, 180, 0, 20)
-Status.Font = Enum.Font.Gotham
-Status.Text = "ONLINE • MOBILE"
-Status.TextSize = 11
-Status.TextColor3 = COLORS.Success
-Status.TextXAlignment = Enum.TextXAlignment.Left
-Status.Parent = TopBar
+local Status=Instance.new("TextLabel")
+Status.BackgroundTransparency=1
+Status.Position=UDim2.new(0,21,0,36)
+Status.Size=UDim2.new(0,180,0,20)
+Status.Font=Enum.Font.Gotham
+Status.Text="ONLINE • MOBILE"
+Status.TextSize=11
+Status.TextColor3=COLORS.Success
+Status.TextXAlignment=Enum.TextXAlignment.Left
+Status.Parent=TopBar
 
-FPSLabel = Instance.new("TextLabel")
-FPSLabel.BackgroundTransparency = 1
-FPSLabel.Position = UDim2.new(1, -170, 0, 12)
-FPSLabel.Size = UDim2.new(0, 70, 0, 20)
-FPSLabel.Font = Enum.Font.GothamBold
-FPSLabel.Text = "FPS --"
-FPSLabel.TextSize = 12
-FPSLabel.TextColor3 = COLORS.Text
-FPSLabel.Parent = TopBar
+FPSLabel=Instance.new("TextLabel")
+FPSLabel.BackgroundTransparency=1
+FPSLabel.Position=UDim2.new(1,-170,0,12)
+FPSLabel.Size=UDim2.new(0,70,0,20)
+FPSLabel.Font=Enum.Font.GothamBold
+FPSLabel.Text="FPS --"
+FPSLabel.TextSize=12
+FPSLabel.TextColor3=COLORS.Text
+FPSLabel.Parent=TopBar
 
-PingLabel = Instance.new("TextLabel")
-PingLabel.BackgroundTransparency = 1
-PingLabel.Position = UDim2.new(1, -90, 0, 12)
-PingLabel.Size = UDim2.new(0, 70, 0, 20)
-PingLabel.Font = Enum.Font.GothamBold
-PingLabel.Text = "PING --"
-PingLabel.TextSize = 12
-PingLabel.TextColor3 = COLORS.Text
-PingLabel.Parent = TopBar
+PingLabel=Instance.new("TextLabel")
+PingLabel.BackgroundTransparency=1
+PingLabel.Position=UDim2.new(1,-90,0,12)
+PingLabel.Size=UDim2.new(0,70,0,20)
+PingLabel.Font=Enum.Font.GothamBold
+PingLabel.Text="PING --"
+PingLabel.TextSize=12
+PingLabel.TextColor3=COLORS.Text
+PingLabel.Parent=TopBar
 
-local Avatar = Instance.new("ImageLabel")
-Avatar.Size = UDim2.new(0, 48, 0, 48)
-Avatar.Position = UDim2.new(0, 14, 0, 75)
-Avatar.BackgroundColor3 = COLORS.Card
-Avatar.BorderSizePixel = 0
-Avatar.Parent = Main
-corner(Avatar, 14)
+local Avatar=Instance.new("ImageLabel")
+Avatar.Size=UDim2.new(0,48,0,48)
+Avatar.Position=UDim2.new(0,14,0,75)
+Avatar.BackgroundColor3=COLORS.Card
+Avatar.BorderSizePixel=0
+Avatar.Parent=Main
+corner(Avatar,14)
 
-local avatarOK, avatarURL = pcall(function()
+local avatarOK,avatarURL=pcall(function()
     return Players:GetUserThumbnailAsync(
         LocalPlayer.UserId,
         Enum.ThumbnailType.HeadShot,
@@ -428,202 +522,248 @@ local avatarOK, avatarURL = pcall(function()
 end)
 
 if avatarOK then
-    Avatar.Image = avatarURL
+    Avatar.Image=avatarURL
 end
 
-local DisplayName = Instance.new("TextLabel")
-DisplayName.BackgroundTransparency = 1
-DisplayName.Position = UDim2.new(0, 72, 0, 76)
-DisplayName.Size = UDim2.new(0, 250, 0, 24)
-DisplayName.Font = Enum.Font.GothamBold
-DisplayName.Text = "DISPLAY : " .. LocalPlayer.DisplayName
-DisplayName.TextSize = 13
-DisplayName.TextColor3 = COLORS.Text
-DisplayName.TextXAlignment = Enum.TextXAlignment.Left
-DisplayName.Parent = Main
+local DisplayName=Instance.new("TextLabel")
+DisplayName.BackgroundTransparency=1
+DisplayName.Position=UDim2.new(0,72,0,76)
+DisplayName.Size=UDim2.new(0,250,0,24)
+DisplayName.Font=Enum.Font.GothamBold
+DisplayName.Text="DISPLAY : "..LocalPlayer.DisplayName
+DisplayName.TextSize=13
+DisplayName.TextColor3=COLORS.Text
+DisplayName.TextXAlignment=Enum.TextXAlignment.Left
+DisplayName.Parent=Main
 
-local Username = Instance.new("TextLabel")
-Username.BackgroundTransparency = 1
-Username.Position = UDim2.new(0, 72, 0, 100)
-Username.Size = UDim2.new(0, 250, 0, 20)
-Username.Font = Enum.Font.Gotham
-Username.Text = "USERNAME : " .. LocalPlayer.Name
-Username.TextSize = 11
-Username.TextColor3 = COLORS.SubText
-Username.TextXAlignment = Enum.TextXAlignment.Left
-Username.Parent = Main
+local Username=Instance.new("TextLabel")
+Username.BackgroundTransparency=1
+Username.Position=UDim2.new(0,72,0,100)
+Username.Size=UDim2.new(0,250,0,20)
+Username.Font=Enum.Font.Gotham
+Username.Text="USERNAME : "..LocalPlayer.Name
+Username.TextSize=11
+Username.TextColor3=COLORS.SubText
+Username.TextXAlignment=Enum.TextXAlignment.Left
+Username.Parent=Main
 
-local Content = Instance.new("Frame")
-Content.Name = "Content"
-Content.Position = UDim2.new(0, 12, 0, 132)
-Content.Size = UDim2.new(1, -24, 1, -144)
-Content.BackgroundTransparency = 1
-Content.Parent = Main
+local Content=Instance.new("Frame")
+Content.Name="Content"
+Content.Position=UDim2.new(0,12,0,132)
+Content.Size=UDim2.new(1,-24,1,-144)
+Content.BackgroundTransparency=1
+Content.Parent=Main
 
-local Tabs = Instance.new("Frame")
-Tabs.Size = UDim2.new(0, 90, 1, 0)
-Tabs.BackgroundColor3 = COLORS.Panel
-Tabs.BorderSizePixel = 0
-Tabs.Parent = Content
-corner(Tabs, 14)
+local Tabs=Instance.new("Frame")
+Tabs.Size=UDim2.new(0,90,1,0)
+Tabs.BackgroundColor3=COLORS.Panel
+Tabs.BorderSizePixel=0
+Tabs.Parent=Content
+corner(Tabs,14)
 
-local Pages = Instance.new("Frame")
-Pages.Position = UDim2.new(0, 100, 0, 0)
-Pages.Size = UDim2.new(1, -100, 1, 0)
-Pages.BackgroundTransparency = 1
-Pages.Parent = Content
+local Pages=Instance.new("Frame")
+Pages.Position=UDim2.new(0,100,0,0)
+Pages.Size=UDim2.new(1,-100,1,0)
+Pages.BackgroundTransparency=1
+Pages.Parent=Content
 
 local function createPage(name)
-    local page = Instance.new("ScrollingFrame")
-    page.Name = name
-    page.Size = UDim2.new(1, 0, 1, 0)
-    page.BackgroundTransparency = 1
-    page.BorderSizePixel = 0
-    page.ScrollBarThickness = 3
-    page.ScrollBarImageTransparency = 0.4
-    page.Visible = false
-    page.AutomaticCanvasSize = Enum.AutomaticSize.Y
-    page.CanvasSize = UDim2.new()
-    page.Parent = Pages
+    local page=Instance.new("ScrollingFrame")
+    page.Name=name
+    page.Size=UDim2.new(1,0,1,0)
+    page.BackgroundTransparency=1
+    page.BorderSizePixel=0
+    page.ScrollBarThickness=3
+    page.ScrollBarImageTransparency=0.4
+    page.Visible=false
+    page.AutomaticCanvasSize=Enum.AutomaticSize.Y
+    page.CanvasSize=UDim2.new()
+    page.Parent=Pages
 
-    local layout = Instance.new("UIListLayout")
-    layout.Padding = UDim.new(0, 8)
-    layout.SortOrder = Enum.SortOrder.LayoutOrder
-    layout.Parent = page
+    local layout=Instance.new("UIListLayout")
+    layout.Padding=UDim.new(0,8)
+    layout.SortOrder=Enum.SortOrder.LayoutOrder
+    layout.Parent=page
 
-    padding(page, 4)
+    padding(page,4)
 
     return page
 end
 
-local HomePage = createPage("HOME")
-local AutoPage = createPage("AUTO WALK")
-local CharacterPage = createPage("CHARACTER")
-local ChatPage = createPage("CHAT")
-local ProfilePage = createPage("PROFILE")
-local SettingsPage = createPage("SETTINGS")
+local HomePage=createPage("HOME")
+local AutoPage=createPage("AUTO WALK")
+local CharacterPage=createPage("CHARACTER")
+local ChatPage=createPage("CHAT")
+local ProfilePage=createPage("PROFILE")
+local SettingsPage=createPage("SETTINGS")
 
-local PagesMap = {
-    HOME = HomePage,
-    ["AUTO WALK"] = AutoPage,
-    CHARACTER = CharacterPage,
-    CHAT = ChatPage,
-    PROFILE = ProfilePage,
-    SETTINGS = SettingsPage
+local PagesMap={
+    HOME=HomePage,
+    ["AUTO WALK"]=AutoPage,
+    CHARACTER=CharacterPage,
+    CHAT=ChatPage,
+    PROFILE=ProfilePage,
+    SETTINGS=SettingsPage
 }
 
-local function createTab(text, icon, order)
-    local button = Instance.new("TextButton")
-    button.Size = UDim2.new(1, -10, 0, 42)
-    button.Position = UDim2.new(0, 5, 0, (order - 1) * 47 + 5)
-    button.BackgroundColor3 = COLORS.Panel
-    button.Text = icon .. "  " .. text
-    button.TextSize = 10
-    button.Font = Enum.Font.GothamBold
-    button.TextColor3 = COLORS.SubText
-    button.AutoButtonColor = false
-    button.Parent = Tabs
-    corner(button, 10)
+local function createTab(text,icon,order)
+    local button=Instance.new("TextButton")
+    button.Size=UDim2.new(1,-10,0,42)
+    button.Position=UDim2.new(
+        0,
+        5,
+        0,
+        (order-1)*47+5
+    )
+    button.BackgroundColor3=COLORS.Panel
+    button.Text=icon.."  "..text
+    button.TextSize=10
+    button.Font=Enum.Font.GothamBold
+    button.TextColor3=COLORS.SubText
+    button.AutoButtonColor=false
+    button.Parent=Tabs
+
+    corner(button,10)
+
     return button
 end
 
-local TabHome = createTab("HOME", "⌂", 1)
-local TabAuto = createTab("AUTO", "◈", 2)
-local TabCharacter = createTab("CHAR", "♙", 3)
-local TabChat = createTab("CHAT", "◉", 4)
-local TabProfile = createTab("PROFILE", "◎", 5)
-local TabSettings = createTab("SET", "⚙", 6)
+local TabHome=createTab("HOME","⌂",1)
+local TabAuto=createTab("AUTO","◈",2)
+local TabCharacter=createTab("CHAR","♙",3)
+local TabChat=createTab("CHAT","◉",4)
+local TabProfile=createTab("PROFILE","◎",5)
+local TabSettings=createTab("SET","⚙",6)
 
-local buttonMap = {
-    HOME = TabHome,
-    ["AUTO WALK"] = TabAuto,
-    CHARACTER = TabCharacter,
-    CHAT = TabChat,
-    PROFILE = TabProfile,
-    SETTINGS = TabSettings
+local buttonMap={
+    HOME=TabHome,
+    ["AUTO WALK"]=TabAuto,
+    CHARACTER=TabCharacter,
+    CHAT=TabChat,
+    PROFILE=TabProfile,
+    SETTINGS=TabSettings
 }
 
 local function switchPage(name)
-    local page = PagesMap[name]
+    local page=PagesMap[name]
 
     if not page then
         return
     end
 
-    for pageName, currentPage in pairs(PagesMap) do
-        currentPage.Visible = pageName == name
+    for pageName,currentPage in pairs(PagesMap) do
+        currentPage.Visible=pageName==name
     end
 
-    for _, child in ipairs(Tabs:GetChildren()) do
+    for _,child in ipairs(Tabs:GetChildren()) do
         if child:IsA("TextButton") then
-            child.BackgroundColor3 = COLORS.Panel
-            child.TextColor3 = COLORS.SubText
+            child.BackgroundColor3=COLORS.Panel
+            child.TextColor3=COLORS.SubText
         end
     end
 
-    local selected = buttonMap[name]
+    local selected=buttonMap[name]
 
     if selected then
-        selected.BackgroundColor3 = COLORS.Accent
-        selected.TextColor3 = COLORS.Text
+        selected.BackgroundColor3=COLORS.Accent
+        selected.TextColor3=COLORS.Text
     end
 end
 
-local function createSection(parent, title, description)
-    local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(1, -8, 0, 64)
-    frame.BackgroundColor3 = COLORS.Panel
-    frame.BorderSizePixel = 0
-    frame.Parent = parent
-    corner(frame, 12)
+TabHome.Activated:Connect(function()
+    switchPage("HOME")
+end)
 
-    local titleLabel = Instance.new("TextLabel")
-    titleLabel.BackgroundTransparency = 1
-    titleLabel.Position = UDim2.new(0, 13, 0, 8)
-    titleLabel.Size = UDim2.new(1, -26, 0, 22)
-    titleLabel.Font = Enum.Font.GothamBold
-    titleLabel.Text = title
-    titleLabel.TextSize = 13
-    titleLabel.TextColor3 = COLORS.Text
-    titleLabel.TextXAlignment = Enum.TextXAlignment.Left
-    titleLabel.Parent = frame
+TabAuto.Activated:Connect(function()
+    switchPage("AUTO WALK")
+end)
 
-    local desc = Instance.new("TextLabel")
-    desc.BackgroundTransparency = 1
-    desc.Position = UDim2.new(0, 13, 0, 31)
-    desc.Size = UDim2.new(1, -26, 0, 20)
-    desc.Font = Enum.Font.Gotham
-    desc.Text = description or ""
-    desc.TextSize = 10
-    desc.TextColor3 = COLORS.SubText
-    desc.TextXAlignment = Enum.TextXAlignment.Left
-    desc.Parent = frame
+TabCharacter.Activated:Connect(function()
+    switchPage("CHARACTER")
+end)
+
+TabChat.Activated:Connect(function()
+    switchPage("CHAT")
+end)
+
+TabProfile.Activated:Connect(function()
+    switchPage("PROFILE")
+end)
+
+TabSettings.Activated:Connect(function()
+    switchPage("SETTINGS")
+end)
+
+local function createSection(parent,title,description)
+    local frame=Instance.new("Frame")
+    frame.Size=UDim2.new(1,-8,0,64)
+    frame.BackgroundColor3=COLORS.Panel
+    frame.BorderSizePixel=0
+    frame.Parent=parent
+    corner(frame,12)
+
+    local titleLabel=Instance.new("TextLabel")
+    titleLabel.BackgroundTransparency=1
+    titleLabel.Position=UDim2.new(0,13,0,8)
+    titleLabel.Size=UDim2.new(1,-26,0,22)
+    titleLabel.Font=Enum.Font.GothamBold
+    titleLabel.Text=title
+    titleLabel.TextSize=13
+    titleLabel.TextColor3=COLORS.Text
+    titleLabel.TextXAlignment=Enum.TextXAlignment.Left
+    titleLabel.Parent=frame
+
+    local desc=Instance.new("TextLabel")
+    desc.BackgroundTransparency=1
+    desc.Position=UDim2.new(0,13,0,31)
+    desc.Size=UDim2.new(1,-26,0,20)
+    desc.Font=Enum.Font.Gotham
+    desc.Text=description or ""
+    desc.TextSize=10
+    desc.TextColor3=COLORS.SubText
+    desc.TextXAlignment=Enum.TextXAlignment.Left
+    desc.Parent=frame
 
     return frame
 end
 
-local function createButton(parent, text, callback)
-    local button = Instance.new("TextButton")
-    button.Size = UDim2.new(1, -8, 0, 42)
-    button.BackgroundColor3 = COLORS.Card
-    button.Text = text
-    button.TextSize = 12
-    button.Font = Enum.Font.GothamBold
-    button.TextColor3 = COLORS.Text
-    button.AutoButtonColor = false
-    button.Parent = parent
-    corner(button, 10)
-    stroke(button, 0.75)
+local function createButton(parent,text,callback)
+    local button=Instance.new("TextButton")
+    button.Size=UDim2.new(1,-8,0,42)
+    button.BackgroundColor3=COLORS.Card
+    button.Text=text
+    button.TextSize=12
+    button.Font=Enum.Font.GothamBold
+    button.TextColor3=COLORS.Text
+    button.AutoButtonColor=false
+    button.Parent=parent
+
+    corner(button,10)
+    stroke(button,0.75)
 
     button.MouseEnter:Connect(function()
-        local t = tween(button, {BackgroundColor3 = COLORS.Accent}, 0.15)
+        local t=tween(
+            button,
+            {
+                BackgroundColor3=COLORS.Accent
+            },
+            0.15
+        )
+
         if t then
             t:Play()
         end
     end)
 
     button.MouseLeave:Connect(function()
-        local t = tween(button, {BackgroundColor3 = COLORS.Card}, 0.15)
+        local t=tween(
+            button,
+            {
+                BackgroundColor3=COLORS.Card
+            },
+            0.15
+        )
+
         if t then
             t:Play()
         end
@@ -638,52 +778,74 @@ local function createButton(parent, text, callback)
     return button
 end
 
-local function createToggle(parent, text, initial, callback)
-    local button = Instance.new("TextButton")
-    button.Size = UDim2.new(1, -8, 0, 42)
-    button.BackgroundColor3 = COLORS.Card
-    button.Text = ""
-    button.AutoButtonColor = false
-    button.Parent = parent
-    corner(button, 10)
+local function createToggle(parent,text,initial,callback)
+    local button=Instance.new("TextButton")
+    button.Size=UDim2.new(1,-8,0,42)
+    button.BackgroundColor3=COLORS.Card
+    button.Text=""
+    button.AutoButtonColor=false
+    button.Parent=parent
 
-    local label = Instance.new("TextLabel")
-    label.BackgroundTransparency = 1
-    label.Position = UDim2.new(0, 13, 0, 0)
-    label.Size = UDim2.new(1, -75, 1, 0)
-    label.Font = Enum.Font.GothamBold
-    label.Text = text
-    label.TextSize = 11
-    label.TextColor3 = COLORS.Text
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    label.Parent = button
+    corner(button,10)
 
-    local state = initial == true
+    local label=Instance.new("TextLabel")
+    label.BackgroundTransparency=1
+    label.Position=UDim2.new(0,13,0,0)
+    label.Size=UDim2.new(1,-75,1,0)
+    label.Font=Enum.Font.GothamBold
+    label.Text=text
+    label.TextSize=11
+    label.TextColor3=COLORS.Text
+    label.TextXAlignment=Enum.TextXAlignment.Left
+    label.Parent=button
 
-    local indicator = Instance.new("Frame")
-    indicator.Size = UDim2.new(0, 45, 0, 23)
-    indicator.Position = UDim2.new(1, -57, 0.5, -11)
-    indicator.BackgroundColor3 = state and COLORS.Success or Color3.fromRGB(55, 57, 70)
-    indicator.Parent = button
-    corner(indicator, 20)
+    local state=initial==true
 
-    local dot = Instance.new("Frame")
-    dot.Size = UDim2.new(0, 17, 0, 17)
-    dot.Position = state and UDim2.new(1, -20, 0.5, -8) or UDim2.new(0, 3, 0.5, -8)
-    dot.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    dot.Parent = indicator
-    corner(dot, 20)
+    local indicator=Instance.new("Frame")
+    indicator.Size=UDim2.new(0,45,0,23)
+    indicator.Position=UDim2.new(1,-57,0.5,-11)
+    indicator.BackgroundColor3=
+        state
+        and COLORS.Success
+        or Color3.fromRGB(55,57,70)
+    indicator.Parent=button
+
+    corner(indicator,20)
+
+    local dot=Instance.new("Frame")
+    dot.Size=UDim2.new(0,17,0,17)
+    dot.Position=
+        state
+        and UDim2.new(1,-20,0.5,-8)
+        or UDim2.new(0,3,0.5,-8)
+    dot.BackgroundColor3=Color3.fromRGB(255,255,255)
+    dot.Parent=indicator
+
+    corner(dot,20)
 
     local function update()
-        indicator.BackgroundColor3 = state and COLORS.Success or Color3.fromRGB(55, 57, 70)
+        indicator.BackgroundColor3=
+            state
+            and COLORS.Success
+            or Color3.fromRGB(55,57,70)
 
-        local targetPosition = state and UDim2.new(1, -20, 0.5, -8) or UDim2.new(0, 3, 0.5, -8)
-        local t = tween(dot, {Position = targetPosition}, 0.15)
+        local target=
+            state
+            and UDim2.new(1,-20,0.5,-8)
+            or UDim2.new(0,3,0.5,-8)
+
+        local t=tween(
+            dot,
+            {
+                Position=target
+            },
+            0.15
+        )
 
         if t then
             t:Play()
         else
-            dot.Position = targetPosition
+            dot.Position=target
         end
 
         if callback then
@@ -692,47 +854,33 @@ local function createToggle(parent, text, initial, callback)
     end
 
     button.Activated:Connect(function()
-        state = not state
+        state=not state
         update()
     end)
 
     return button
 end
 
-local function updateAutoStatus(text, color)
-    if AutoStatus then
-        AutoStatus.Text = text
-        if color then
-            AutoStatus.TextColor3 = color
-        end
+local function setAutoStatus(text,color)
+    if not AutoStatus then
+        return
     end
+
+    AutoStatus.Text=text
+    AutoStatus.TextColor3=color or COLORS.Success
 end
 
-local function getStateName(state)
-    if typeof(state) == "EnumItem" then
-        return state.Name
-    end
-    return tostring(state)
-end
-
-local function isAirState(state)
-    return state == Enum.HumanoidStateType.Jumping
-        or state == Enum.HumanoidStateType.Freefall
-        or state == Enum.HumanoidStateType.FallingDown
-        or state == Enum.HumanoidStateType.Flying
-end
-
-local function vectorToTable(v)
+local function vecToTable(v)
     return {
-        X = v.X,
-        Y = v.Y,
-        Z = v.Z
+        X=v.X,
+        Y=v.Y,
+        Z=v.Z
     }
 end
 
-local function tableToVector(v, fallback)
-    if type(v) ~= "table" then
-        return fallback or Vector3.zero
+local function tableToVec(v)
+    if type(v)~="table" then
+        return Vector3.zero
     end
 
     return Vector3.new(
@@ -742,56 +890,121 @@ local function tableToVector(v, fallback)
     )
 end
 
-local function routeValid()
-    return type(route) == "table" and #route >= 2
+local function getPointPosition(point)
+    return tableToVec(point and point.Position)
 end
 
-local function disconnectPlayback()
-    pcall(function()
-        RunService:UnbindFromRenderStep(PLAYBACK_BIND_NAME)
-    end)
+local function getPointMove(point)
+    local v=tableToVec(point and point.MoveDirection)
 
-    if playbackConnection then
-        playbackConnection:Disconnect()
-        playbackConnection = nil
-    end
-end
-
-local function stopRecording()
-    isRecording = false
-    pendingJump = false
-
-    if recordConnection then
-        recordConnection:Disconnect()
-        recordConnection = nil
-    end
-
-    if jumpRequestConnection then
-        jumpRequestConnection:Disconnect()
-        jumpRequestConnection = nil
-    end
-
-    updateAutoStatus(
-        "STATUS : IDLE • " .. tostring(#route) .. " POINTS",
-        COLORS.Success
+    local horizontal=Vector3.new(
+        v.X,
+        0,
+        v.Z
     )
-end
 
-local function stopPlayback()
-    isPlaying = false
-    disconnectPlayback()
-
-    if Humanoid and Humanoid.Parent then
-        pcall(function()
-            Humanoid:Move(Vector3.zero, false)
-        end)
+    if horizontal.Magnitude>1 then
+        horizontal=horizontal.Unit
     end
 
-    lastPlaybackJumpTime = -1
+    return horizontal
+end
 
-    updateAutoStatus(
-        "STATUS : IDLE • " .. tostring(#route) .. " POINTS",
-        COLORS.Success
+local function getPointLook(point)
+    local v=tableToVec(point and point.Look)
+
+    local horizontal=Vector3.new(
+        v.X,
+        0,
+        v.Z
+    )
+
+    if horizontal.Magnitude<0.01 then
+        return Vector3.zero
+    end
+
+    return horizontal.Unit
+end
+
+local function getPointTime(point)
+    return tonumber(point and point.Time) or 0
+end
+
+local function isJumpState(point)
+    local state=point and point.State
+
+    return
+        point and point.Jump==true
+        or state=="Jumping"
+        or state=="Freefall"
+        or state=="FallingDown"
+end
+
+local function addRecordPoint(position,moveDirection,look,velocity,state,jump,timeValue)
+    route[#route+1]={
+        Time=timeValue,
+        Position=vecToTable(position),
+        MoveDirection=vecToTable(moveDirection),
+        Look=vecToTable(look),
+        Velocity=vecToTable(velocity),
+        State=state.Name,
+        Jump=jump==true
+    }
+end
+
+local function recordCurrentSample(force)
+    if not Root or not Root.Parent or not Humanoid then
+        return
+    end
+
+    local now=os.clock()
+    local elapsed=now-recordStart
+
+    if not force and now-lastSampleTime<1/60 then
+        return
+    end
+
+    lastSampleTime=now
+
+    local position=Root.Position
+    local moveDirection=Humanoid.MoveDirection
+    local look=Root.CFrame.LookVector
+    local velocity=Root.AssemblyLinearVelocity
+    local state=Humanoid:GetState()
+
+    local jump=
+        state==Enum.HumanoidStateType.Jumping
+        or (
+            velocity.Y>6
+            and Humanoid.FloorMaterial==Enum.Material.Air
+        )
+
+    local last=route[#route]
+
+    if last and CONFIG.AntiJitter and not jump then
+        local lastPosition=getPointPosition(last)
+        local lastMove=getPointMove(last)
+        local distance=(position-lastPosition).Magnitude
+        local moveChange=(moveDirection-lastMove).Magnitude
+        local stateChanged=last.State~=state.Name
+
+        if distance<0.025
+            and moveChange<0.025
+            and not stateChanged
+            and elapsed-getPointTime(last)<0.06
+            and not force then
+            return
+        end
+    end
+
+    addRecordPoint(
+        position,
+        moveDirection,
+        look,
+        velocity,
+        state,
+        jump,
+        elapsed
     )
 end
 
@@ -801,233 +1014,239 @@ local function startRecording()
     end
 
     if not refreshCharacter() then
-        updateAutoStatus("STATUS : CHARACTER NOT READY", COLORS.Warning)
+        setAutoStatus(
+            "STATUS : CHARACTER NOT READY",
+            COLORS.Warning
+        )
         return
     end
 
-    route = {}
-    playbackIndex = 1
-    playbackClock = 0
-    previousRecordState = nil
-    pendingJump = false
-    isRecording = true
+    route={}
+    jumpEvents={}
+    playbackIndex=1
+    playbackTime=0
+    playbackJumpCursor=1
 
-    local startTime = os.clock()
-    local lastPosition = Root.Position
-    local lastDirection = Vector3.zero
-    local lastState = Humanoid:GetState()
+    isRecording=true
+    recordStart=os.clock()
+    lastSampleTime=0
+    lastRecordState=Humanoid:GetState()
 
-    jumpRequestConnection = UserInputService.JumpRequest:Connect(function()
-        if isRecording then
-            pendingJump = true
-        end
-    end)
+    recordCurrentSample(true)
 
-    recordConnection = RunService.RenderStepped:Connect(function()
+    recordConnection=RunService.Heartbeat:Connect(function()
         if not isRecording then
             return
         end
 
-        if not Character
-            or not Character.Parent
-            or not Humanoid
-            or not Humanoid.Parent
-            or not Root
+        if not Root
             or not Root.Parent
-            or Humanoid.Health <= 0 then
+            or not Humanoid
+            or Humanoid.Health<=0 then
             stopRecording()
             return
         end
 
-        local now = os.clock()
-        local elapsed = now - startTime
-        local position = Root.Position
-        local moveDirection = Humanoid.MoveDirection
-        local state = Humanoid:GetState()
-        local verticalVelocity = Root.AssemblyLinearVelocity.Y
+        local currentState=Humanoid:GetState()
 
-        local stateChanged = previousRecordState ~= state
-        local jumpEvent = pendingJump
-
-        if state == Enum.HumanoidStateType.Jumping
-            and lastState ~= Enum.HumanoidStateType.Jumping then
-            jumpEvent = true
+        if currentState==Enum.HumanoidStateType.Jumping
+            and lastRecordState~=Enum.HumanoidStateType.Jumping then
+            jumpEvents[#jumpEvents+1]=os.clock()-recordStart
         end
 
-        if stateChanged
-            and state == Enum.HumanoidStateType.Jumping then
-            jumpEvent = true
+        if Humanoid.Jump
+            and Humanoid.FloorMaterial==Enum.Material.Air
+            and lastRecordState~=Enum.HumanoidStateType.Jumping then
+            jumpEvents[#jumpEvents+1]=os.clock()-recordStart
         end
 
-        local moved = (position - lastPosition).Magnitude > 0.005
-        local directionChanged = (moveDirection - lastDirection).Magnitude > 0.015
-        local stateImportant = stateChanged
-        local verticalImportant = math.abs(verticalVelocity) > 1
-        local forceSample = elapsed <= 0.05
+        recordCurrentSample(false)
 
-        if forceSample
-            or moved
-            or directionChanged
-            or stateImportant
-            or verticalImportant
-            or jumpEvent
-            or not CONFIG.AntiLag then
-
-            route[#route + 1] = {
-                Time = elapsed,
-                Position = vectorToTable(position),
-                MoveDirection = vectorToTable(moveDirection),
-                LookVector = vectorToTable(Root.CFrame.LookVector),
-                VerticalVelocity = verticalVelocity,
-                WalkSpeed = Humanoid.WalkSpeed,
-                JumpPower = Humanoid.JumpPower,
-                State = getStateName(state),
-                JumpEvent = jumpEvent,
-                Airborne = isAirState(state)
-            }
-
-            lastPosition = position
-            lastDirection = moveDirection
-            lastState = state
-            previousRecordState = state
-            pendingJump = false
-        end
+        lastRecordState=currentState
     end)
 
-    updateAutoStatus("STATUS : RECORDING", COLORS.Warning)
+    setAutoStatus(
+        "STATUS : RECORDING",
+        COLORS.Warning
+    )
 end
 
-local function getRouteTime(point)
-    if type(point) ~= "table" then
-        return 0
-    end
-    return tonumber(point.Time) or 0
-end
-
-local function getPlaybackPoint(index)
-    return route[index]
-end
-
-local function interpolateVector(a, b, alpha)
-    local va = tableToVector(a, Vector3.zero)
-    local vb = tableToVector(b, va)
-    return va:Lerp(vb, math.clamp(alpha, 0, 1))
-end
-
-local function normalizeMovement(direction)
-    if direction.Magnitude <= 0.001 then
-        return Vector3.zero
+local function findNearestForwardIndex(position,startIndex)
+    if #route<2 then
+        return 1
     end
 
-    return direction.Unit
+    local bestIndex=math.clamp(
+        startIndex or 1,
+        1,
+        #route
+    )
+
+    local bestDistance=math.huge
+
+    local beginIndex=math.max(
+        1,
+        bestIndex-3
+    )
+
+    local endIndex=math.min(
+        #route,
+        bestIndex+24
+    )
+
+    for i=beginIndex,endIndex do
+        local p=getPointPosition(route[i])
+
+        local flatDistance=(
+            Vector3.new(
+                p.X,
+                position.Y,
+                p.Z
+            )
+            -
+            Vector3.new(
+                position.X,
+                position.Y,
+                position.Z
+            )
+        ).Magnitude
+
+        if flatDistance<bestDistance then
+            bestDistance=flatDistance
+            bestIndex=i
+        end
+    end
+
+    return bestIndex
 end
 
-local function getTargetPosition(point)
-    if type(point) ~= "table" then
+local function advancePlaybackIndex(position)
+    while playbackIndex<#route do
+        local point=getPointPosition(route[playbackIndex])
+
+        local distance=(
+            Vector3.new(
+                point.X,
+                position.Y,
+                point.Z
+            )
+            -
+            Vector3.new(
+                position.X,
+                position.Y,
+                position.Z
+            )
+        ).Magnitude
+
+        if distance<=1.35 then
+            playbackIndex+=1
+        else
+            break
+        end
+    end
+end
+
+local function getInterpolatedData(timeValue)
+    if #route<2 then
         return nil
     end
 
-    if type(point.Position) ~= "table" then
-        return nil
+    while playbackIndex<#route
+        and getPointTime(route[playbackIndex+1])<=timeValue do
+        playbackIndex+=1
     end
 
-    return tableToVector(point.Position, nil)
-end
+    local aIndex=math.clamp(
+        playbackIndex,
+        1,
+        #route-1
+    )
 
-local function getReplayMovement(index, clock)
-    local current = route[index]
-    local nextPoint = route[index + 1]
+    local bIndex=aIndex+1
 
-    if not current then
-        return Vector3.zero
-    end
+    local a=route[aIndex]
+    local b=route[bIndex]
 
-    if not nextPoint then
-        return normalizeMovement(tableToVector(current.MoveDirection, Vector3.zero))
-    end
+    local aTime=getPointTime(a)
+    local bTime=getPointTime(b)
 
-    local currentTime = getRouteTime(current)
-    local nextTime = getRouteTime(nextPoint)
-    local span = math.max(nextTime - currentTime, 0.0001)
-    local alpha = math.clamp((clock - currentTime) / span, 0, 1)
+    local alpha=math.clamp(
+        (timeValue-aTime)/
+        math.max(bTime-aTime,0.001),
+        0,
+        1
+    )
 
-    local direction = interpolateVector(
-        current.MoveDirection,
-        nextPoint.MoveDirection,
+    local aPosition=getPointPosition(a)
+    local bPosition=getPointPosition(b)
+
+    local aMove=getPointMove(a)
+    local bMove=getPointMove(b)
+
+    local aLook=getPointLook(a)
+    local bLook=getPointLook(b)
+
+    local position=aPosition:Lerp(
+        bPosition,
         alpha
     )
 
-    return normalizeMovement(direction)
+    local move=aMove:Lerp(
+        bMove,
+        alpha
+    )
+
+    local look=aLook:Lerp(
+        bLook,
+        alpha
+    )
+
+    local jump=
+        isJumpState(a)
+        or isJumpState(b)
+
+    return {
+        Position=position,
+        MoveDirection=move,
+        Look=look,
+        Jump=jump,
+        StateA=a.State,
+        StateB=b.State,
+        A=a,
+        B=b
+    }
 end
 
-local function getReplayTargetPosition(index, clock)
-    local current = route[index]
-    local nextPoint = route[index + 1]
-
-    if not current then
-        return nil
-    end
-
-    local currentPosition = getTargetPosition(current)
-
-    if not currentPosition then
-        return nil
-    end
-
-    if not nextPoint then
-        return currentPosition
-    end
-
-    local nextPosition = getTargetPosition(nextPoint)
-
-    if not nextPosition then
-        return currentPosition
-    end
-
-    local currentTime = getRouteTime(current)
-    local nextTime = getRouteTime(nextPoint)
-    local span = math.max(nextTime - currentTime, 0.0001)
-    local alpha = math.clamp((clock - currentTime) / span, 0, 1)
-
-    return currentPosition:Lerp(nextPosition, alpha)
-end
-
-local function triggerReplayJump()
-    if not Humanoid or not Humanoid.Parent then
+local function triggerJump()
+    if not Humanoid or Humanoid.Health<=0 then
         return
     end
 
-    local now = playbackClock
+    local state=Humanoid:GetState()
 
-    if lastPlaybackJumpTime >= 0
-        and math.abs(now - lastPlaybackJumpTime) < 0.08 then
+    if state==Enum.HumanoidStateType.Jumping
+        or state==Enum.HumanoidStateType.Freefall then
         return
     end
 
-    lastPlaybackJumpTime = now
-
     pcall(function()
-        Humanoid.Jump = true
-    end)
-
-    pcall(function()
-        if Humanoid:GetState() ~= Enum.HumanoidStateType.Jumping then
-            Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-        end
+        Humanoid.Jump=true
     end)
 end
 
-local function processReplayEvents(previousIndex, newIndex)
-    if newIndex <= previousIndex then
-        return
-    end
+local function processJumpEvents(previousTime,currentTime)
+    while playbackJumpCursor<=#jumpEvents do
+        local eventTime=jumpEvents[playbackJumpCursor]
 
-    for i = previousIndex, newIndex do
-        local point = route[i]
-
-        if point and point.JumpEvent == true then
-            triggerReplayJump()
+        if eventTime>currentTime then
+            break
         end
+
+        if eventTime>=previousTime-0.02 then
+            triggerJump()
+        end
+
+        playbackJumpCursor+=1
     end
 end
 
@@ -1036,145 +1255,359 @@ local function startPlayback()
         return
     end
 
-    if not routeValid() then
-        updateAutoStatus("STATUS : ROUTE TERLALU PENDEK", COLORS.Warning)
+    if #route<2 then
+        setAutoStatus(
+            "STATUS : ROUTE TERLALU PENDEK",
+            COLORS.Warning
+        )
         return
     end
 
     if not refreshCharacter() then
-        updateAutoStatus("STATUS : CHARACTER NOT READY", COLORS.Warning)
+        setAutoStatus(
+            "STATUS : CHARACTER NOT READY",
+            COLORS.Warning
+        )
         return
     end
 
-    disconnectPlayback()
+    local firstTime=getPointTime(route[1])
 
-    isPlaying = true
-    playbackIndex = 1
-    playbackClock = 0
-    playbackStartClock = os.clock()
-    lastPlaybackJumpTime = -1
+    if firstTime>0 then
+        for i=1,#route do
+            route[i].Time=getPointTime(route[i])-firstTime
+        end
+    end
 
-    updateAutoStatus("STATUS : PLAYING", COLORS.Success)
+    playbackTime=0
+    playbackIndex=1
+    playbackJumpCursor=1
+    isPlaying=true
+
+    setAutoStatus(
+        "STATUS : PLAYING",
+        COLORS.Success
+    )
+
+    pcall(function()
+        RunService:UnbindFromRenderStep(PLAYBACK_BIND)
+    end)
 
     RunService:BindToRenderStep(
-        PLAYBACK_BIND_NAME,
-        PLAYBACK_PRIORITY,
+        PLAYBACK_BIND,
+        Enum.RenderPriority.Character.Value+10,
         function(dt)
             if not isPlaying then
                 return
             end
 
-            if not Character
-                or not Character.Parent
+            if not Root
+                or not Root.Parent
                 or not Humanoid
                 or not Humanoid.Parent
-                or Humanoid.Health <= 0
-                or not Root
-                or not Root.Parent then
+                or Humanoid.Health<=0 then
                 stopPlayback()
                 return
             end
 
-            local realElapsed = os.clock() - playbackStartClock
+            local safeDt=math.clamp(
+                dt,
+                0,
+                0.12
+            )
 
-            if realElapsed < playbackClock then
-                realElapsed = playbackClock
-            end
+            local previousTime=playbackTime
 
-            playbackClock = realElapsed
+            playbackTime+=safeDt
 
-            local totalTime = getRouteTime(route[#route])
+            local totalTime=getPointTime(
+                route[#route]
+            )
 
-            if playbackClock >= totalTime then
-                local finalPoint = route[#route]
-                local finalDirection = normalizeMovement(
-                    tableToVector(finalPoint.MoveDirection, Vector3.zero)
-                )
+            if playbackTime>=totalTime then
+                local finalPoint=route[#route]
+                local finalMove=getPointMove(finalPoint)
 
-                pcall(function()
-                    Humanoid:Move(finalDirection, false)
-                end)
+                if finalMove.Magnitude<0.02 then
+                    finalMove=getPointLook(finalPoint)
+                end
 
-                if finalPoint.JumpEvent == true
-                    and lastPlaybackJumpTime < 0 then
-                    triggerReplayJump()
+                if finalMove.Magnitude>0.02 then
+                    pcall(function()
+                        Humanoid:Move(
+                            finalMove.Unit,
+                            false
+                        )
+                    end)
+                else
+                    pcall(function()
+                        Humanoid:Move(
+                            Vector3.zero,
+                            false
+                        )
+                    end)
+                end
+
+                if isJumpState(finalPoint) then
+                    triggerJump()
                 end
 
                 stopPlayback()
                 return
             end
 
-            local oldIndex = playbackIndex
+            processJumpEvents(
+                previousTime,
+                playbackTime
+            )
 
-            while playbackIndex < #route
-                and getRouteTime(route[playbackIndex + 1]) <= playbackClock do
-                playbackIndex += 1
+            local sample=getInterpolatedData(
+                playbackTime
+            )
+
+            if not sample then
+                stopPlayback()
+                return
             end
 
-            processReplayEvents(oldIndex, playbackIndex)
+            advancePlaybackIndex(
+                Root.Position
+            )
 
-            local movement = getReplayMovement(playbackIndex, playbackClock)
+            local currentPosition=Root.Position
+            local targetPosition=sample.Position
 
-            if CONFIG.AntiOutTrack then
-                local targetPosition = getReplayTargetPosition(
-                    playbackIndex,
-                    playbackClock
+            local toTarget=Vector3.new(
+                targetPosition.X-currentPosition.X,
+                0,
+                targetPosition.Z-currentPosition.Z
+            )
+
+            local targetDirection=Vector3.zero
+
+            if toTarget.Magnitude>0.05 then
+                targetDirection=toTarget.Unit
+            end
+
+            local recordedDirection=Vector3.new(
+                sample.MoveDirection.X,
+                0,
+                sample.MoveDirection.Z
+            )
+
+            if recordedDirection.Magnitude>1 then
+                recordedDirection=recordedDirection.Unit
+            end
+
+            if targetDirection.Magnitude<0.05 then
+                targetDirection=recordedDirection
+            elseif recordedDirection.Magnitude>0.05 then
+                local blend=CONFIG.NaturalAnimation
+                    and 0.38
+                    or 0.18
+
+                targetDirection=(
+                    targetDirection*(1-blend)
+                    +
+                    recordedDirection*blend
                 )
 
-                if targetPosition then
-                    local offset = targetPosition - Root.Position
-                    local horizontalOffset = Vector3.new(
-                        offset.X,
-                        0,
-                        offset.Z
+                if targetDirection.Magnitude>0.01 then
+                    targetDirection=targetDirection.Unit
+                end
+            end
+
+            local nextIndex=math.min(
+                playbackIndex+2,
+                #route
+            )
+
+            local nextPoint=route[nextIndex]
+
+            if nextPoint then
+                local nextPosition=getPointPosition(
+                    nextPoint
+                )
+
+                local lookAhead=Vector3.new(
+                    nextPosition.X-currentPosition.X,
+                    0,
+                    nextPosition.Z-currentPosition.Z
+                )
+
+                if lookAhead.Magnitude>0.05 then
+                    local lead=CONFIG.AntiJitter
+                        and 0.24
+                        or 0.12
+
+                    targetDirection=(
+                        targetDirection*(1-lead)
+                        +
+                        lookAhead.Unit*lead
                     )
 
-                    local distance = horizontalOffset.Magnitude
-
-                    if distance > 3 then
-                        local correction = horizontalOffset.Unit
-                        local strength = math.clamp((distance - 2) / 18, 0, 0.65)
-
-                        if movement.Magnitude > 0.01 then
-                            movement = normalizeMovement(
-                                movement:Lerp(correction, strength)
-                            )
-                        else
-                            movement = correction
-                        end
+                    if targetDirection.Magnitude>0.01 then
+                        targetDirection=targetDirection.Unit
                     end
                 end
             end
 
-            pcall(function()
-                Humanoid:Move(movement, false)
-            end)
+            if CONFIG.AntiOutTrack then
+                local errorVector=Vector3.new(
+                    targetPosition.X-currentPosition.X,
+                    0,
+                    targetPosition.Z-currentPosition.Z
+                )
 
-            local currentPoint = route[playbackIndex]
+                local errorDistance=errorVector.Magnitude
 
-            if currentPoint then
-                local currentTime = getRouteTime(currentPoint)
+                if errorDistance>3 then
+                    local recoveryStrength=math.clamp(
+                        (errorDistance-2)/16,
+                        0,
+                        0.55
+                    )
 
-                if currentPoint.JumpEvent == true
-                    and playbackClock - currentTime >= 0
-                    and playbackClock - currentTime < math.max(dt * 2, 0.08) then
-                    triggerReplayJump()
+                    if errorVector.Magnitude>0.01 then
+                        targetDirection=(
+                            targetDirection*
+                            (1-recoveryStrength)
+                            +
+                            errorVector.Unit*
+                            recoveryStrength
+                        )
+
+                        if targetDirection.Magnitude>0.01 then
+                            targetDirection=targetDirection.Unit
+                        end
+                    end
                 end
 
-                local stateName = currentPoint.State
-
-                if stateName == "Jumping"
-                    and not isAirState(Humanoid:GetState()) then
-                    triggerReplayJump()
+                if errorDistance>22 then
+                    playbackIndex=findNearestForwardIndex(
+                        currentPosition,
+                        playbackIndex
+                    )
                 end
+            end
+
+            local segmentStart=getPointPosition(
+                sample.A
+            )
+
+            local segmentEnd=getPointPosition(
+                sample.B
+            )
+
+            local segmentDistance=(
+                segmentEnd-segmentStart
+            ).Magnitude
+
+            local segmentTime=math.max(
+                getPointTime(sample.B)-
+                getPointTime(sample.A),
+                0.03
+            )
+
+            local requiredSpeed=segmentDistance/segmentTime
+
+            requiredSpeed=math.clamp(
+                requiredSpeed,
+                4,
+                36
+            )
+
+            if CONFIG.WalkSpeed>0 then
+                requiredSpeed=math.max(
+                    requiredSpeed,
+                    CONFIG.WalkSpeed
+                )
+            end
+
+            Humanoid.WalkSpeed=requiredSpeed
+
+            if targetDirection.Magnitude>0.02 then
+                pcall(function()
+                    Humanoid:Move(
+                        targetDirection,
+                        false
+                    )
+                end)
+            else
+                pcall(function()
+                    Humanoid:Move(
+                        Vector3.zero,
+                        false
+                    )
+                end)
+            end
+
+            local currentState=Humanoid:GetState()
+
+            if sample.Jump
+                and currentState~=Enum.HumanoidStateType.Jumping
+                and currentState~=Enum.HumanoidStateType.Freefall
+                and currentState~=Enum.HumanoidStateType.FallingDown then
+
+                local heightDifference=
+                    targetPosition.Y-currentPosition.Y
+
+                if heightDifference>1.7 then
+                    triggerJump()
+                end
+            end
+
+            local waypointDistance=(
+                Vector3.new(
+                    currentPosition.X,
+                    0,
+                    currentPosition.Z
+                )
+                -
+                Vector3.new(
+                    targetPosition.X,
+                    0,
+                    targetPosition.Z
+                )
+            ).Magnitude
+
+            if waypointDistance<=1.25 then
+                playbackIndex=math.min(
+                    playbackIndex+1,
+                    #route
+                )
             end
         end
     )
+
+    playbackHeartbeat=RunService.Heartbeat:Connect(function()
+        if not isPlaying then
+            return
+        end
+
+        if not Humanoid
+            or not Humanoid.Parent
+            or Humanoid.Health<=0 then
+            stopPlayback()
+            return
+        end
+
+        if Humanoid.PlatformStand then
+            Humanoid.PlatformStand=false
+        end
+
+        if Humanoid.WalkSpeed<1 then
+            Humanoid.WalkSpeed=16
+        end
+    end)
 end
 
 local function cutRoute()
-    if not routeValid() then
-        updateAutoStatus("STATUS : ROUTE KOSONG", COLORS.Warning)
+    if #route<2 then
+        setAutoStatus(
+            "STATUS : ROUTE KOSONG",
+            COLORS.Warning
+        )
         return
     end
 
@@ -1186,75 +1619,84 @@ local function cutRoute()
         stopPlayback()
     end
 
-    local cutIndex = math.clamp(playbackIndex, 1, #route)
-    local newRoute = {}
+    local cutIndex=math.clamp(
+        playbackIndex,
+        1,
+        #route
+    )
 
-    for i = 1, cutIndex do
-        newRoute[#newRoute + 1] = route[i]
+    local newRoute={}
+
+    for i=1,cutIndex do
+        newRoute[#newRoute+1]=route[i]
     end
 
-    route = newRoute
-    playbackIndex = math.clamp(playbackIndex, 1, math.max(#route, 1))
+    route=newRoute
+    playbackIndex=1
+    playbackTime=0
 
-    updateAutoStatus(
-        "STATUS : CUT • " .. tostring(#route) .. " POINTS",
+    jumpEvents={}
+
+    setAutoStatus(
+        "STATUS : CUT • "..tostring(#route).." POINTS",
         COLORS.Warning
     )
 end
 
 local function connectRoute()
-    if not routeValid() then
-        updateAutoStatus("STATUS : ROUTE TERLALU PENDEK", COLORS.Warning)
+    if #route<2 then
+        setAutoStatus(
+            "STATUS : ROUTE TERLALU PENDEK",
+            COLORS.Warning
+        )
         return
     end
 
-    if isRecording then
-        stopRecording()
-    end
+    local first=route[1]
+    local last=route[#route]
 
-    if isPlaying then
-        stopPlayback()
-    end
+    local firstPosition=getPointPosition(first)
+    local lastPosition=getPointPosition(last)
 
-    local first = route[1]
-    local last = route[#route]
+    local distance=(
+        lastPosition-firstPosition
+    ).Magnitude
 
-    local firstPosition = getTargetPosition(first)
-    local lastPosition = getTargetPosition(last)
-
-    if not firstPosition or not lastPosition then
-        updateAutoStatus("STATUS : ROUTE INVALID", COLORS.Warning)
+    if distance<0.05 then
+        setAutoStatus(
+            "STATUS : ROUTE SUDAH TERHUBUNG",
+            COLORS.Warning
+        )
         return
     end
 
-    local distance = (lastPosition - firstPosition).Magnitude
+    local lastTime=getPointTime(last)
 
-    if distance <= 0.01 then
-        updateAutoStatus("STATUS : ROUTE SUDAH TERHUBUNG", COLORS.Warning)
-        return
-    end
-
-    local lastTime = getRouteTime(last)
-
-    route[#route + 1] = {
-        Time = lastTime + math.max(distance / 16, 0.05),
-        Position = vectorToTable(firstPosition),
-        MoveDirection = vectorToTable(
-            tableToVector(first.MoveDirection, Vector3.zero)
-        ),
-        LookVector = vectorToTable(
-            tableToVector(first.LookVector, Vector3.new(0, 0, -1))
-        ),
-        VerticalVelocity = 0,
-        WalkSpeed = tonumber(first.WalkSpeed) or 16,
-        JumpPower = tonumber(first.JumpPower) or 50,
-        State = "Running",
-        JumpEvent = false,
-        Airborne = false
+    route[#route+1]={
+        Time=lastTime+
+            math.max(
+                distance/
+                math.max(CONFIG.WalkSpeed>0 and CONFIG.WalkSpeed or 16,1),
+                0.03
+            ),
+        Position={
+            X=firstPosition.X,
+            Y=firstPosition.Y,
+            Z=firstPosition.Z
+        },
+        MoveDirection=first.MoveDirection,
+        Look=first.Look,
+        Velocity={
+            X=0,
+            Y=0,
+            Z=0
+        },
+        State="Running",
+        Jump=false
     }
 
-    updateAutoStatus(
-        "STATUS : ROUTE CONNECTED • " .. tostring(#route) .. " POINTS",
+    setAutoStatus(
+        "STATUS : ROUTE CONNECTED • "..tostring(#route).." POINTS",
         COLORS.Success
     )
 end
@@ -1269,7 +1711,10 @@ createButton(
     HomePage,
     "⚡ LOAD SCRIPT",
     function()
-        updateAutoStatus("STATUS : READY", COLORS.Success)
+        setAutoStatus(
+            "STATUS : AUTO WALK READY",
+            COLORS.Success
+        )
         switchPage("AUTO WALK")
     end
 )
@@ -1282,7 +1727,7 @@ createSection(
 
 createButton(
     HomePage,
-    "👤 " .. LocalPlayer.DisplayName,
+    "👤 "..LocalPlayer.DisplayName,
     function()
         switchPage("PROFILE")
     end
@@ -1298,19 +1743,19 @@ createButton(
 
 createSection(
     AutoPage,
-    "AUTO WALK",
-    "Record dan replay movement + jump"
+    "MAIN AUTO WALK",
+    "Record dan playback rute"
 )
 
-AutoStatus = Instance.new("TextLabel")
-AutoStatus.Size = UDim2.new(1, -8, 0, 32)
-AutoStatus.BackgroundColor3 = COLORS.Panel
-AutoStatus.Text = "STATUS : IDLE"
-AutoStatus.Font = Enum.Font.GothamBold
-AutoStatus.TextSize = 11
-AutoStatus.TextColor3 = COLORS.Success
-AutoStatus.Parent = AutoPage
-corner(AutoStatus, 10)
+AutoStatus=Instance.new("TextLabel")
+AutoStatus.Size=UDim2.new(1,-8,0,32)
+AutoStatus.BackgroundColor3=COLORS.Panel
+AutoStatus.Text="STATUS : IDLE"
+AutoStatus.Font=Enum.Font.GothamBold
+AutoStatus.TextSize=11
+AutoStatus.TextColor3=COLORS.Success
+AutoStatus.Parent=AutoPage
+corner(AutoStatus,10)
 
 createButton(
     AutoPage,
@@ -1347,16 +1792,21 @@ createButton(
 
 createButton(
     AutoPage,
-    "↻ REFRESH PLAYBACK",
+    "↻ REFRESH PLAY ANIMATION",
     function()
         if isPlaying then
+            local savedTime=playbackTime
             stopPlayback()
+            playbackTime=savedTime
             task.wait()
             startPlayback()
         else
-            playbackIndex = 1
-            playbackClock = 0
-            updateAutoStatus("STATUS : PLAYBACK RESET", COLORS.Success)
+            playbackTime=0
+            playbackIndex=1
+            setAutoStatus(
+                "STATUS : PLAYBACK REFRESHED",
+                COLORS.Success
+            )
         end
     end
 )
@@ -1371,15 +1821,13 @@ createButton(
     AutoPage,
     "💾 SAVE FILE",
     function()
-        if not routeValid() then
-            updateAutoStatus("STATUS : ROUTE KOSONG", COLORS.Warning)
-            return
-        end
-
-        savedRoutes.Main = route
+        savedRoutes.Main=route
         saveRoutes()
 
-        updateAutoStatus("STATUS : ROUTE SAVED", COLORS.Success)
+        setAutoStatus(
+            "STATUS : ROUTE SAVED",
+            COLORS.Success
+        )
     end
 )
 
@@ -1387,26 +1835,27 @@ createButton(
     AutoPage,
     "📂 LOAD FILE",
     function()
-        if type(savedRoutes.Main) ~= "table"
-            or #savedRoutes.Main < 2 then
-            updateAutoStatus("STATUS : FILE TIDAK DITEMUKAN", COLORS.Warning)
+        if type(savedRoutes.Main)~="table"
+            or #savedRoutes.Main<2 then
+
+            setAutoStatus(
+                "STATUS : FILE TIDAK DITEMUKAN",
+                COLORS.Warning
+            )
             return
         end
 
-        if isPlaying then
-            stopPlayback()
-        end
+        stopRecording()
+        stopPlayback()
 
-        if isRecording then
-            stopRecording()
-        end
+        route=savedRoutes.Main
+        playbackIndex=1
+        playbackTime=0
 
-        route = savedRoutes.Main
-        playbackIndex = 1
-        playbackClock = 0
-
-        updateAutoStatus(
-            "STATUS : ROUTE LOADED • " .. tostring(#route) .. " POINTS",
+        setAutoStatus(
+            "STATUS : ROUTE LOADED • "
+            ..tostring(#route)
+            .." POINTS",
             COLORS.Success
         )
     end
@@ -1416,21 +1865,25 @@ createButton(
     AutoPage,
     "🗑 REMOVE FILE",
     function()
-        savedRoutes.Main = nil
+        savedRoutes.Main=nil
         safeDeleteFile(ROUTE_FILE)
 
-        route = {}
-        playbackIndex = 1
-        playbackClock = 0
+        route={}
+        jumpEvents={}
+        playbackIndex=1
+        playbackTime=0
 
-        updateAutoStatus("STATUS : FILE REMOVED", COLORS.Danger)
+        setAutoStatus(
+            "STATUS : FILE REMOVED",
+            COLORS.Danger
+        )
     end
 )
 
 createSection(
     AutoPage,
     "PLAYBACK PROTECTION",
-    "Movement stability"
+    "Stability system"
 )
 
 createToggle(
@@ -1438,7 +1891,7 @@ createToggle(
     "NATURAL ANIMASI PLAY",
     CONFIG.NaturalAnimation,
     function(v)
-        CONFIG.NaturalAnimation = v
+        CONFIG.NaturalAnimation=v
         saveConfig()
     end
 )
@@ -1448,7 +1901,7 @@ createToggle(
     "ANTI JITTER",
     CONFIG.AntiJitter,
     function(v)
-        CONFIG.AntiJitter = v
+        CONFIG.AntiJitter=v
         saveConfig()
     end
 )
@@ -1458,7 +1911,7 @@ createToggle(
     "ANTI GLITCH",
     CONFIG.AntiGlitch,
     function(v)
-        CONFIG.AntiGlitch = v
+        CONFIG.AntiGlitch=v
         saveConfig()
     end
 )
@@ -1468,7 +1921,7 @@ createToggle(
     "ANTI LAG",
     CONFIG.AntiLag,
     function(v)
-        CONFIG.AntiLag = v
+        CONFIG.AntiLag=v
         saveConfig()
     end
 )
@@ -1478,41 +1931,48 @@ createToggle(
     "ANTI OUT TRACK",
     CONFIG.AntiOutTrack,
     function(v)
-        CONFIG.AntiOutTrack = v
+        CONFIG.AntiOutTrack=v
         saveConfig()
     end
 )
 
-Floating = Instance.new("Frame")
-Floating.Size = UDim2.new(0, 292, 0, 62)
-Floating.Position = UDim2.new(0.5, -146, 1, -82)
-Floating.BackgroundColor3 = COLORS.Panel
-Floating.BorderSizePixel = 0
-Floating.Parent = ScreenGui
-Floating.ZIndex = 20
-corner(Floating, 20)
-stroke(Floating, 0.4)
+Floating=Instance.new("Frame")
+Floating.Size=UDim2.new(0,300,0,62)
+Floating.Position=UDim2.new(
+    0.5,
+    -150,
+    1,
+    -82
+)
+Floating.BackgroundColor3=COLORS.Panel
+Floating.BorderSizePixel=0
+Floating.Parent=ScreenGui
+Floating.ZIndex=25
 
-local floatingLayout = Instance.new("UIListLayout")
-floatingLayout.FillDirection = Enum.FillDirection.Horizontal
-floatingLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-floatingLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-floatingLayout.Padding = UDim.new(0, 5)
-floatingLayout.Parent = Floating
+corner(Floating,18)
+stroke(Floating,0.35)
 
-local function floatingButton(text, callback)
-    local button = Instance.new("TextButton")
-    button.Size = UDim2.new(0, 36, 0, 44)
-    button.BackgroundColor3 = COLORS.Card
-    button.Text = text
-    button.TextSize = 17
-    button.Font = Enum.Font.GothamBold
-    button.TextColor3 = COLORS.Text
-    button.AutoButtonColor = false
-    button.Parent = Floating
-    button.ZIndex = 21
-    corner(button, 11)
-    stroke(button, 0.7)
+local floatingLayout=Instance.new("UIListLayout")
+floatingLayout.FillDirection=Enum.FillDirection.Horizontal
+floatingLayout.HorizontalAlignment=Enum.HorizontalAlignment.Center
+floatingLayout.VerticalAlignment=Enum.VerticalAlignment.Center
+floatingLayout.Padding=UDim.new(0,5)
+floatingLayout.Parent=Floating
+
+local function floatingButton(text,callback)
+    local button=Instance.new("TextButton")
+    button.Size=UDim2.new(0,38,0,44)
+    button.BackgroundColor3=COLORS.Card
+    button.Text=text
+    button.TextSize=14
+    button.Font=Enum.Font.GothamBold
+    button.TextColor3=COLORS.Text
+    button.AutoButtonColor=false
+    button.Parent=Floating
+    button.ZIndex=26
+
+    corner(button,11)
+    stroke(button,0.7)
 
     button.Activated:Connect(function()
         if callback then
@@ -1523,24 +1983,73 @@ local function floatingButton(text, callback)
     return button
 end
 
-floatingButton("▶", startPlayback)
-floatingButton("●", startRecording)
-floatingButton("■", function()
-    stopRecording()
-    stopPlayback()
-end)
-floatingButton("✂", cutRoute)
-floatingButton("↔", connectRoute)
-floatingButton("‹", function()
-    if #route > 0 then
-        playbackIndex = math.max(1, playbackIndex - 1)
+floatingButton(
+    "▶",
+    startPlayback
+)
+
+floatingButton(
+    "●",
+    startRecording
+)
+
+floatingButton(
+    "■",
+    function()
+        stopRecording()
+        stopPlayback()
     end
-end)
-floatingButton("›", function()
-    if #route > 0 then
-        playbackIndex = math.min(#route, playbackIndex + 1)
+)
+
+floatingButton(
+    "✂",
+    cutRoute
+)
+
+floatingButton(
+    "↔",
+    connectRoute
+)
+
+floatingButton(
+    "‹",
+    function()
+        if #route==0 then
+            return
+        end
+
+        playbackIndex=math.max(
+            1,
+            playbackIndex-1
+        )
+
+        if route[playbackIndex] then
+            playbackTime=getPointTime(
+                route[playbackIndex]
+            )
+        end
     end
-end)
+)
+
+floatingButton(
+    "›",
+    function()
+        if #route==0 then
+            return
+        end
+
+        playbackIndex=math.min(
+            #route,
+            playbackIndex+1
+        )
+
+        if route[playbackIndex] then
+            playbackTime=getPointTime(
+                route[playbackIndex]
+            )
+        end
+    end
+)
 
 createSection(
     CharacterPage,
@@ -1548,27 +2057,32 @@ createSection(
     "Character control"
 )
 
-SpeedValue = Instance.new("TextLabel")
-SpeedValue.Size = UDim2.new(1, -8, 0, 38)
-SpeedValue.BackgroundColor3 = COLORS.Panel
-SpeedValue.Text = "WALK SPEED SET : " .. tostring(CONFIG.WalkSpeed)
-SpeedValue.Font = Enum.Font.GothamBold
-SpeedValue.TextSize = 12
-SpeedValue.TextColor3 = COLORS.Text
-SpeedValue.Parent = CharacterPage
-corner(SpeedValue, 10)
+SpeedValue=Instance.new("TextLabel")
+SpeedValue.Size=UDim2.new(1,-8,0,38)
+SpeedValue.BackgroundColor3=COLORS.Panel
+SpeedValue.Text=
+    "WALK SPEED SET : "
+    ..tostring(CONFIG.WalkSpeed)
+SpeedValue.Font=Enum.Font.GothamBold
+SpeedValue.TextSize=12
+SpeedValue.TextColor3=COLORS.Text
+SpeedValue.Parent=CharacterPage
+corner(SpeedValue,10)
 
 createButton(
     CharacterPage,
     "WALK SPEED +5",
     function()
-        CONFIG.WalkSpeed += 5
+        CONFIG.WalkSpeed+=5
 
         if Humanoid and not isPlaying then
-            Humanoid.WalkSpeed = CONFIG.WalkSpeed
+            Humanoid.WalkSpeed=CONFIG.WalkSpeed
         end
 
-        SpeedValue.Text = "WALK SPEED SET : " .. tostring(CONFIG.WalkSpeed)
+        SpeedValue.Text=
+            "WALK SPEED SET : "
+            ..tostring(CONFIG.WalkSpeed)
+
         saveConfig()
     end
 )
@@ -1577,38 +2091,52 @@ createButton(
     CharacterPage,
     "WALK SPEED -5",
     function()
-        CONFIG.WalkSpeed = math.max(0, CONFIG.WalkSpeed - 5)
+        CONFIG.WalkSpeed=math.max(
+            0,
+            CONFIG.WalkSpeed-5
+        )
 
         if Humanoid and not isPlaying then
-            Humanoid.WalkSpeed = CONFIG.WalkSpeed > 0 and CONFIG.WalkSpeed or 16
+            Humanoid.WalkSpeed=
+                CONFIG.WalkSpeed>0
+                and CONFIG.WalkSpeed
+                or 16
         end
 
-        SpeedValue.Text = "WALK SPEED SET : " .. tostring(CONFIG.WalkSpeed)
+        SpeedValue.Text=
+            "WALK SPEED SET : "
+            ..tostring(CONFIG.WalkSpeed)
+
         saveConfig()
     end
 )
 
-JumpValue = Instance.new("TextLabel")
-JumpValue.Size = UDim2.new(1, -8, 0, 38)
-JumpValue.BackgroundColor3 = COLORS.Panel
-JumpValue.Text = "JUMP SET : " .. tostring(CONFIG.JumpPower)
-JumpValue.Font = Enum.Font.GothamBold
-JumpValue.TextSize = 12
-JumpValue.TextColor3 = COLORS.Text
-JumpValue.Parent = CharacterPage
-corner(JumpValue, 10)
+JumpValue=Instance.new("TextLabel")
+JumpValue.Size=UDim2.new(1,-8,0,38)
+JumpValue.BackgroundColor3=COLORS.Panel
+JumpValue.Text=
+    "JUMP SET : "
+    ..tostring(CONFIG.JumpPower)
+JumpValue.Font=Enum.Font.GothamBold
+JumpValue.TextSize=12
+JumpValue.TextColor3=COLORS.Text
+JumpValue.Parent=CharacterPage
+corner(JumpValue,10)
 
 createButton(
     CharacterPage,
     "JUMP +10",
     function()
-        CONFIG.JumpPower += 10
+        CONFIG.JumpPower+=10
 
         if Humanoid and Humanoid.UseJumpPower then
-            Humanoid.JumpPower = CONFIG.JumpPower
+            Humanoid.JumpPower=CONFIG.JumpPower
         end
 
-        JumpValue.Text = "JUMP SET : " .. tostring(CONFIG.JumpPower)
+        JumpValue.Text=
+            "JUMP SET : "
+            ..tostring(CONFIG.JumpPower)
+
         saveConfig()
     end
 )
@@ -1617,13 +2145,19 @@ createButton(
     CharacterPage,
     "JUMP -10",
     function()
-        CONFIG.JumpPower = math.max(0, CONFIG.JumpPower - 10)
+        CONFIG.JumpPower=math.max(
+            0,
+            CONFIG.JumpPower-10
+        )
 
         if Humanoid and Humanoid.UseJumpPower then
-            Humanoid.JumpPower = CONFIG.JumpPower
+            Humanoid.JumpPower=CONFIG.JumpPower
         end
 
-        JumpValue.Text = "JUMP SET : " .. tostring(CONFIG.JumpPower)
+        JumpValue.Text=
+            "JUMP SET : "
+            ..tostring(CONFIG.JumpPower)
+
         saveConfig()
     end
 )
@@ -1634,66 +2168,97 @@ createSection(
     "Select target player"
 )
 
-local PlayerList = Instance.new("Frame")
-PlayerList.Size = UDim2.new(1, -8, 0, 180)
-PlayerList.BackgroundColor3 = COLORS.Panel
-PlayerList.BorderSizePixel = 0
-PlayerList.Parent = CharacterPage
+local PlayerList=Instance.new("Frame")
+PlayerList.Size=UDim2.new(1,-8,0,180)
+PlayerList.BackgroundColor3=COLORS.Panel
+PlayerList.BorderSizePixel=0
+PlayerList.Parent=CharacterPage
 corner(PlayerList)
 
-local PlayerScroll = Instance.new("ScrollingFrame")
-PlayerScroll.Size = UDim2.new(1, -10, 1, -10)
-PlayerScroll.Position = UDim2.new(0, 5, 0, 5)
-PlayerScroll.BackgroundTransparency = 1
-PlayerScroll.BorderSizePixel = 0
-PlayerScroll.ScrollBarThickness = 3
-PlayerScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
-PlayerScroll.CanvasSize = UDim2.new()
-PlayerScroll.Parent = PlayerList
+local PlayerScroll=Instance.new("ScrollingFrame")
+PlayerScroll.Size=UDim2.new(1,-10,1,-10)
+PlayerScroll.Position=UDim2.new(0,5,0,5)
+PlayerScroll.BackgroundTransparency=1
+PlayerScroll.BorderSizePixel=0
+PlayerScroll.ScrollBarThickness=3
+PlayerScroll.AutomaticCanvasSize=Enum.AutomaticSize.Y
+PlayerScroll.CanvasSize=UDim2.new()
+PlayerScroll.Parent=PlayerList
 
-local playerLayout = Instance.new("UIListLayout")
-playerLayout.Padding = UDim.new(0, 5)
-playerLayout.SortOrder = Enum.SortOrder.LayoutOrder
-playerLayout.Parent = PlayerScroll
+local playerLayout=Instance.new("UIListLayout")
+playerLayout.Padding=UDim.new(0,5)
+playerLayout.SortOrder=Enum.SortOrder.LayoutOrder
+playerLayout.Parent=PlayerScroll
 
 local function refreshPlayerList()
-    for _, child in ipairs(PlayerScroll:GetChildren()) do
+    for _,child in ipairs(
+        PlayerScroll:GetChildren()
+    ) do
         if child:IsA("TextButton") then
             child:Destroy()
         end
     end
 
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer then
-            local button = Instance.new("TextButton")
-            button.Size = UDim2.new(1, -5, 0, 34)
-            button.BackgroundColor3 = COLORS.Card
-            button.Text = player.DisplayName .. "  @" .. player.Name
-            button.TextSize = 10
-            button.Font = Enum.Font.GothamBold
-            button.TextColor3 = COLORS.Text
-            button.AutoButtonColor = false
-            button.Parent = PlayerScroll
-            corner(button, 8)
+    for _,player in ipairs(
+        Players:GetPlayers()
+    ) do
+        if player~=LocalPlayer then
+            local button=Instance.new("TextButton")
+            button.Size=UDim2.new(1,-5,0,34)
+            button.BackgroundColor3=COLORS.Card
+            button.Text=
+                player.DisplayName
+                .."  @"
+                ..player.Name
+            button.TextSize=10
+            button.Font=Enum.Font.GothamBold
+            button.TextColor3=COLORS.Text
+            button.AutoButtonColor=false
+            button.Parent=PlayerScroll
+            corner(button,8)
 
-            button.Activated:Connect(function()
-                selectedPlayer = player
-            end)
+            button.Activated:Connect(
+                function()
+                    selectedPlayer=player
+
+                    local targetCharacter=
+                        player.Character
+
+                    local targetRoot=
+                        targetCharacter
+                        and targetCharacter:
+                            FindFirstChild(
+                                "HumanoidRootPart"
+                            )
+
+                    if targetRoot
+                        and refreshCharacter() then
+
+                        Root.CFrame=
+                            targetRoot.CFrame*
+                            CFrame.new(0,0,3)
+                    end
+                end
+            )
         end
     end
 end
 
 refreshPlayerList()
 
-Players.PlayerAdded:Connect(refreshPlayerList)
+Players.PlayerAdded:Connect(
+    refreshPlayerList
+)
 
-Players.PlayerRemoving:Connect(function(player)
-    if selectedPlayer == player then
-        selectedPlayer = nil
+Players.PlayerRemoving:Connect(
+    function(player)
+        if selectedPlayer==player then
+            selectedPlayer=nil
+        end
+
+        refreshPlayerList()
     end
-
-    refreshPlayerList()
-end)
+)
 
 createButton(
     CharacterPage,
@@ -1715,16 +2280,23 @@ createButton(
             return
         end
 
-        local targetCharacter = selectedPlayer.Character
-        local targetHumanoid = targetCharacter and targetCharacter:FindFirstChildOfClass("Humanoid")
-        local camera = workspace.CurrentCamera
+        local targetCharacter=
+            selectedPlayer.Character
 
-        if not targetHumanoid or not camera then
-            return
+        local targetHumanoid=
+            targetCharacter
+            and targetCharacter:
+                FindFirstChildOfClass(
+                    "Humanoid"
+                )
+
+        local camera=
+            workspace.CurrentCamera
+
+        if targetHumanoid and camera then
+            camera.CameraSubject=targetHumanoid
+            spectating=true
         end
-
-        camera.CameraSubject = targetHumanoid
-        spectating = true
     end
 )
 
@@ -1732,37 +2304,42 @@ createButton(
     CharacterPage,
     "STOP SPECTATE",
     function()
-        spectating = false
+        spectating=false
         refreshCharacter()
 
-        local camera = workspace.CurrentCamera
+        local camera=
+            workspace.CurrentCamera
 
         if camera and Humanoid then
-            camera.CameraSubject = Humanoid
+            camera.CameraSubject=Humanoid
         end
     end
 )
 
 local function setAntiAFK(enabled)
-    CONFIG.AntiAFK = enabled
+    CONFIG.AntiAFK=enabled
 
     if antiAFKConnection then
         antiAFKConnection:Disconnect()
-        antiAFKConnection = nil
+        antiAFKConnection=nil
     end
 
     if enabled then
-        antiAFKConnection = LocalPlayer.Idled:Connect(function()
-            if not CONFIG.AntiAFK then
-                return
-            end
+        antiAFKConnection=
+            LocalPlayer.Idled:Connect(
+                function()
+                    if not CONFIG.AntiAFK then
+                        return
+                    end
 
-            pcall(function()
-                local VirtualUser = game:GetService("VirtualUser")
-                VirtualUser:CaptureController()
-                VirtualUser:ClickButton2(Vector2.new(0, 0))
-            end)
-        end)
+                    pcall(function()
+                        VirtualUser:CaptureController()
+                        VirtualUser:ClickButton2(
+                            Vector2.new(0,0)
+                        )
+                    end)
+                end
+            )
     end
 
     saveConfig()
@@ -1781,62 +2358,70 @@ createSection(
     "Roblox online chat"
 )
 
-local ChatBox = Instance.new("ScrollingFrame")
-ChatBox.Size = UDim2.new(1, -8, 0, 250)
-ChatBox.BackgroundColor3 = COLORS.Panel
-ChatBox.BorderSizePixel = 0
-ChatBox.ScrollBarThickness = 3
-ChatBox.AutomaticCanvasSize = Enum.AutomaticSize.Y
-ChatBox.CanvasSize = UDim2.new()
-ChatBox.Parent = ChatPage
-corner(ChatBox, 12)
+local ChatBox=Instance.new("ScrollingFrame")
+ChatBox.Size=UDim2.new(1,-8,0,250)
+ChatBox.BackgroundColor3=COLORS.Panel
+ChatBox.BorderSizePixel=0
+ChatBox.ScrollBarThickness=3
+ChatBox.AutomaticCanvasSize=Enum.AutomaticSize.Y
+ChatBox.CanvasSize=UDim2.new()
+ChatBox.Parent=ChatPage
+corner(ChatBox,12)
 
-local ChatLayout = Instance.new("UIListLayout")
-ChatLayout.Padding = UDim.new(0, 5)
-ChatLayout.Parent = ChatBox
+local ChatLayout=Instance.new("UIListLayout")
+ChatLayout.Padding=UDim.new(0,5)
+ChatLayout.Parent=ChatBox
 
-local MessageInput = Instance.new("TextBox")
-MessageInput.Size = UDim2.new(1, -8, 0, 42)
-MessageInput.BackgroundColor3 = COLORS.Card
-MessageInput.PlaceholderText = "Kirim pesan..."
-MessageInput.Text = ""
-MessageInput.TextSize = 11
-MessageInput.Font = Enum.Font.Gotham
-MessageInput.TextColor3 = COLORS.Text
-MessageInput.PlaceholderColor3 = COLORS.SubText
-MessageInput.ClearTextOnFocus = false
-MessageInput.Parent = ChatPage
-corner(MessageInput, 10)
+local MessageInput=Instance.new("TextBox")
+MessageInput.Size=UDim2.new(1,-8,0,42)
+MessageInput.BackgroundColor3=COLORS.Card
+MessageInput.PlaceholderText="Kirim pesan..."
+MessageInput.Text=""
+MessageInput.TextSize=11
+MessageInput.Font=Enum.Font.Gotham
+MessageInput.TextColor3=COLORS.Text
+MessageInput.PlaceholderColor3=COLORS.SubText
+MessageInput.ClearTextOnFocus=false
+MessageInput.Parent=ChatPage
+corner(MessageInput,10)
 
 createButton(
     ChatPage,
     "SEND MESSAGE",
     function()
-        local message = MessageInput.Text
+        local message=MessageInput.Text
 
-        if message == "" then
+        if message=="" then
             return
         end
 
-        local sent = false
+        local sent=false
 
         pcall(function()
-            local channels = TextChatService:FindFirstChild("TextChannels")
+            local channels=
+                TextChatService:
+                FindFirstChild(
+                    "TextChannels"
+                )
 
             if not channels then
                 return
             end
 
-            local general = channels:FindFirstChild("RBXGeneral")
+            local general=
+                channels:
+                FindFirstChild(
+                    "RBXGeneral"
+                )
 
             if general then
                 general:SendAsync(message)
-                sent = true
+                sent=true
             end
         end)
 
         if sent then
-            MessageInput.Text = ""
+            MessageInput.Text=""
         end
     end
 )
@@ -1851,7 +2436,9 @@ createButton(
     ProfilePage,
     "@VORA ZURE : APA YANG ANDA LAKUKAN?",
     function()
-        print("@VORA ZURE > @ALDO : SEDANG BERMAIN")
+        print(
+            "@VORA ZURE > @ALDO : SEDANG BERMAIN"
+        )
     end
 )
 
@@ -1859,7 +2446,9 @@ createButton(
     ProfilePage,
     "@ALDO > @VORA ZURE : SEDANG BERMAIN",
     function()
-        print("VORA ZURE > ALDO : BERMAIN APA?")
+        print(
+            "VORA ZURE > ALDO : BERMAIN APA?"
+        )
     end
 )
 
@@ -1867,7 +2456,9 @@ createButton(
     ProfilePage,
     "@AZURE > @ALDO : BERMAIN APA?",
     function()
-        print("AZURE > ALDO : BERMAIN APA?")
+        print(
+            "AZURE > ALDO : BERMAIN APA?"
+        )
     end
 )
 
@@ -1877,16 +2468,20 @@ createSection(
     "Preferensi VORA ZURE"
 )
 
-LanguageButton = createButton(
+LanguageButton=createButton(
     SettingsPage,
-    "BAHASA : " .. tostring(CONFIG.Language),
+    "BAHASA : "
+        ..tostring(CONFIG.Language),
     function()
-        CONFIG.Language =
-            CONFIG.Language == "Indonesia"
+        CONFIG.Language=
+            CONFIG.Language=="Indonesia"
             and "English"
             or "Indonesia"
 
-        LanguageButton.Text = "BAHASA : " .. tostring(CONFIG.Language)
+        LanguageButton.Text=
+            "BAHASA : "
+            ..tostring(CONFIG.Language)
+
         saveConfig()
     end
 )
@@ -1897,7 +2492,7 @@ createSection(
     "Animated gradient"
 )
 
-local gradientNames = {
+local gradientNames={
     "ANIM GRADIENT : DEFAULT",
     "ANIM GRADIENT 1",
     "ANIM GRADIENT 2",
@@ -1905,13 +2500,15 @@ local gradientNames = {
     "ANIM GRADIENT 4"
 }
 
-for index, name in ipairs(gradientNames) do
+for index,name in ipairs(
+    gradientNames
+) do
     createButton(
         SettingsPage,
         name,
         function()
-            selectedGradient = index - 1
-            CONFIG.Gradient = selectedGradient
+            CONFIG.Gradient=index-1
+            selectedGradient=index-1
             applyGradient()
             saveConfig()
         end
@@ -1929,12 +2526,14 @@ createButton(
     "REFRESH CHARACTER",
     function()
         if refreshCharacter() and Humanoid then
-            if CONFIG.WalkSpeed > 0 and not isPlaying then
-                Humanoid.WalkSpeed = CONFIG.WalkSpeed
-            end
+            Humanoid.WalkSpeed=
+                CONFIG.WalkSpeed>0
+                and CONFIG.WalkSpeed
+                or 16
 
             if Humanoid.UseJumpPower then
-                Humanoid.JumpPower = CONFIG.JumpPower
+                Humanoid.JumpPower=
+                    CONFIG.JumpPower
             end
         end
     end
@@ -1944,91 +2543,106 @@ createButton(
     SettingsPage,
     "RESET CONFIG",
     function()
-        if isRecording then
-            stopRecording()
-        end
+        stopRecording()
+        stopPlayback()
 
-        if isPlaying then
-            stopPlayback()
-        end
+        CONFIG.Language="Indonesia"
+        CONFIG.Gradient=0
+        CONFIG.WalkSpeed=0
+        CONFIG.JumpPower=50
+        CONFIG.AntiAFK=false
+        CONFIG.NaturalAnimation=true
+        CONFIG.AntiJitter=true
+        CONFIG.AntiGlitch=true
+        CONFIG.AntiLag=true
+        CONFIG.AntiOutTrack=true
 
-        CONFIG.Language = "Indonesia"
-        CONFIG.Gradient = 0
-        CONFIG.WalkSpeed = 0
-        CONFIG.JumpPower = 50
-        CONFIG.AntiAFK = false
-        CONFIG.NaturalAnimation = true
-        CONFIG.AntiJitter = true
-        CONFIG.AntiGlitch = true
-        CONFIG.AntiLag = true
-        CONFIG.AntiOutTrack = true
-
-        selectedGradient = 0
+        selectedGradient=0
 
         setAntiAFK(false)
-
         applyGradient()
         refreshCharacter()
 
         if Humanoid then
-            Humanoid.WalkSpeed = 16
+            Humanoid.WalkSpeed=16
 
             if Humanoid.UseJumpPower then
-                Humanoid.JumpPower = 50
+                Humanoid.JumpPower=50
             end
         end
 
         if SpeedValue then
-            SpeedValue.Text = "WALK SPEED SET : 0"
+            SpeedValue.Text=
+                "WALK SPEED SET : 0"
         end
 
         if JumpValue then
-            JumpValue.Text = "JUMP SET : 50"
+            JumpValue.Text=
+                "JUMP SET : 50"
         end
 
         if LanguageButton then
-            LanguageButton.Text = "BAHASA : Indonesia"
+            LanguageButton.Text=
+                "BAHASA : Indonesia"
         end
 
         saveConfig()
 
-        updateAutoStatus("STATUS : CONFIG RESET", COLORS.Success)
+        setAutoStatus(
+            "STATUS : CONFIG RESET",
+            COLORS.Success
+        )
     end
 )
 
-OpenButton = Instance.new("TextButton")
-OpenButton.Name = "OpenButton"
-OpenButton.Size = UDim2.new(0, 70, 0, 70)
-OpenButton.Position = UDim2.new(0, 20, 0.5, -35)
-OpenButton.BackgroundColor3 = COLORS.Accent
-OpenButton.Text = "👑"
-OpenButton.TextSize = 29
-OpenButton.Font = Enum.Font.GothamBold
-OpenButton.TextColor3 = COLORS.Text
-OpenButton.AutoButtonColor = false
-OpenButton.Parent = ScreenGui
-OpenButton.ZIndex = 30
-corner(OpenButton, 22)
-stroke(OpenButton, 0.3)
+OpenButton=Instance.new("TextButton")
+OpenButton.Name="OpenButton"
+OpenButton.Size=UDim2.new(0,70,0,70)
+OpenButton.Position=UDim2.new(0,18,0.5,-35)
+OpenButton.BackgroundColor3=COLORS.Accent
+OpenButton.Text="👑"
+OpenButton.TextSize=29
+OpenButton.Font=Enum.Font.GothamBold
+OpenButton.TextColor3=COLORS.Text
+OpenButton.AutoButtonColor=false
+OpenButton.Parent=ScreenGui
+corner(OpenButton,22)
+stroke(OpenButton,0.25)
+
+local dragging=false
+local dragStart
+local startPosition
 
 local function setMenu(state)
-    menuOpen = state
+    menuOpen=state
 
     if menuTween then
         pcall(function()
             menuTween:Cancel()
         end)
-        menuTween = nil
+        menuTween=nil
     end
 
     if state then
-        Main.Visible = true
-        Main.Size = UDim2.new(0, 390, 0, 0)
+        Main.Visible=true
+        Main.Size=
+            UDim2.new(
+                0,
+                390,
+                0,
+                0
+            )
 
-        menuTween = tween(
+        menuTween=tween(
             Main,
             {
-                Size = UDim2.new(0, 390, 0, 590)
+                Size=
+                    UDim2.new(
+                        0,
+                        390,
+                        0,
+                        590
+                    )
             },
             0.25
         )
@@ -2036,189 +2650,234 @@ local function setMenu(state)
         if menuTween then
             menuTween:Play()
         else
-            Main.Size = UDim2.new(0, 390, 0, 590)
+            Main.Size=
+                UDim2.new(
+                    0,
+                    390,
+                    0,
+                    590
+                )
         end
     else
-        menuTween = tween(
+        menuTween=tween(
             Main,
             {
-                Size = UDim2.new(0, 390, 0, 0)
+                Size=
+                    UDim2.new(
+                        0,
+                        390,
+                        0,
+                        0
+                    )
             },
-            0.20
+            0.2
         )
 
         if menuTween then
-            local activeTween = menuTween
+            local active=menuTween
 
-            activeTween.Completed:Connect(function()
-                if not menuOpen and Main and Main.Parent then
-                    Main.Visible = false
+            active.Completed:Connect(
+                function()
+                    if not menuOpen
+                        and Main
+                        and Main.Parent then
+                        Main.Visible=false
+                    end
                 end
-            end)
+            )
 
-            activeTween:Play()
+            active:Play()
         else
-            Main.Visible = false
+            Main.Visible=false
         end
     end
 end
 
-local dragging = false
-local dragStart
-local startPosition
+OpenButton.InputBegan:Connect(
+    function(input)
+        if input.UserInputType==
+            Enum.UserInputType.Touch
+            or input.UserInputType==
+                Enum.UserInputType.MouseButton1 then
 
-OpenButton.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.Touch
-        or input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging=true
+            dragMoved=false
+            dragStart=input.Position
+            startPosition=
+                OpenButton.Position
 
-        dragging = true
-        dragMoved = false
-        dragStart = input.Position
-        startPosition = OpenButton.Position
+            input.Changed:Connect(
+                function()
+                    if input.UserInputState==
+                        Enum.UserInputState.End then
+                        dragging=false
+                    end
+                end
+            )
+        end
+    end
+)
 
-        input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End then
-                dragging = false
+UserInputService.InputChanged:Connect(
+    function(input)
+        if not dragging then
+            return
+        end
+
+        if input.UserInputType~=
+            Enum.UserInputType.Touch
+            and input.UserInputType~=
+                Enum.UserInputType.MouseMovement then
+            return
+        end
+
+        local delta=
+            input.Position-dragStart
+
+        if delta.Magnitude>8 then
+            dragMoved=true
+        end
+
+        local camera=
+            workspace.CurrentCamera
+
+        local viewport=
+            camera
+            and camera.ViewportSize
+            or Vector2.new(800,600)
+
+        local buttonSize=
+            OpenButton.AbsoluteSize
+
+        local newX=
+            startPosition.X.Offset+
+            delta.X
+
+        local newY=
+            startPosition.Y.Offset+
+            delta.Y
+
+        newX=math.clamp(
+            newX,
+            0,
+            math.max(
+                0,
+                viewport.X-buttonSize.X
+            )
+        )
+
+        newY=math.clamp(
+            newY,
+            0,
+            math.max(
+                0,
+                viewport.Y-buttonSize.Y
+            )
+        )
+
+        OpenButton.Position=
+            UDim2.new(
+                0,
+                newX,
+                0,
+                newY
+            )
+    end
+)
+
+OpenButton.Activated:Connect(
+    function()
+        if dragMoved then
+            dragMoved=false
+            return
+        end
+
+        setMenu(not menuOpen)
+    end
+)
+
+local lastFrame=os.clock()
+local frameCounter=0
+
+RunService.RenderStepped:Connect(
+    function()
+        frameCounter+=1
+
+        local now=os.clock()
+
+        if now-lastFrame>=1 then
+            FPSLabel.Text=
+                "FPS "
+                ..tostring(frameCounter)
+
+            frameCounter=0
+            lastFrame=now
+
+            local ping=0
+
+            pcall(
+                function()
+                    ping=math.floor(
+                        LocalPlayer:
+                        GetNetworkPing()*
+                        1000
+                    )
+                end
+            )
+
+            PingLabel.Text=
+                "PING "
+                ..tostring(ping)
+        end
+    end
+)
+
+RunService.Heartbeat:Connect(
+    function()
+        if not Character
+            or not Character.Parent
+            or not Humanoid
+            or not Root
+            or not Root.Parent then
+            return
+        end
+
+        if not isPlaying
+            and CONFIG.WalkSpeed>0 then
+
+            if Humanoid.WalkSpeed~=
+                CONFIG.WalkSpeed then
+                Humanoid.WalkSpeed=
+                    CONFIG.WalkSpeed
             end
-        end)
-    end
-end)
+        end
 
-UserInputService.InputChanged:Connect(function(input)
-    if not dragging then
-        return
-    end
+        if not isPlaying
+            and Humanoid.UseJumpPower then
 
-    if input.UserInputType ~= Enum.UserInputType.Touch
-        and input.UserInputType ~= Enum.UserInputType.MouseMovement then
-        return
-    end
-
-    local delta = input.Position - dragStart
-
-    if delta.Magnitude > 8 then
-        dragMoved = true
-    end
-
-    local camera = workspace.CurrentCamera
-    local viewport = camera and camera.ViewportSize or Vector2.new(800, 600)
-    local buttonSize = OpenButton.AbsoluteSize
-
-    local newX = startPosition.X.Offset + delta.X
-    local newY = startPosition.Y.Offset + delta.Y
-
-    newX = math.clamp(
-        newX,
-        0,
-        math.max(0, viewport.X - buttonSize.X)
-    )
-
-    newY = math.clamp(
-        newY,
-        0,
-        math.max(0, viewport.Y - buttonSize.Y)
-    )
-
-    OpenButton.Position = UDim2.new(0, newX, 0, newY)
-end)
-
-OpenButton.Activated:Connect(function()
-    if dragMoved then
-        dragMoved = false
-        return
-    end
-
-    setMenu(not menuOpen)
-end)
-
-local lastFrame = os.clock()
-local frameCounter = 0
-
-RunService.RenderStepped:Connect(function()
-    frameCounter += 1
-
-    local now = os.clock()
-
-    if now - lastFrame >= 1 then
-        FPSLabel.Text = "FPS " .. tostring(frameCounter)
-
-        frameCounter = 0
-        lastFrame = now
-
-        local ping = 0
-
-        pcall(function()
-            ping = math.floor(LocalPlayer:GetNetworkPing() * 1000)
-        end)
-
-        PingLabel.Text = "PING " .. tostring(ping)
-    end
-end)
-
-RunService.Heartbeat:Connect(function()
-    if not Character
-        or not Character.Parent
-        or not Humanoid
-        or not Root
-        or not Root.Parent then
-        return
-    end
-
-    if not isPlaying then
-        if CONFIG.WalkSpeed > 0 then
-            if Humanoid.WalkSpeed ~= CONFIG.WalkSpeed then
-                Humanoid.WalkSpeed = CONFIG.WalkSpeed
+            if Humanoid.JumpPower~=
+                CONFIG.JumpPower then
+                Humanoid.JumpPower=
+                    CONFIG.JumpPower
             end
         end
 
-        if Humanoid.UseJumpPower then
-            if Humanoid.JumpPower ~= CONFIG.JumpPower then
-                Humanoid.JumpPower = CONFIG.JumpPower
-            end
+        if CONFIG.AntiGlitch
+            and not isPlaying
+            and Root.Position.Y<-500 then
+
+            Root.AssemblyLinearVelocity=
+                Vector3.zero
+
+            Root.CFrame=
+                CFrame.new(
+                    Root.Position.X,
+                    10,
+                    Root.Position.Z
+                )
         end
     end
-
-    if CONFIG.AntiGlitch and Root.Position.Y < -500 then
-        if isPlaying then
-            stopPlayback()
-        end
-    end
-end)
-
-characterConnection = LocalPlayer.CharacterAdded:Connect(function(character)
-    if isRecording then
-        stopRecording()
-    end
-
-    if isPlaying then
-        stopPlayback()
-    end
-
-    Character = character
-    Humanoid = character:WaitForChild("Humanoid", 10)
-    Root = character:WaitForChild("HumanoidRootPart", 10)
-
-    task.wait(0.15)
-
-    if Humanoid then
-        Humanoid.WalkSpeed = CONFIG.WalkSpeed > 0 and CONFIG.WalkSpeed or 16
-
-        if Humanoid.UseJumpPower then
-            Humanoid.JumpPower = CONFIG.JumpPower
-        end
-    end
-
-    if spectating then
-        local camera = workspace.CurrentCamera
-        if camera and Humanoid then
-            camera.CameraSubject = Humanoid
-        end
-    end
-end)
-
-if workspace.CurrentCamera then
-    workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(updateUIScale)
-end
+)
 
 if CONFIG.AntiAFK then
     setAntiAFK(true)
@@ -2226,4 +2885,3 @@ end
 
 switchPage("HOME")
 setMenu(true)
-```0
