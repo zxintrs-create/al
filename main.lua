@@ -17,6 +17,10 @@ local defaultConfig = {
 	Sensitivity = 1.0
 }
 
+-- image id
+local SHIFT_LOCK_IMAGE = "rbxassetid://112921115907036"
+local OPEN_MENU_IMAGE = "rbxassetid://117917793889046"
+
 local config = {}
 for k, v in pairs(defaultConfig) do
 	config[k] = v
@@ -199,7 +203,7 @@ btnShiftLock.Name = "ShiftLockButton"
 btnShiftLock.AnchorPoint = Vector2.new(.5,.5)
 btnShiftLock.Position = UDim2.new(config.ShiftX,0,config.ShiftY,0)
 btnShiftLock.Size = UDim2.fromOffset(config.ShiftSize,config.ShiftSize)
-btnShiftLock.Image = "rbxassetid://6031068426"
+btnShiftLock.Image = SHIFT_LOCK_IMAGE
 btnShiftLock.ImageColor3 = Color3.new(1,1,1)
 btnShiftLock.BackgroundColor3 = SHIFT_OFF
 btnShiftLock.BackgroundTransparency = .2
@@ -533,12 +537,16 @@ local function makeButton(parent,name,pos,size,text,bg,z)
 	return b
 end
 
-local menu = makeButton(
-	gui,"OpenMenu",
-	UDim2.new(1,-72,1,-72),
-	UDim2.fromOffset(60,60),"⚙",
-	nil,100
-)
+local menu = Instance.new("ImageButton")
+menu.Name = "OpenMenu"
+menu.Position = UDim2.new(1,-72,1,-72)
+menu.Size = UDim2.fromOffset(60,60)
+menu.Image = OPEN_MENU_IMAGE
+menu.BackgroundColor3 = Color3.fromRGB(245,245,245)
+menu.BackgroundTransparency = 0.05
+menu.AutoButtonColor = false
+menu.ZIndex = 100
+menu.Parent = gui
 
 local menuCorner = Instance.new("UICorner")
 menuCorner.CornerRadius = UDim.new(1,0)
