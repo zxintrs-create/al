@@ -17,9 +17,9 @@ local defaultConfig = {
 	Sensitivity = 1.0
 }
 
--- image id
-local SHIFT_LOCK_IMAGE = "rbxassetid://112921115907036"
-local OPEN_MENU_IMAGE = "rbxassetid://117917793889046"
+-- image id stting
+local SHIFT_LOCK_IMAGE = "rbxassetid://137886634947855"
+local OPEN_MENU_IMAGE = "rbxassetid://136616143786672"
 
 local config = {}
 for k, v in pairs(defaultConfig) do
