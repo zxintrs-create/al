@@ -48,18 +48,24 @@ local savedRoutes={}
 local isRecording=false
 local isPlaying=false
 
-local playbackIndex=1
-local playbackTarget=nil
-local playbackLastDirection=Vector3.zero
-local playbackJumpCursor=1
-
 local recordStart=0
 local lastRecordTime=0
 local lastRecordState=nil
+
+local playbackIndex=1
+local playbackRouteDistance=0
+local playbackJumpCursor=1
+local playbackLastPosition=nil
+local playbackDirection=Vector3.zero
+local playbackTargetIndex=2
+local playbackInitialized=false
+
 local jumpEvents={}
 
+local routeCumulative={}
+
 local recordConnection
-local playbackHeartbeat
+local playbackConnection
 local antiAFKConnection
 local characterConnection
 
@@ -92,13 +98,12 @@ local PlaybackMarker
 
 local RouteVisualPoints={}
 local RouteVisualBeams={}
-
 local routeVisualLastPosition=nil
 local routeVisualLastTime=0
 
-local LINE_SAMPLE_INTERVAL=0.04
-local LINE_MIN_DISTANCE=0.35
-local MAX_ROUTE_VISUAL_POINTS=1200
+local LINE_SAMPLE_INTERVAL=0.035
+local LINE_MIN_DISTANCE=0.28
+local MAX_ROUTE_VISUAL_POINTS=1400
 
 local function refreshCharacter()
 	Character=LocalPlayer.Character
@@ -307,13 +312,13 @@ local function getPointMove(point)
 	end
 
 	local v=tableToVec(point.MoveDirection)
-	local flat=Vector3.new(v.X,0,v.Z)
+	local result=Vector3.new(v.X,0,v.Z)
 
-	if flat.Magnitude>1 then
-		flat=flat.Unit
+	if result.Magnitude>1 then
+		result=result.Unit
 	end
 
-	return flat
+	return result
 end
 
 local function getPointLook(point)
@@ -322,13 +327,13 @@ local function getPointLook(point)
 	end
 
 	local v=tableToVec(point.Look)
-	local flat=Vector3.new(v.X,0,v.Z)
+	local result=Vector3.new(v.X,0,v.Z)
 
-	if flat.Magnitude<0.01 then
+	if result.Magnitude<0.01 then
 		return Vector3.zero
 	end
 
-	return flat.Unit
+	return result.Unit
 end
 
 local function getPointTime(point)
@@ -337,13 +342,6 @@ local function getPointTime(point)
 	end
 
 	return tonumber(point.Time) or 0
-end
-
-local function setAutoStatus(text,color)
-	if AutoStatus and AutoStatus.Parent then
-		AutoStatus.Text=text
-		AutoStatus.TextColor3=color or COLORS.Success
-	end
 end
 
 local function isJumpPoint(point)
@@ -355,6 +353,13 @@ local function isJumpPoint(point)
 		or point.State=="Jumping"
 		or point.State=="Freefall"
 		or point.State=="FallingDown"
+end
+
+local function setAutoStatus(text,color)
+	if AutoStatus and AutoStatus.Parent then
+		AutoStatus.Text=text
+		AutoStatus.TextColor3=color or COLORS.Success
+	end
 end
 
 local function clearRouteVisuals()
@@ -396,6 +401,10 @@ local function createVisualContainer()
 end
 
 local function createMarker(name,position,size,color)
+	if not RouteVisualFolder then
+		createVisualContainer()
+	end
+
 	local part=Instance.new("Part")
 	part.Name=name
 	part.Shape=Enum.PartType.Ball
@@ -408,12 +417,12 @@ local function createMarker(name,position,size,color)
 	part.CastShadow=false
 	part.Material=Enum.Material.Neon
 	part.Color=color
-	part.Transparency=0.05
+	part.Transparency=0.04
 	part.Parent=RouteVisualFolder
 
 	local light=Instance.new("PointLight")
-	light.Range=7
-	light.Brightness=1.2
+	light.Range=8
+	light.Brightness=1.3
 	light.Color=color
 	light.Parent=part
 
@@ -444,9 +453,9 @@ local function createVisualPoint(position)
 		beam.FaceCamera=true
 		beam.LightEmission=1
 		beam.LightInfluence=0
-		beam.Segments=2
-		beam.Width0=0.16
-		beam.Width1=0.16
+		beam.Segments=3
+		beam.Width0=0.15
+		beam.Width1=0.15
 		beam.Transparency=NumberSequence.new(0.08)
 		beam.Color=ColorSequence.new({
 			ColorSequenceKeypoint.new(0,COLORS.Accent),
@@ -462,27 +471,27 @@ local function beginRouteVisuals(position)
 	createVisualContainer()
 
 	StartMarker=createMarker(
-		"START",
+		"RouteStart",
 		position,
-		0.85,
+		0.9,
 		COLORS.Success
 	)
 
 	EndMarker=createMarker(
-		"END",
+		"RouteEnd",
 		position,
-		0.9,
+		0.95,
 		COLORS.Danger
 	)
 
 	PlaybackMarker=createMarker(
-		"PLAYBACK",
+		"Playback",
 		position,
-		0.6,
+		0.65,
 		COLORS.Warning
 	)
 
-	PlaybackMarker.Transparency=0.15
+	PlaybackMarker.Transparency=0.12
 
 	createVisualPoint(position)
 
@@ -527,31 +536,31 @@ local function rebuildRouteVisuals()
 
 	createVisualContainer()
 
-	local startPosition=getPointPosition(route[1])
-	local endPosition=getPointPosition(route[#route])
+	local first=getPointPosition(route[1])
+	local last=getPointPosition(route[#route])
 
 	StartMarker=createMarker(
-		"START",
-		startPosition,
-		0.85,
+		"RouteStart",
+		first,
+		0.9,
 		COLORS.Success
 	)
 
 	EndMarker=createMarker(
-		"END",
-		endPosition,
-		0.9,
+		"RouteEnd",
+		last,
+		0.95,
 		COLORS.Danger
 	)
 
 	PlaybackMarker=createMarker(
-		"PLAYBACK",
-		startPosition,
-		0.6,
+		"Playback",
+		first,
+		0.65,
 		COLORS.Warning
 	)
 
-	PlaybackMarker.Transparency=0.15
+	PlaybackMarker.Transparency=0.12
 
 	local step=math.max(
 		1,
@@ -573,14 +582,382 @@ local function rebuildRouteVisuals()
 		)
 	end
 
-	routeVisualLastPosition=endPosition
+	routeVisualLastPosition=last
 	routeVisualLastTime=os.clock()
 end
 
-local function updatePlaybackMarker(position)
-	if PlaybackMarker and PlaybackMarker.Parent then
-		PlaybackMarker.Position=position
+local function rebuildRouteData()
+	table.clear(routeCumulative)
+
+	if #route==0 then
+		return
 	end
+
+	routeCumulative[1]=0
+
+	for i=2,#route do
+		local a=getPointPosition(route[i-1])
+		local b=getPointPosition(route[i])
+
+		local d=(b-a).Magnitude
+
+		routeCumulative[i]=
+			routeCumulative[i-1]+d
+	end
+end
+
+local function getRouteTotalDistance()
+	if #route==0 then
+		return 0
+	end
+
+	return routeCumulative[#route] or 0
+end
+
+local function getNearestRouteIndex(position,startIndex)
+	if #route<2 then
+		return 1
+	end
+
+	local start=math.clamp(
+		startIndex or 1,
+		1,
+		#route-1
+	)
+
+	local best=start
+	local bestDistance=math.huge
+
+	local minIndex=math.max(1,start-8)
+	local maxIndex=math.min(#route-1,start+50)
+
+	for i=minIndex,maxIndex do
+		local point=getPointPosition(route[i])
+
+		local flat=Vector3.new(
+			point.X,
+			position.Y,
+			point.Z
+		)
+
+		local posFlat=Vector3.new(
+			position.X,
+			position.Y,
+			position.Z
+		)
+
+		local d=(flat-posFlat).Magnitude
+
+		if d<bestDistance then
+			bestDistance=d
+			best=i
+		end
+	end
+
+	return best
+end
+
+local function findRouteDistanceFromIndex(position,startIndex)
+	if #route<2 then
+		return 0
+	end
+
+	local index=getNearestRouteIndex(
+		position,
+		startIndex
+	)
+
+	local point=getPointPosition(route[index])
+
+	local localDistance=
+		(
+			Vector3.new(
+				position.X,
+				point.Y,
+				position.Z
+			)
+			-
+			Vector3.new(
+				point.X,
+				point.Y,
+				point.Z
+			)
+		).Magnitude
+
+	return (routeCumulative[index] or 0)+localDistance
+end
+
+local function getRouteSampleAtDistance(distance)
+	if #route<2 then
+		return nil
+	end
+
+	local total=getRouteTotalDistance()
+
+	if total<=0 then
+		return {
+			Position=getPointPosition(route[1]),
+			Direction=getPointMove(route[1]),
+			Look=getPointLook(route[1]),
+			Index=1
+		}
+	end
+
+	distance=math.clamp(
+		distance,
+		0,
+		total
+	)
+
+	local low=1
+	local high=#route-1
+
+	while low<=high do
+		local mid=math.floor((low+high)/2)
+		local a=routeCumulative[mid] or 0
+		local b=routeCumulative[mid+1] or a
+
+		if distance<a then
+			high=mid-1
+		elseif distance>b then
+			low=mid+1
+		else
+			local p1=getPointPosition(route[mid])
+			local p2=getPointPosition(route[mid+1])
+
+			local segment=b-a
+			local alpha=
+				segment>0
+				and math.clamp((distance-a)/segment,0,1)
+				or 0
+
+			local position=p1:Lerp(
+				p2,
+				alpha
+			)
+
+			local move1=getPointMove(route[mid])
+			local move2=getPointMove(route[mid+1])
+
+			local move=move1:Lerp(
+				move2,
+				alpha
+			)
+
+			local look1=getPointLook(route[mid])
+			local look2=getPointLook(route[mid+1])
+
+			local look=look1:Lerp(
+				look2,
+				alpha
+			)
+
+			local segmentDirection=Vector3.new(
+				p2.X-p1.X,
+				0,
+				p2.Z-p1.Z
+			)
+
+			if segmentDirection.Magnitude>0.03 then
+				segmentDirection=segmentDirection.Unit
+			else
+				segmentDirection=Vector3.zero
+			end
+
+			if move.Magnitude>0.03 then
+				move=Vector3.new(
+					move.X,
+					0,
+					move.Z
+				)
+
+				if move.Magnitude>1 then
+					move=move.Unit
+				end
+			else
+				move=segmentDirection
+			end
+
+			if look.Magnitude>0.03 then
+				look=look.Unit
+			else
+				look=segmentDirection
+			end
+
+			return {
+				Position=position,
+				Direction=move,
+				Look=look,
+				Index=mid,
+				Alpha=alpha
+			}
+		end
+	end
+
+	return {
+		Position=getPointPosition(route[#route]),
+		Direction=getPointMove(route[#route]),
+		Look=getPointLook(route[#route]),
+		Index=#route-1,
+		Alpha=1
+	}
+end
+
+local function getJumpDistanceList()
+	local result={}
+
+	local origin=routeCumulative[1] or 0
+
+	for i,point in ipairs(route) do
+		if isJumpPoint(point) then
+			result[#result+1]={
+				Distance=(routeCumulative[i] or origin),
+				Index=i
+			}
+		end
+	end
+
+	return result
+end
+
+local function triggerJump()
+	if not Humanoid or Humanoid.Health<=0 then
+		return
+	end
+
+	local state=Humanoid:GetState()
+
+	if state==Enum.HumanoidStateType.Jumping
+		or state==Enum.HumanoidStateType.Freefall
+		or state==Enum.HumanoidStateType.FallingDown then
+		return
+	end
+
+	pcall(function()
+		Humanoid.Jump=true
+	end)
+end
+
+local function processJumpReplay(previousDistance,currentDistance)
+	if playbackJumpCursor>#jumpEvents then
+		return
+	end
+
+	while playbackJumpCursor<=#jumpEvents do
+		local event=jumpEvents[playbackJumpCursor]
+
+		if type(event)=="table" then
+			local eventDistance=tonumber(event.Distance) or 0
+
+			if eventDistance>currentDistance then
+				break
+			end
+
+			if eventDistance>=previousDistance-0.25 then
+				triggerJump()
+			end
+		end
+
+		playbackJumpCursor+=1
+	end
+end
+
+local function getPlaybackDirection(sample,currentPosition)
+	if not sample then
+		return Vector3.zero
+	end
+
+	local target=sample.Position
+
+	local toTarget=Vector3.new(
+		target.X-currentPosition.X,
+		0,
+		target.Z-currentPosition.Z
+	)
+
+	local targetDirection=Vector3.zero
+
+	if toTarget.Magnitude>0.04 then
+		targetDirection=toTarget.Unit
+	end
+
+	local recorded=sample.Direction
+
+	if recorded.Magnitude>0.03 then
+		local blend=
+			CONFIG.NaturalAnimation
+			and 0.32
+			or 0.12
+
+		if targetDirection.Magnitude>0.03 then
+			targetDirection=(
+				targetDirection*(1-blend)
+				+
+				recorded*blend
+			)
+		else
+			targetDirection=recorded
+		end
+	end
+
+	local lookAheadDistance=2.8
+	local lookAhead=
+		getRouteSampleAtDistance(
+			playbackRouteDistance+lookAheadDistance
+		)
+
+	if lookAhead then
+		local delta=
+			Vector3.new(
+				lookAhead.Position.X-target.X,
+				0,
+				lookAhead.Position.Z-target.Z
+			)
+
+		if delta.Magnitude>0.05 then
+			local lead=
+				CONFIG.NaturalAnimation
+				and 0.26
+				or 0.12
+
+			targetDirection=(
+				targetDirection*(1-lead)
+				+
+				delta.Unit*lead
+			)
+		end
+	end
+
+	if CONFIG.AntiOutTrack then
+		local errorVector=toTarget
+		local errorDistance=errorVector.Magnitude
+
+		if errorDistance>2.5
+			and errorVector.Magnitude>0.01 then
+
+			local correction=math.clamp(
+				(errorDistance-2)/10,
+				0,
+				0.65
+			)
+
+			targetDirection=(
+				targetDirection*(1-correction)
+				+
+				errorVector.Unit*correction
+			)
+		end
+	end
+
+	if targetDirection.Magnitude>0.03 then
+		return targetDirection.Unit
+	end
+
+	if playbackDirection.Magnitude>0.03 then
+		return playbackDirection.Unit
+	end
+
+	return Vector3.zero
 end
 
 local function stopPlayback()
@@ -596,20 +973,28 @@ local function stopPlayback()
 		)
 	end)
 
-	if playbackHeartbeat then
-		playbackHeartbeat:Disconnect()
-		playbackHeartbeat=nil
+	if playbackConnection then
+		playbackConnection:Disconnect()
+		playbackConnection=nil
 	end
 
-	playbackIndex=1
 	playbackTarget=nil
-	playbackLastDirection=Vector3.zero
+	playbackDirection=Vector3.zero
 	playbackJumpCursor=1
+	playbackInitialized=false
 
 	if Humanoid and Humanoid.Parent then
 		pcall(function()
-			Humanoid:Move(Vector3.zero,false)
+			Humanoid:Move(
+				Vector3.zero,
+				false
+			)
 		end)
+	end
+
+	if #route>0 and PlaybackMarker then
+		PlaybackMarker.Position=
+			getPointPosition(route[1])
 	end
 
 	setAutoStatus(
@@ -623,13 +1008,17 @@ local function recordCurrentSample(force)
 		return
 	end
 
-	if not Root or not Root.Parent or not Humanoid or Humanoid.Health<=0 then
+	if not Root
+		or not Root.Parent
+		or not Humanoid
+		or Humanoid.Health<=0 then
 		return
 	end
 
 	local now=os.clock()
 
-	if not force and now-lastRecordTime<1/60 then
+	if not force
+		and now-lastRecordTime<1/60 then
 		return
 	end
 
@@ -642,7 +1031,7 @@ local function recordCurrentSample(force)
 	local velocity=Root.AssemblyLinearVelocity
 	local state=Humanoid:GetState()
 
-	local jump=
+	local jumped=
 		state==Enum.HumanoidStateType.Jumping
 		or (
 			velocity.Y>5
@@ -651,21 +1040,31 @@ local function recordCurrentSample(force)
 
 	local last=route[#route]
 
-	if last and CONFIG.AntiJitter and not force and not jump then
-		local distance=(position-getPointPosition(last)).Magnitude
-		local moveChange=(move-getPointMove(last)).Magnitude
-		local stateChanged=last.State~=state.Name
+	if last and CONFIG.AntiJitter and not force and not jumped then
+		local distance=
+			(position-getPointPosition(last)).Magnitude
 
-		if distance<0.03
-			and moveChange<0.025
-			and not stateChanged then
+		local moveChange=
+			(move-getPointMove(last)).Magnitude
+
+		local changed=
+			state.Name~=last.State
+
+		if distance<0.025
+			and moveChange<0.02
+			and not changed then
 			return
 		end
 	end
 
-	if jump and state==Enum.HumanoidStateType.Jumping
+	if jumped
+		and state==Enum.HumanoidStateType.Jumping
 		and lastRecordState~=Enum.HumanoidStateType.Jumping then
-		jumpEvents[#jumpEvents+1]=elapsed
+
+		jumpEvents[#jumpEvents+1]={
+			Time=elapsed,
+			Distance=0
+		}
 	end
 
 	lastRecordState=state.Name
@@ -677,7 +1076,7 @@ local function recordCurrentSample(force)
 		Look=vecToTable(look),
 		Velocity=vecToTable(velocity),
 		State=state.Name,
-		Jump=jump
+		Jump=jumped
 	}
 
 	addRouteVisualPoint(
@@ -687,6 +1086,19 @@ local function recordCurrentSample(force)
 
 	if EndMarker and EndMarker.Parent then
 		EndMarker.Position=position
+	end
+end
+
+local function buildJumpEvents()
+	local distanceList=getJumpDistanceList()
+
+	table.clear(jumpEvents)
+
+	for _,item in ipairs(distanceList) do
+		jumpEvents[#jumpEvents+1]={
+			Distance=item.Distance,
+			Index=item.Index
+		}
 	end
 end
 
@@ -706,8 +1118,12 @@ local function stopRecording()
 		recordCurrentSample(true)
 	end
 
+	rebuildRouteData()
+	buildJumpEvents()
+
 	if EndMarker and EndMarker.Parent and #route>0 then
-		EndMarker.Position=getPointPosition(route[#route])
+		EndMarker.Position=
+			getPointPosition(route[#route])
 	end
 
 	setAutoStatus(
@@ -730,12 +1146,15 @@ local function startRecording()
 	end
 
 	route={}
-	jumpEvents={}
+	savedRoutes.Current=nil
+	table.clear(routeCumulative)
+	table.clear(jumpEvents)
 
 	playbackIndex=1
-	playbackTarget=nil
-	playbackLastDirection=Vector3.zero
+	playbackRouteDistance=0
 	playbackJumpCursor=1
+	playbackLastPosition=nil
+	playbackDirection=Vector3.zero
 
 	recordStart=os.clock()
 	lastRecordTime=0
@@ -774,125 +1193,28 @@ local function startRecording()
 	)
 end
 
-local function findNearestForwardIndex(position,startIndex)
+local function initializePlayback()
 	if #route<2 then
-		return 1
+		return false
 	end
 
-	local base=math.clamp(
-		startIndex or 1,
-		1,
-		#route-1
-	)
+	rebuildRouteData()
 
-	local bestIndex=base
-	local bestDistance=math.huge
-
-	local minIndex=math.max(
-		1,
-		base-4
-	)
-
-	local maxIndex=math.min(
-		#route-1,
-		base+35
-	)
-
-	for i=minIndex,maxIndex do
-		local point=getPointPosition(route[i])
-
-		local flatPoint=Vector3.new(
-			point.X,
-			position.Y,
-			point.Z
-		)
-
-		local flatPosition=Vector3.new(
-			position.X,
-			position.Y,
-			position.Z
-		)
-
-		local distance=(flatPoint-flatPosition).Magnitude
-
-		if distance<bestDistance then
-			bestDistance=distance
-			bestIndex=i
-		end
+	if getRouteTotalDistance()<=0 then
+		return false
 	end
 
-	return bestIndex
-end
+	buildJumpEvents()
 
-local function getDirectionForPlayback(index)
-	local point=route[index]
+	playbackIndex=1
+	playbackRouteDistance=0
+	playbackJumpCursor=1
+	playbackLastPosition=Root.Position
+	playbackDirection=getPointMove(route[1])
+	playbackTarget=getRouteSampleAtDistance(0)
+	playbackInitialized=true
 
-	if not point then
-		return Vector3.zero
-	end
-
-	local move=getPointMove(point)
-
-	if move.Magnitude>0.03 then
-		return move.Unit
-	end
-
-	local look=getPointLook(point)
-
-	if look.Magnitude>0.03 then
-		return look.Unit
-	end
-
-	if route[index+1] then
-		local delta=
-			getPointPosition(route[index+1])
-			-getPointPosition(point)
-
-		local flat=Vector3.new(
-			delta.X,
-			0,
-			delta.Z
-		)
-
-		if flat.Magnitude>0.03 then
-			return flat.Unit
-		end
-	end
-
-	return Vector3.zero
-end
-
-local function processJumpEvents()
-	if playbackJumpCursor>#jumpEvents then
-		return
-	end
-
-	local targetDistance=
-		(getPointPosition(route[playbackIndex])-
-		getPointPosition(route[1])).Magnitude
-
-	while playbackJumpCursor<=#jumpEvents do
-		local eventDistance=
-			tonumber(jumpEvents[playbackJumpCursor]) or 0
-
-		if targetDistance<eventDistance then
-			break
-		end
-
-		if Humanoid and Humanoid.Health>0 then
-			local state=Humanoid:GetState()
-
-			if state~=Enum.HumanoidStateType.Jumping
-				and state~=Enum.HumanoidStateType.Freefall then
-
-				pcall(function()
-					Humanoid.Jump=true
-				end)
-			end
-		end
-
-		playbackJumpCursor+=1
-	end
+	return true
 end
 
 local function startPlayback()
@@ -916,19 +1238,20 @@ local function startPlayback()
 		return
 	end
 
-	rebuildRouteVisuals()
-
-	playbackIndex=1
-	playbackTarget=nil
-	playbackLastDirection=getDirectionForPlayback(1)
-	playbackJumpCursor=1
-
-	isPlaying=true
+	if not initializePlayback() then
+		setAutoStatus(
+			"STATUS : ROUTE INVALID",
+			COLORS.Danger
+		)
+		return
+	end
 
 	if PlaybackMarker then
 		PlaybackMarker.Position=
 			getPointPosition(route[1])
 	end
+
+	isPlaying=true
 
 	setAutoStatus(
 		"STATUS : PLAYING • ROUTE ACTIVE",
@@ -943,7 +1266,7 @@ local function startPlayback()
 
 	RunService:BindToRenderStep(
 		PLAYBACK_BIND,
-		Enum.RenderPriority.Character.Value+20,
+		Enum.RenderPriority.Character.Value+25,
 		function(dt)
 			if not isPlaying then
 				return
@@ -959,185 +1282,128 @@ local function startPlayback()
 				return
 			end
 
-			local currentPosition=Root.Position
-
-			local nextIndex=
-				math.clamp(
-					playbackIndex+1,
-					2,
-					#route
-				)
-
-			local nextPoint=route[nextIndex]
-
-			if not nextPoint then
-				stopPlayback()
-				return
-			end
-
-			local nextPosition=
-				getPointPosition(nextPoint)
-
-			local flatCurrent=Vector3.new(
-				currentPosition.X,
-				0,
-				currentPosition.Z
+			local frameDt=math.clamp(
+				dt,
+				1/240,
+				0.12
 			)
 
-			local flatNext=Vector3.new(
-				nextPosition.X,
-				0,
-				nextPosition.Z
-			)
+			local actualPosition=Root.Position
 
-			local toNext=flatNext-flatCurrent
-			local distanceToNext=toNext.Magnitude
+			if playbackLastPosition then
+				local moved=
+					(actualPosition-playbackLastPosition).Magnitude
 
-			while distanceToNext<=1.1
-				and playbackIndex<#route-1 do
+				if moved>0
+					and moved<8 then
+					local directionSinceLast=
+						actualPosition-playbackLastPosition
 
-				playbackIndex+=1
-
-				nextIndex=
-					math.clamp(
-						playbackIndex+1,
-						2,
-						#route
-					)
-
-				nextPoint=route[nextIndex]
-
-				if not nextPoint then
-					break
-				end
-
-				nextPosition=
-					getPointPosition(nextPoint)
-
-				flatNext=Vector3.new(
-					nextPosition.X,
-					0,
-					nextPosition.Z
-				)
-
-				toNext=flatNext-flatCurrent
-				distanceToNext=toNext.Magnitude
-			end
-
-			if playbackIndex>=#route-1
-				and distanceToNext<=1.2 then
-
-				pcall(function()
-					Humanoid:Move(
-						Vector3.zero,
-						false
-					)
-				end)
-
-				if PlaybackMarker then
-					PlaybackMarker.Position=
-						getPointPosition(route[#route])
-				end
-
-				stopPlayback()
-				return
-			end
-
-			local segmentStart=
-				getPointPosition(
-					route[playbackIndex]
-				)
-
-			local segmentEnd=
-				nextPosition
-
-			local segment=
-				segmentEnd-segmentStart
-
-			local segmentFlat=
-				Vector3.new(
-					segment.X,
-					0,
-					segment.Z
-				)
-
-			local segmentDirection=
-				segmentFlat.Magnitude>0.03
-				and segmentFlat.Unit
-				or Vector3.zero
-
-			local recordedDirection=
-				getDirectionForPlayback(
-					playbackIndex
-				)
-
-			local direction=segmentDirection
-
-			if recordedDirection.Magnitude>0.03 then
-				local blend=
-					CONFIG.NaturalAnimation
-					and 0.35
-					or 0.15
-
-				direction=(
-					segmentDirection*(1-blend)
-					+
-					recordedDirection*blend
-				)
-
-				if direction.Magnitude>0.03 then
-					direction=direction.Unit
-				else
-					direction=segmentDirection
-				end
-			end
-
-			if CONFIG.AntiOutTrack then
-				local error=flatNext-flatCurrent
-
-				if error.Magnitude>3 then
-					local correction=math.clamp(
-						(error.Magnitude-2)/12,
+					local flatMovement=Vector3.new(
+						directionSinceLast.X,
 						0,
-						0.6
+						directionSinceLast.Z
 					)
 
-					direction=(
-						direction*(1-correction)
-						+
-						error.Unit*correction
-					)
+					if flatMovement.Magnitude>0.01 then
+						local forward=
+							playbackTarget
+							and Vector3.new(
+								playbackTarget.Position.X-
+								playbackLastPosition.X,
+								0,
+								playbackTarget.Position.Z-
+								playbackLastPosition.Z
+							)
 
-					if direction.Magnitude>0.03 then
-						direction=direction.Unit
+						if not forward
+							or forward.Magnitude<0.01
+							or flatMovement:Dot(forward)>=0 then
+
+							playbackRouteDistance+=flatMovement.Magnitude
+						end
 					end
 				end
-
-				if error.Magnitude>25 then
-					playbackIndex=findNearestForwardIndex(
-						currentPosition,
-						playbackIndex
-					)
-
-					direction=getDirectionForPlayback(
-						playbackIndex
-					)
-				end
 			end
 
+			playbackLastPosition=actualPosition
+
+			local totalDistance=
+				getRouteTotalDistance()
+
+			local currentDistance=math.clamp(
+				playbackRouteDistance,
+				0,
+				totalDistance
+			)
+
+			local currentSample=
+				getRouteSampleAtDistance(
+					currentDistance
+				)
+
+			if not currentSample then
+				stopPlayback()
+				return
+			end
+
+			playbackTarget=currentSample
+			playbackIndex=math.clamp(
+				currentSample.Index or 1,
+				1,
+				math.max(#route-1,1)
+			)
+
+			local adaptiveLookAhead=
+				math.clamp(
+					2.2+
+					(
+						Root.AssemblyLinearVelocity.Magnitude*
+						0.08
+					),
+					2.2,
+					5
+				)
+
+			if CONFIG.AntiLag and frameDt>0.055 then
+				adaptiveLookAhead+=1.5
+			end
+
+			local lookAheadSample=
+				getRouteSampleAtDistance(
+					currentDistance+adaptiveLookAhead
+				)
+
+			local targetPosition=
+				lookAheadSample
+				and lookAheadSample.Position
+				or currentSample.Position
+
+			local direction=
+				getPlaybackDirection(
+					{
+						Position=targetPosition,
+						Direction=
+							lookAheadSample
+							and lookAheadSample.Direction
+							or currentSample.Direction
+					},
+					actualPosition
+				)
+
 			if direction.Magnitude>0.02 then
-				playbackLastDirection=direction
+				playbackDirection=direction.Unit
 
 				pcall(function()
 					Humanoid:Move(
-						direction,
+						playbackDirection,
 						false
 					)
 				end)
-			elseif playbackLastDirection.Magnitude>0.02 then
+			elseif playbackDirection.Magnitude>0.02 then
 				pcall(function()
 					Humanoid:Move(
-						playbackLastDirection,
+						playbackDirection.Unit,
 						false
 					)
 				end)
@@ -1153,70 +1419,152 @@ local function startPlayback()
 			local currentState=
 				Humanoid:GetState()
 
-			if isJumpPoint(route[playbackIndex])
-				or isJumpPoint(nextPoint) then
+			local currentPoint=
+				route[
+					math.clamp(
+						playbackIndex,
+						1,
+						#route
+					)
+				]
 
-				if currentState~=Enum.HumanoidStateType.Jumping
-					and currentState~=Enum.HumanoidStateType.Freefall
-					and currentState~=Enum.HumanoidStateType.FallingDown then
+			local nextPoint=
+				route[
+					math.min(
+						playbackIndex+1,
+						#route
+					)
+				]
 
-					local heightDelta=
-						nextPosition.Y-currentPosition.Y
+			if (
+				isJumpPoint(currentPoint)
+				or isJumpPoint(nextPoint)
+				or (
+					targetPosition.Y-actualPosition.Y>1.35
+				)
+			)
+			and currentState~=Enum.HumanoidStateType.Jumping
+			and currentState~=Enum.HumanoidStateType.Freefall
+			and currentState~=Enum.HumanoidStateType.FallingDown then
 
-					if heightDelta>1.2 then
-						pcall(function()
-							Humanoid.Jump=true
-						end)
-					end
+				if targetPosition.Y-actualPosition.Y>1.1
+					or isJumpPoint(currentPoint)
+					or isJumpPoint(nextPoint) then
+					triggerJump()
 				end
 			end
 
-			if PlaybackMarker then
-				local markerTarget=
-					currentPosition:Lerp(
-						nextPosition,
-						math.clamp(
-							1-distanceToNext/
-								math.max(
-									(
-										flatNext-
-										Vector3.new(
-											segmentStart.X,
-											0,
-											segmentStart.Z
-										)
-									).Magnitude,
-									0.05
-								),
-							0,
-							1
-						)
-					)
+			processJumpEvents(
+				math.max(
+					0,
+					currentDistance-0.5
+				),
+				currentDistance+0.75
+			)
 
+			local distanceToEnd=
+				totalDistance-currentDistance
+
+			local actualEndDistance=
+				(
+					Vector3.new(
+						getPointPosition(route[#route]).X,
+						0,
+						getPointPosition(route[#route]).Z
+					)
+					-
+					Vector3.new(
+						actualPosition.X,
+						0,
+						actualPosition.Z
+					)
+				).Magnitude
+
+			if PlaybackMarker and PlaybackMarker.Parent then
 				PlaybackMarker.Position=
-					markerTarget
+					currentSample.Position
 			end
 
-			processJumpEvents()
+			if distanceToEnd<=1.35
+				or actualEndDistance<=1.35 then
 
-			if CONFIG.AntiLag then
-				if math.abs(dt)>0.1 then
-					task.defer(function()
-						if isPlaying and Humanoid and Humanoid.Parent then
-							pcall(function()
-								Humanoid:Move(
-									direction,
-									false
-								)
-							end)
-						end
+				local endDirection=
+					getPointMove(route[#route])
+
+				if endDirection.Magnitude<0.03 then
+					endDirection=getPointLook(route[#route])
+				end
+
+				if endDirection.Magnitude>0.03 then
+					pcall(function()
+						Humanoid:Move(
+							endDirection.Unit,
+							false
+						)
+					end)
+				else
+					pcall(function()
+						Humanoid:Move(
+							Vector3.zero,
+							false
+						)
 					end)
 				end
+
+				if PlaybackMarker then
+					PlaybackMarker.Position=
+						getPointPosition(route[#route])
+				end
+
+				stopPlayback()
+				return
+			end
+
+			local routeError=
+				(
+					Vector3.new(
+						currentSample.Position.X,
+						0,
+						currentSample.Position.Z
+					)
+					-
+					Vector3.new(
+						actualPosition.X,
+						0,
+						actualPosition.Z
+					)
+				).Magnitude
+
+			if CONFIG.AntiOutTrack
+				and routeError>12 then
+
+				local nearest=
+					getNearestRouteIndex(
+						actualPosition,
+						playbackIndex
+					)
+
+				playbackIndex=nearest
+
+				local nearestDistance=
+					routeCumulative[nearest] or 0
+
+				if nearestDistance>currentDistance then
+					playbackRouteDistance=
+						math.max(
+							playbackRouteDistance,
+							nearestDistance-0.2
+						)
+				end
+			end
+
+			if Humanoid.PlatformStand then
+				Humanoid.PlatformStand=false
 			end
 		end
 	)
 
-	playbackHeartbeat=
+	playbackConnection=
 		RunService.Heartbeat:Connect(
 			function()
 				if not isPlaying then
@@ -1231,9 +1579,12 @@ local function startPlayback()
 					return
 				end
 
-				if Humanoid.PlatformStand then
-					Humanoid.PlatformStand=false
-				end
+				pcall(function()
+					Humanoid:Move(
+						playbackDirection,
+						false
+					)
+				end)
 			end
 		)
 end
@@ -1251,8 +1602,8 @@ local function cutRoute()
 	stopPlayback()
 
 	local cutIndex=math.clamp(
-		playbackIndex,
-		1,
+		playbackIndex+1,
+		2,
 		#route
 	)
 
@@ -1264,9 +1615,11 @@ local function cutRoute()
 
 	route=newRoute
 
-	jumpEvents={}
+	rebuildRouteData()
+	buildJumpEvents()
+
 	playbackIndex=1
-	playbackTarget=nil
+	playbackRouteDistance=0
 	playbackJumpCursor=1
 
 	rebuildRouteVisuals()
@@ -1286,16 +1639,20 @@ local function connectRoute()
 		return
 	end
 
-	local first=route[1]
-	local last=route[#route]
+	stopPlayback()
 
-	local firstPosition=getPointPosition(first)
-	local lastPosition=getPointPosition(last)
+	rebuildRouteData()
 
-	local delta=firstPosition-lastPosition
-	local distance=delta.Magnitude
+	local firstPosition=
+		getPointPosition(route[1])
 
-	if distance<0.05 then
+	local lastPosition=
+		getPointPosition(route[#route])
+
+	local delta=
+		firstPosition-lastPosition
+
+	if delta.Magnitude<0.05 then
 		setAutoStatus(
 			"STATUS : ROUTE SUDAH TERHUBUNG",
 			COLORS.Warning
@@ -1303,23 +1660,43 @@ local function connectRoute()
 		return
 	end
 
-	local flatDistance=Vector3.new(
-		delta.X,
-		0,
-		delta.Z
-	).Magnitude
+	local lastTime=
+		getPointTime(route[#route])
 
-	local estimateTime=
+	local distance=
+		Vector3.new(
+			delta.X,
+			0,
+			delta.Z
+		).Magnitude
+
+	local routeLength=
 		math.max(
-			flatDistance/16,
+			getRouteTotalDistance(),
+			1
+		)
+
+	local currentDuration=
+		math.max(
+			getPointTime(route[#route])-
+			getPointTime(route[1]),
+			0.1
+		)
+
+	local averageSpeed=
+		routeLength/currentDuration
+
+	local connectTime=
+		math.max(
+			distance/math.max(averageSpeed,1),
 			0.05
 		)
 
 	route[#route+1]={
-		Time=getPointTime(last)+estimateTime,
+		Time=lastTime+connectTime,
 		Position=vecToTable(firstPosition),
-		MoveDirection=first.MoveDirection,
-		Look=first.Look,
+		MoveDirection=route[1].MoveDirection,
+		Look=route[1].Look,
 		Velocity={
 			X=0,
 			Y=0,
@@ -1329,11 +1706,111 @@ local function connectRoute()
 		Jump=false
 	}
 
+	rebuildRouteData()
+	buildJumpEvents()
 	rebuildRouteVisuals()
 
 	setAutoStatus(
 		"STATUS : ROUTE CONNECTED • "..tostring(#route).." POINTS",
 		COLORS.Success
+	)
+end
+
+local function saveCurrentRoute()
+	if #route<2 then
+		setAutoStatus(
+			"STATUS : ROUTE KOSONG",
+			COLORS.Warning
+		)
+		return
+	end
+
+	rebuildRouteData()
+	buildJumpEvents()
+
+	savedRoutes.Main={
+		Points=route,
+		Jumps=jumpEvents
+	}
+
+	saveRoutes()
+
+	setAutoStatus(
+		"STATUS : ROUTE SAVED",
+		COLORS.Success
+	)
+end
+
+local function loadCurrentRoute()
+	if type(savedRoutes.Main)~="table" then
+		setAutoStatus(
+			"STATUS : FILE TIDAK DITEMUKAN",
+			COLORS.Warning
+		)
+		return
+	end
+
+	stopRecording()
+	stopPlayback()
+
+	local loadedPoints=savedRoutes.Main.Points
+
+	if type(loadedPoints)~="table" then
+		loadedPoints=savedRoutes.Main
+	end
+
+	if type(loadedPoints)~="table"
+		or #loadedPoints<2 then
+
+		setAutoStatus(
+			"STATUS : FILE INVALID",
+			COLORS.Danger
+		)
+		return
+	end
+
+	route=loadedPoints
+
+	if type(savedRoutes.Main.Jumps)=="table" then
+		jumpEvents=savedRoutes.Main.Jumps
+	else
+		buildJumpEvents()
+	end
+
+	rebuildRouteData()
+
+	playbackIndex=1
+	playbackRouteDistance=0
+	playbackJumpCursor=1
+
+	rebuildRouteVisuals()
+
+	setAutoStatus(
+		"STATUS : ROUTE LOADED • "..tostring(#route).." POINTS",
+		COLORS.Success
+	)
+end
+
+local function removeSavedRoute()
+	stopRecording()
+	stopPlayback()
+
+	savedRoutes.Main=nil
+	safeDeleteFile(ROUTE_FILE)
+
+	route={}
+	jumpEvents={}
+	table.clear(routeCumulative)
+
+	playbackIndex=1
+	playbackRouteDistance=0
+	playbackJumpCursor=1
+
+	clearRouteVisuals()
+
+	setAutoStatus(
+		"STATUS : FILE REMOVED",
+		COLORS.Danger
 	)
 end
 
@@ -1417,7 +1894,7 @@ task.spawn(function()
 		if Gradient and Gradient.Parent then
 			Gradient.Offset=Vector2.new(-1,0)
 
-			local t=tween(
+			local animation=tween(
 				Gradient,
 				{
 					Offset=Vector2.new(1,0)
@@ -1425,9 +1902,9 @@ task.spawn(function()
 				4
 			)
 
-			if t then
-				t:Play()
-				t.Completed:Wait()
+			if animation then
+				animation:Play()
+				animation.Completed:Wait()
 			else
 				task.wait(4)
 			end
@@ -1490,7 +1967,6 @@ Avatar.Position=UDim2.new(0,14,0,75)
 Avatar.BackgroundColor3=COLORS.Card
 Avatar.BorderSizePixel=0
 Avatar.Parent=Main
-
 corner(Avatar,14)
 
 local avatarOK,avatarURL=pcall(function()
@@ -1597,7 +2073,6 @@ local function createTab(text,icon,order)
 		0,
 		(order-1)*47+5
 	)
-
 	button.BackgroundColor3=COLORS.Panel
 	button.Text=icon.."  "..text
 	button.TextSize=10
@@ -1947,13 +2422,10 @@ createButton(
 			return
 		end
 
-		if isPlaying then
-			stopPlayback()
-		end
+		stopPlayback()
 
 		playbackIndex=1
-		playbackTarget=nil
-		playbackLastDirection=Vector3.zero
+		playbackRouteDistance=0
 		playbackJumpCursor=1
 
 		if PlaybackMarker then
@@ -1977,91 +2449,19 @@ createSection(
 createButton(
 	AutoPage,
 	"💾 SAVE FILE",
-	function()
-		if #route<2 then
-			setAutoStatus(
-				"STATUS : ROUTE KOSONG",
-				COLORS.Warning
-			)
-			return
-		end
-
-		savedRoutes.Main=route
-		saveRoutes()
-
-		setAutoStatus(
-			"STATUS : ROUTE SAVED",
-			COLORS.Success
-		)
-	end
+	saveCurrentRoute
 )
 
 createButton(
 	AutoPage,
 	"📂 LOAD FILE",
-	function()
-		if type(savedRoutes.Main)~="table"
-			or #savedRoutes.Main<2 then
-
-			setAutoStatus(
-				"STATUS : FILE TIDAK DITEMUKAN",
-				COLORS.Warning
-			)
-			return
-		end
-
-		stopRecording()
-		stopPlayback()
-
-		route=savedRoutes.Main
-		jumpEvents={}
-
-		for _,point in ipairs(route) do
-			if isJumpPoint(point) then
-				local p=getPointPosition(point)
-				local origin=getPointPosition(route[1])
-				jumpEvents[#jumpEvents+1]=(p-origin).Magnitude
-			end
-		end
-
-		playbackIndex=1
-		playbackTarget=nil
-		playbackJumpCursor=1
-
-		rebuildRouteVisuals()
-
-		setAutoStatus(
-			"STATUS : ROUTE LOADED • "
-			..tostring(#route)
-			.." POINTS",
-			COLORS.Success
-		)
-	end
+	loadCurrentRoute
 )
 
 createButton(
 	AutoPage,
 	"🗑 REMOVE FILE",
-	function()
-		stopRecording()
-		stopPlayback()
-
-		savedRoutes.Main=nil
-		safeDeleteFile(ROUTE_FILE)
-
-		route={}
-		jumpEvents={}
-		playbackIndex=1
-		playbackTarget=nil
-		playbackJumpCursor=1
-
-		clearRouteVisuals()
-
-		setAutoStatus(
-			"STATUS : FILE REMOVED",
-			COLORS.Danger
-		)
-	end
+	removeSavedRoute
 )
 
 createSection(
@@ -2121,12 +2521,12 @@ createToggle(
 )
 
 Floating=Instance.new("Frame")
-Floating.Size=UDim2.new(0,330,0,68)
+Floating.Size=UDim2.new(0,340,0,72)
 Floating.Position=UDim2.new(
 	0.5,
-	-165,
+	-170,
 	1,
-	-88
+	-92
 )
 Floating.BackgroundColor3=COLORS.Panel
 Floating.BorderSizePixel=0
@@ -2146,10 +2546,10 @@ floatingLayout.Parent=Floating
 local function floatingButton(text,callback)
 	local button=Instance.new("TextButton")
 
-	button.Size=UDim2.new(0,42,0,50)
+	button.Size=UDim2.new(0,44,0,54)
 	button.BackgroundColor3=COLORS.Card
 	button.Text=text
-	button.TextSize=17
+	button.TextSize=18
 	button.Font=Enum.Font.GothamBold
 	button.TextColor3=COLORS.Text
 	button.AutoButtonColor=false
@@ -2168,9 +2568,15 @@ local function floatingButton(text,callback)
 	return button
 end
 
-floatingButton("▶",startPlayback)
+floatingButton(
+	"▶",
+	startPlayback
+)
 
-floatingButton("●",startRecording)
+floatingButton(
+	"●",
+	startRecording
+)
 
 floatingButton(
 	"■",
@@ -2180,14 +2586,20 @@ floatingButton(
 	end
 )
 
-floatingButton("✂",cutRoute)
+floatingButton(
+	"✂",
+	cutRoute
+)
 
-floatingButton("↔",connectRoute)
+floatingButton(
+	"↔",
+	connectRoute
+)
 
 floatingButton(
 	"‹",
 	function()
-		if #route==0 then
+		if #route<1 then
 			return
 		end
 
@@ -2196,8 +2608,10 @@ floatingButton(
 			playbackIndex-1
 		)
 
-		playbackTarget=nil
-		playbackLastDirection=Vector3.zero
+		if routeCumulative[playbackIndex] then
+			playbackRouteDistance=
+				routeCumulative[playbackIndex]
+		end
 
 		if PlaybackMarker and route[playbackIndex] then
 			PlaybackMarker.Position=
@@ -2209,7 +2623,7 @@ floatingButton(
 floatingButton(
 	"›",
 	function()
-		if #route==0 then
+		if #route<1 then
 			return
 		end
 
@@ -2218,8 +2632,10 @@ floatingButton(
 			playbackIndex+1
 		)
 
-		playbackTarget=nil
-		playbackLastDirection=Vector3.zero
+		if routeCumulative[playbackIndex] then
+			playbackRouteDistance=
+				routeCumulative[playbackIndex]
+		end
 
 		if PlaybackMarker and route[playbackIndex] then
 			PlaybackMarker.Position=
@@ -2273,6 +2689,7 @@ local function refreshPlayerList()
 	for _,player in ipairs(Players:GetPlayers()) do
 		if player~=LocalPlayer then
 			local button=Instance.new("TextButton")
+
 			button.Size=UDim2.new(1,-5,0,34)
 			button.BackgroundColor3=COLORS.Card
 			button.Text=
@@ -2326,7 +2743,8 @@ createButton(
 			return
 		end
 
-		local targetCharacter=selectedPlayer.Character
+		local targetCharacter=
+			selectedPlayer.Character
 
 		local targetRoot=
 			targetCharacter
@@ -2356,7 +2774,8 @@ createButton(
 			return
 		end
 
-		local targetCharacter=selectedPlayer.Character
+		local targetCharacter=
+			selectedPlayer.Character
 
 		local targetHumanoid=
 			targetCharacter
@@ -2406,7 +2825,6 @@ local function setAntiAFK(enabled)
 
 					pcall(function()
 						VirtualUser:CaptureController()
-
 						VirtualUser:ClickButton2(
 							Vector2.new(0,0)
 						)
@@ -2470,8 +2888,6 @@ createButton(
 			return
 		end
 
-		local sent=false
-
 		pcall(function()
 			local channels=
 				TextChatService:FindFirstChild(
@@ -2489,13 +2905,9 @@ createButton(
 
 			if general then
 				general:SendAsync(message)
-				sent=true
+				MessageInput.Text=""
 			end
 		end)
-
-		if sent then
-			MessageInput.Text=""
-		end
 	end
 )
 
@@ -2659,7 +3071,6 @@ local function setMenu(state)
 		pcall(function()
 			menuTween:Cancel()
 		end)
-
 		menuTween=nil
 	end
 
@@ -2697,6 +3108,7 @@ local function setMenu(state)
 					if not menuOpen
 						and Main
 						and Main.Parent then
+
 						Main.Visible=false
 					end
 				end
@@ -2755,19 +3167,28 @@ UserInputService.InputChanged:Connect(
 
 		local size=OpenButton.AbsoluteSize
 
-		local newX=dragStartPosition.X.Offset+delta.X
-		local newY=dragStartPosition.Y.Offset+delta.Y
+		local newX=
+			dragStartPosition.X.Offset+delta.X
+
+		local newY=
+			dragStartPosition.Y.Offset+delta.Y
 
 		newX=math.clamp(
 			newX,
 			0,
-			math.max(0,viewport.X-size.X)
+			math.max(
+				0,
+				viewport.X-size.X
+			)
 		)
 
 		newY=math.clamp(
 			newY,
 			0,
-			math.max(0,viewport.Y-size.Y)
+			math.max(
+				0,
+				viewport.Y-size.Y
+			)
 		)
 
 		OpenButton.Position=
@@ -2791,27 +3212,38 @@ OpenButton.Activated:Connect(
 	end
 )
 
-characterConnection=LocalPlayer.CharacterAdded:Connect(
-	function(character)
-		if isRecording then
-			stopRecording()
-		end
+if characterConnection then
+	characterConnection:Disconnect()
+	characterConnection=nil
+end
 
-		if isPlaying then
-			stopPlayback()
-		end
+characterConnection=
+	LocalPlayer.CharacterAdded:Connect(
+		function(character)
+			if isRecording then
+				stopRecording()
+			end
 
-		Character=character
-		Humanoid=character:WaitForChild(
-			"Humanoid",
-			10
-		)
-		Root=character:WaitForChild(
-			"HumanoidRootPart",
-			10
-		)
-	end
-)
+			if isPlaying then
+				stopPlayback()
+			end
+
+			Character=character
+			Humanoid=character:WaitForChild(
+				"Humanoid",
+				10
+			)
+
+			Root=character:WaitForChild(
+				"HumanoidRootPart",
+				10
+			)
+
+			if Humanoid then
+				Humanoid.AutoRotate=true
+			end
+		end
+	)
 
 local lastFrame=os.clock()
 local frameCounter=0
@@ -2859,11 +3291,12 @@ RunService.Heartbeat:Connect(
 
 			Root.AssemblyLinearVelocity=Vector3.zero
 
-			Root.CFrame=CFrame.new(
-				Root.Position.X,
-				10,
-				Root.Position.Z
-			)
+			Root.CFrame=
+				CFrame.new(
+					Root.Position.X,
+					10,
+					Root.Position.Z
+				)
 		end
 
 		if not isPlaying
@@ -2879,6 +3312,7 @@ if CONFIG.AntiAFK then
 end
 
 if #route>=2 then
+	rebuildRouteData()
 	rebuildRouteVisuals()
 end
 
