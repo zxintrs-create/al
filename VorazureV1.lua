@@ -91,8 +91,142 @@ lastJumpState = false,
 cutStart = 1,
 cutEnd = 1,
 originalWalkSpeed = 16,
-memoryStorage = {}
+memoryStorage = {},
+playbackOriginalAnchored = false
 }
+
+
+local function captureAnimationSnapshot()
+    local snapshot = {}
+    if not Humanoid then return snapshot end
+
+    local ok, tracks = pcall(function()
+        return Humanoid:GetPlayingAnimationTracks()
+    end)
+    if not ok or type(tracks) ~= "table" then
+        return snapshot
+    end
+
+    for _, track in ipairs(tracks) do
+        local animationId = ""
+        pcall(function()
+            if track.Animation then
+                animationId = track.Animation.AnimationId or ""
+            end
+        end)
+
+        if animationId ~= "" then
+            table.insert(snapshot, {
+                AnimationId = animationId,
+                TimePosition = tonumber(track.TimePosition) or 0,
+                Speed = tonumber(track.Speed) or 1,
+                Weight = tonumber(track.WeightCurrent) or 1,
+                Looped = track.Looped == true,
+                IsPlaying = track.IsPlaying == true
+            })
+        end
+    end
+
+    return snapshot
+end
+
+local function cloneAnimations(list)
+    local out = {}
+    if type(list) ~= "table" then return out end
+    for _, a in ipairs(list) do
+        if type(a) == "table" and a.AnimationId then
+            table.insert(out, {
+                AnimationId = a.AnimationId,
+                TimePosition = tonumber(a.TimePosition) or 0,
+                Speed = tonumber(a.Speed) or 1,
+                Weight = tonumber(a.Weight) or 1,
+                Looped = a.Looped == true,
+                IsPlaying = a.IsPlaying == true
+            })
+        end
+    end
+    return out
+end
+
+local animationCache = {}
+
+local function getAnimationTrack(animationId)
+    if not isCharacterAlive() or animationId == "" then return nil end
+
+    local cached = animationCache[animationId]
+    if cached and cached.Parent then
+        return cached
+    end
+
+    local animation = Instance.new("Animation")
+    animation.AnimationId = animationId
+
+    local ok, track = pcall(function()
+        return Humanoid:LoadAnimation(animation)
+    end)
+
+    animation:Destroy()
+
+    if ok and track then
+        animationCache[animationId] = track
+        return track
+    end
+
+    return nil
+end
+
+local function applyAnimationSnapshot(snapshot)
+    if type(snapshot) ~= "table" or not isCharacterAlive() then return end
+
+    local desired = {}
+    for _, a in ipairs(snapshot) do
+        if a.AnimationId and a.AnimationId ~= "" then
+            desired[a.AnimationId] = a
+            local track = getAnimationTrack(a.AnimationId)
+
+            if track then
+                pcall(function()
+                    track.Looped = a.Looped == true
+                end)
+
+                if a.IsPlaying then
+                    if not track.IsPlaying then
+                        track:Play(0, math.max(a.Weight or 1, 0), math.max(a.Speed or 1, 0.01))
+                        pcall(function()
+                            track.TimePosition = math.max(a.TimePosition or 0, 0)
+                        end)
+                    else
+                        track:AdjustSpeed(math.max(a.Speed or 1, 0.01))
+                        track:AdjustWeight(math.max(a.Weight or 1, 0), 0)
+                    end
+                elseif track.IsPlaying then
+                    track:Stop(0)
+                end
+            end
+        end
+    end
+
+    -- Stop cached tracks that were present previously but are absent from this node.
+    for id, track in pairs(animationCache) do
+        if track and track.Parent and not desired[id] and track.IsPlaying then
+            pcall(function()
+                track:Stop(0)
+            end)
+        end
+    end
+end
+
+local function clearAnimationCache()
+    for id, track in pairs(animationCache) do
+        if track then
+            pcall(function()
+                track:Stop(0)
+                track:Destroy()
+            end)
+        end
+        animationCache[id] = nil
+    end
+end
 
 local function cloneTimeline(tbl)
 local clone = {}
@@ -105,8 +239,9 @@ RelativeTimestamp = node.RelativeTimestamp,
 Jump = node.Jump,
 WalkSpeed = node.WalkSpeed,
 HumanoidState = node.HumanoidState,
-MovementDirection = node.MovementDirection
-})
+MovementDirection = node.MovementDirection,
+        Animations = cloneAnimations(node.Animations)
+    })
 end
 return clone
 end
@@ -121,44 +256,41 @@ return timeline
 end
 
 local function saveToDisk()
-local exportData = {}
-for slot, data in pairs(state.savedFiles) do
-if data and data.timeline then
-local encodedTimeline = {}
-for _, node in ipairs(data.timeline) do
-local cf = node.CFrame or CFrame.new(node.Position)
-local comps = {cf:GetComponents()}
-local roundedComps = {}
-for _, v in ipairs(comps) do
-table.insert(roundedComps, math.round(v * 1000) / 1000)
-end
+    local exportData = {}
 
-table.insert(encodedTimeline, {  
-                C = roundedComps,  
-                P = {  
-                    math.round(node.Position.X * 100) / 100,  
-                    math.round(node.Position.Y * 100) / 100,  
-                    math.round(node.Position.Z * 100) / 100  
-                },  
-                T = math.round(node.Timestamp * 1000) / 1000,  
-                J = node.Jump or false,  
-                W = node.WalkSpeed or 16,  
-                S = tostring(node.HumanoidState or Enum.HumanoidStateType.Running),  
-                D = node.MovementDirection and {node.MovementDirection.X, node.MovementDirection.Y, node.MovementDirection.Z} or {0,0,0}  
-            })  
-        end  
-        exportData[tostring(slot)] = { timeline = encodedTimeline }  
-    end  
-end  
-  
-state.memoryStorage = exportData  
-  
-pcall(function()  
-    if writefile then  
-        writefile(CFG.SaveFileName, HttpService:JSONEncode(exportData))  
-    end  
-end)
+    for slot, data in pairs(state.savedFiles) do
+        if data and data.timeline then
+            local encodedTimeline = {}
 
+            for _, node in ipairs(data.timeline) do
+                local cf = node.CFrame or CFrame.new(node.Position)
+                local comps = {cf:GetComponents()}
+
+                table.insert(encodedTimeline, {
+                    C = comps,
+                    P = {node.Position.X, node.Position.Y, node.Position.Z},
+                    T = node.Timestamp,
+                    J = node.Jump or false,
+                    W = node.WalkSpeed or 16,
+                    S = tostring(node.HumanoidState or Enum.HumanoidStateType.Running),
+                    D = node.MovementDirection
+                        and {node.MovementDirection.X, node.MovementDirection.Y, node.MovementDirection.Z}
+                        or {0, 0, 0},
+                    A = cloneAnimations(node.Animations)
+                })
+            end
+
+            exportData[tostring(slot)] = {timeline = encodedTimeline}
+        end
+    end
+
+    state.memoryStorage = exportData
+
+    pcall(function()
+        if writefile then
+            writefile(CFG.SaveFileName, HttpService:JSONEncode(exportData))
+        end
+    end)
 end
 
 local function loadFromDisk()
@@ -204,8 +336,9 @@ if decoded and type(decoded) == "table" then
                         Jump = node.J or false,  
                         WalkSpeed = node.W or 16,  
                         HumanoidState = node.S or Enum.HumanoidStateType.Running,  
-                        MovementDirection = dir  
-                    })  
+                        MovementDirection = dir,
+                        Animations = cloneAnimations(node.A)
+                    })
                 end  
             end  
             state.savedFiles[tonumber(slot) or slot] = { timeline = normalizeTimeline(decodedTimeline) }  
@@ -331,12 +464,12 @@ IconImage.ZIndex = 11
 IconImage.Parent = OpenMenu
 
 --========================================================
--- MAIN FRAME (550x325)
+-- MAIN MENU
 --========================================================
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.fromOffset(550, 325)
-MainFrame.Position = UDim2.new(0.5, -275, 0.5, -162.5)
+MainFrame.Size = UDim2.fromOffset(620, 365)
+MainFrame.Position = UDim2.new(0.5, -310, 0.5, -182.5)
 MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
@@ -413,22 +546,128 @@ StatusLabel.BackgroundTransparency = 1
 StatusLabel.ZIndex = 3
 StatusLabel.Parent = MainFrame
 
+local ControlFrame = Instance.new("Frame")
+ControlFrame.Name = "ControlFrame"
+ControlFrame.Size = UDim2.new(1, -20, 1, -75)
+ControlFrame.Position = UDim2.new(0, 10, 0, 65)
+ControlFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 25)
+ControlFrame.BorderSizePixel = 0
+ControlFrame.ZIndex = 3
+ControlFrame.Parent = MainFrame
+
+local ControlCorner = Instance.new("UICorner")
+ControlCorner.CornerRadius = UDim.new(0, 10)
+ControlCorner.Parent = ControlFrame
+
+local ControlStroke = Instance.new("UIStroke")
+ControlStroke.Thickness = 1
+ControlStroke.Color = Color3.fromRGB(55, 55, 75)
+ControlStroke.Parent = ControlFrame
+
 local ScrollingContainer = Instance.new("ScrollingFrame")
-ScrollingContainer.Size = UDim2.new(1, -20, 1, -75)
-ScrollingContainer.Position = UDim2.new(0, 10, 0, 65)
+ScrollingContainer.Name = "ActionContainer"
+ScrollingContainer.Size = UDim2.new(1, -12, 1, -12)
+ScrollingContainer.Position = UDim2.fromOffset(6, 6)
 ScrollingContainer.BackgroundTransparency = 1
 ScrollingContainer.BorderSizePixel = 0
 ScrollingContainer.CanvasSize = UDim2.new(0, 0, 0, 0)
-ScrollingContainer.AutomaticCanvasSize = Enum.AutomaticSize.XY
+ScrollingContainer.AutomaticCanvasSize = Enum.AutomaticSize.Y
 ScrollingContainer.ScrollBarThickness = 4
-ScrollingContainer.ZIndex = 3
-ScrollingContainer.Parent = MainFrame
+ScrollingContainer.ZIndex = 4
+ScrollingContainer.Parent = ControlFrame
 
 local UIGrid = Instance.new("UIGridLayout")
 UIGrid.CellSize = UDim2.fromOffset(120, 39)
 UIGrid.CellPadding = UDim2.fromOffset(8, 8)
 UIGrid.SortOrder = Enum.SortOrder.LayoutOrder
 UIGrid.Parent = ScrollingContainer
+
+local FileButton = Instance.new("TextButton")
+FileButton.Name = "FileButton"
+FileButton.Size = UDim2.fromOffset(120, 39)
+FileButton.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+FileButton.Text = "FILE"
+FileButton.TextColor3 = Color3.fromRGB(230, 230, 230)
+FileButton.Font = Enum.Font.GothamBold
+FileButton.TextSize = 11
+FileButton.LayoutOrder = 10
+FileButton.ZIndex = 5
+FileButton.Parent = ScrollingContainer
+
+local FileButtonCorner = Instance.new("UICorner")
+FileButtonCorner.CornerRadius = UDim.new(0, 6)
+FileButtonCorner.Parent = FileButton
+
+local FileButtonStroke = Instance.new("UIStroke")
+FileButtonStroke.Thickness = 1
+FileButtonStroke.Color = Color3.fromRGB(70, 70, 90)
+FileButtonStroke.Parent = FileButton
+
+local FileFrame = Instance.new("Frame")
+FileFrame.Name = "FileFrame"
+FileFrame.Size = UDim2.fromOffset(285, 300)
+FileFrame.Position = UDim2.new(0.5, -142.5, 0.5, -150)
+FileFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 25)
+FileFrame.BorderSizePixel = 0
+FileFrame.Visible = false
+FileFrame.ZIndex = 20
+FileFrame.Parent = MainFrame
+
+local FileCorner = Instance.new("UICorner")
+FileCorner.CornerRadius = UDim.new(0, 10)
+FileCorner.Parent = FileFrame
+
+local FileStroke = Instance.new("UIStroke")
+FileStroke.Thickness = 1
+FileStroke.Color = CFG.AccentColor
+FileStroke.Parent = FileFrame
+
+local FileTitle = Instance.new("TextLabel")
+FileTitle.Name = "FileTitle"
+FileTitle.Size = UDim2.new(1, -48, 0, 34)
+FileTitle.Position = UDim2.fromOffset(10, 4)
+FileTitle.BackgroundTransparency = 1
+FileTitle.Text = "FILES"
+FileTitle.TextColor3 = CFG.LineColor
+FileTitle.Font = Enum.Font.GothamBold
+FileTitle.TextSize = 13
+FileTitle.TextXAlignment = Enum.TextXAlignment.Left
+FileTitle.ZIndex = 21
+FileTitle.Parent = FileFrame
+
+local FileClose = Instance.new("TextButton")
+FileClose.Name = "FileClose"
+FileClose.Size = UDim2.fromOffset(32, 28)
+FileClose.Position = UDim2.new(1, -38, 0, 7)
+FileClose.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+FileClose.Text = "X"
+FileClose.TextColor3 = Color3.fromRGB(230, 230, 230)
+FileClose.Font = Enum.Font.GothamBold
+FileClose.TextSize = 12
+FileClose.ZIndex = 21
+FileClose.Parent = FileFrame
+
+local FileCloseCorner = Instance.new("UICorner")
+FileCloseCorner.CornerRadius = UDim.new(0, 6)
+FileCloseCorner.Parent = FileClose
+
+local FileContainer = Instance.new("ScrollingFrame")
+FileContainer.Name = "FileContainer"
+FileContainer.Size = UDim2.new(1, -20, 1, -48)
+FileContainer.Position = UDim2.fromOffset(10, 40)
+FileContainer.BackgroundTransparency = 1
+FileContainer.BorderSizePixel = 0
+FileContainer.CanvasSize = UDim2.new(0, 0, 0, 0)
+FileContainer.AutomaticCanvasSize = Enum.AutomaticSize.Y
+FileContainer.ScrollBarThickness = 4
+FileContainer.ZIndex = 21
+FileContainer.Parent = FileFrame
+
+local FileLayout = Instance.new("UIListLayout")
+FileLayout.Padding = UDim.new(0, 7)
+FileLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+FileLayout.SortOrder = Enum.SortOrder.LayoutOrder
+FileLayout.Parent = FileContainer
 
 local function updateStatus(text)
 if not ScreenGui or not ScreenGui.Parent then return end
@@ -450,7 +689,7 @@ btn.TextColor3 = Color3.fromRGB(230, 230, 230)
 btn.Font = Enum.Font.GothamBold
 btn.TextSize = 11
 btn.LayoutOrder = order
-btn.ZIndex = 4
+btn.ZIndex = 5
 btn.Parent = ScrollingContainer
 
 local btnCorner = Instance.new("UICorner")    
@@ -470,6 +709,41 @@ table.insert(currentConnections, btn.Activated:Connect(function()
 end))    
 return btn
 
+end
+
+local function createFileBtn(textValue, order, callback)
+local btn = Instance.new("TextButton")
+btn.Name = "FileButton_" .. tostring(order)
+btn.Size = UDim2.new(1, -4, 0, 34)
+btn.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+btn.Text = textValue
+btn.TextColor3 = Color3.fromRGB(230, 230, 230)
+btn.Font = Enum.Font.GothamBold
+btn.TextSize = 11
+btn.LayoutOrder = order
+btn.ZIndex = 22
+btn.Parent = FileContainer
+
+local btnCorner = Instance.new("UICorner")
+btnCorner.CornerRadius = UDim.new(0, 6)
+btnCorner.Parent = btn
+
+local btnStroke = Instance.new("UIStroke")
+btnStroke.Thickness = 1
+btnStroke.Color = Color3.fromRGB(70, 70, 90)
+btnStroke.Parent = btn
+
+table.insert(currentConnections, btn.Activated:Connect(function()
+    TweenService:Create(btn, TweenInfo.new(0.15), {BackgroundColor3 = CFG.AccentColor}):Play()
+    task.delay(0.15, function()
+        if btn and btn.Parent then
+            TweenService:Create(btn, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(30, 30, 40)}):Play()
+        end
+    end)
+    callback()
+end))
+
+return btn
 end
 
 local lastRecordTick = 0
@@ -504,7 +778,8 @@ if #state.timeline == 0 then
         Jump = jumpTrigger,  
         WalkSpeed = Humanoid.WalkSpeed,  
         HumanoidState = st,  
-        MovementDirection = moveDir  
+        MovementDirection = moveDir,
+        Animations = captureAnimationSnapshot()
     })    
     state.cutStart = 1  
     state.cutEnd = 1  
@@ -523,7 +798,8 @@ else
             Jump = jumpTrigger,  
             WalkSpeed = Humanoid.WalkSpeed,  
             HumanoidState = st,  
-            MovementDirection = moveDir  
+            MovementDirection = moveDir,
+            Animations = captureAnimationSnapshot()
         })    
         normalizeTimeline(state.timeline)  
         state.cutEnd = #state.timeline  
@@ -533,6 +809,7 @@ end
 end)
 
 stopPlayback = function(manualStop)
+local wasPlaying = state.isPlaying
 state.isPlaying = false
 state.isPaused = false
 state.playbackID = state.playbackID + 1
@@ -545,186 +822,317 @@ pcall(function() RunService:UnbindFromRenderStep("AldoKnightXorzV437_Playback") 
 if isCharacterAlive() and Humanoid then    
     Humanoid.AutoRotate = true    
     Humanoid:Move(Vector3.zero, true)    
-    Humanoid.WalkSpeed = state.originalWalkSpeed  
+    Humanoid.WalkSpeed = state.originalWalkSpeed
+    if wasPlaying then
+        RootPart.Anchored = state.playbackOriginalAnchored
+        RootPart.AssemblyLinearVelocity = Vector3.zero
+        RootPart.AssemblyAngularVelocity = Vector3.zero
+    end
 end    
 updateStatus("IDLE")
 
 end
 
 local function executePlayback()
-if #state.timeline < 2 or state.isPlaying or not isCharacterAlive() then return end
+    if #state.timeline < 2 or state.isPlaying or not isCharacterAlive() then return end
 
-stopPlayback(false)
-state.isPlaying = true
-state.isPaused = false
-state.playbackID = state.playbackID + 1
-local currentPlaybackID = state.playbackID
+    stopPlayback(false)
 
-state.originalWalkSpeed = Humanoid.WalkSpeed
-Humanoid.AutoRotate = true
+    state.isPlaying = true
+    state.isPaused = false
+    state.playbackID = state.playbackID + 1
 
-local playbackState = "WALKING_TO_START"
-local stateChanged = true
+    local playbackID = state.playbackID
+    local timeline = state.timeline
+    local firstNode = timeline[1]
 
-local startPos = state.timeline[1].Position
-local playbackStartTime = tick()
-local totalPauseDuration = 0
-local pauseStartTime = 0
-local currentIndex = 1
-local lastJumpConsumedIndex = 0
-local timeoutTimer = tick() + 30
-local lookAheadTime = 0.12
-local maxCorrectionDistance = 2.5
+    state.originalWalkSpeed = Humanoid.WalkSpeed
 
-local function getNodeAtTime(targetTime, fromIndex)
-    local index = math.max(1, math.min(fromIndex or 1, #state.timeline - 1))
-    while index < #state.timeline - 1 and targetTime > state.timeline[index + 1].RelativeTimestamp do
-        index = index + 1
-    end
-    return index
-end
+    local currentIndex = 1
+    local activeTween = nil
+    local activeConnection = nil
+    local wasAnchored = RootPart.Anchored
+    local wasAutoRotate = Humanoid.AutoRotate
+    local finished = false
+    local paused = false
 
-local function getInterpolatedPosition(targetTime, fromIndex)
-    if targetTime <= state.timeline[1].RelativeTimestamp then
-        return state.timeline[1].Position
-    end
+    state.playbackOriginalAnchored = wasAnchored
 
-    local lastNode = state.timeline[#state.timeline]
-    if targetTime >= lastNode.RelativeTimestamp then
-        return lastNode.Position
-    end
-
-    local index = getNodeAtTime(targetTime, fromIndex)
-    local a = state.timeline[index]
-    local b = state.timeline[index + 1]
-    local span = b.RelativeTimestamp - a.RelativeTimestamp
-    local alpha = span > 0 and math.clamp((targetTime - a.RelativeTimestamp) / span, 0, 1) or 1
-    return a.Position:Lerp(b.Position, alpha)
-end
-
-updateStatus("WALKING TO START")
-
-pcall(function() RunService:UnbindFromRenderStep("AldoKnightXorzV437_Playback") end)
-RunService:BindToRenderStep("AldoKnightXorzV437_Playback", Enum.RenderPriority.Character.Value - 1, function(dt)
-    if not state.isPlaying or state.playbackID ~= currentPlaybackID or not isCharacterAlive() then
-        stopPlayback(false)
-        return
-    end
-
-    if state.isPaused then
-        if pauseStartTime == 0 then
-            pauseStartTime = tick()
+    local function disconnectTween()
+        if activeConnection then
+            pcall(function() activeConnection:Disconnect() end)
+            activeConnection = nil
         end
-        Humanoid:Move(Vector3.zero, true)
-        return
-    elseif pauseStartTime > 0 then
-        totalPauseDuration = totalPauseDuration + (tick() - pauseStartTime)
-        pauseStartTime = 0
     end
 
-    if playbackState == "WALKING_TO_START" or playbackState == "RETURNING_TO_START" then
-        Humanoid.AutoRotate = true
+    local function cancelTween()
+        disconnectTween()
+        if activeTween then
+            pcall(function() activeTween:Cancel() end)
+            activeTween = nil
+        end
+    end
 
-        if stateChanged then
-            Humanoid:MoveTo(startPos)
-            stateChanged = false
+    local function restore()
+        cancelTween()
+        if isCharacterAlive() then
+            RootPart.AssemblyLinearVelocity = Vector3.zero
+            RootPart.AssemblyAngularVelocity = Vector3.zero
+            RootPart.Anchored = wasAnchored
+            Humanoid.AutoRotate = wasAutoRotate
+            Humanoid.WalkSpeed = state.originalWalkSpeed
+            Humanoid:Move(Vector3.zero, false)
+            clearAnimationCache()
+        end
+    end
+
+    local function applyRecordedNode(node)
+        if not isCharacterAlive() or not node then return end
+
+        if node.WalkSpeed then
+            Humanoid.WalkSpeed = tonumber(node.WalkSpeed) or Humanoid.WalkSpeed
         end
 
-        local dist = (RootPart.Position - startPos).Magnitude
-        if dist <= 0.75 then
-            playbackState = "PLAYING"
-            playbackStartTime = tick()
-            totalPauseDuration = 0
-            currentIndex = 1
-            lastJumpConsumedIndex = 0
-            stateChanged = true
-            updateStatus(state.isAutoWalk and "AUTO WALK" or "PLAYING")
-        elseif tick() > timeoutTimer then
-            if dist > 4.0 then
-                updateStatus("ABORTED: STUCK")
-                stopPlayback(false)
-                return
-            end
-            stateChanged = true
-            timeoutTimer = tick() + 10
+        Humanoid.AutoRotate = false
+
+        -- Animation is replayed independently from position.
+        -- The recorded CFrame remains the only trajectory source.
+        if node.Animations then
+            applyAnimationSnapshot(node.Animations)
         end
+    end
 
-    elseif playbackState == "PLAYING" then
-        Humanoid.AutoRotate = true
+    local function finishPlayback()
+        if finished then return end
+        finished = true
+        cancelTween()
 
-        local currentTime = tick() - playbackStartTime - totalPauseDuration
-
-        while currentIndex < #state.timeline and currentTime >= state.timeline[currentIndex + 1].RelativeTimestamp do
-            currentIndex = currentIndex + 1
-        end
-
-        if currentIndex >= #state.timeline then
-            if state.isAutoWalk then
-                playbackState = "RETURNING_TO_START"
-                stateChanged = true
-                timeoutTimer = tick() + 30
-                updateStatus("WALKING TO START")
-            else
-                stopPlayback(false)
-            end
+        if not isCharacterAlive() then
+            state.isPlaying = false
+            state.isPaused = false
             return
         end
 
-        local currentNode = state.timeline[currentIndex]
-        local nextNode = state.timeline[currentIndex + 1]
+        -- Final route Tween already ended exactly on the final recorded CFrame.
+        -- No CFrame correction is performed here.
+        RootPart.AssemblyLinearVelocity = Vector3.zero
+        RootPart.AssemblyAngularVelocity = Vector3.zero
 
-        local timeDiff = nextNode.RelativeTimestamp - currentNode.RelativeTimestamp
-        local alpha = 0
-        if timeDiff > 0 then
-            alpha = math.clamp((currentTime - currentNode.RelativeTimestamp) / timeDiff, 0, 1)
-        end
+        if state.isAutoWalk then
+            local finalNode = timeline[#timeline]
+            local startCF = firstNode.CFrame or CFrame.new(firstNode.Position)
+            local endCF = finalNode.CFrame or CFrame.new(finalNode.Position)
+            local distance = (endCF.Position - startCF.Position).Magnitude
+            local speed = math.max(
+                tonumber(finalNode.WalkSpeed) or state.originalWalkSpeed or 16,
+                1
+            )
 
-        if currentNode.WalkSpeed then
-            Humanoid.WalkSpeed = currentNode.WalkSpeed
-        end
-
-        if currentNode.Jump and lastJumpConsumedIndex ~= currentIndex then
-            lastJumpConsumedIndex = currentIndex
-            Humanoid.Jump = true
-        end
-
-        local targetTime = currentTime + lookAheadTime
-        local lookTarget = getInterpolatedPosition(targetTime, currentIndex)
-        local currentPos = RootPart.Position
-
-        local tangent = lookTarget - currentPos
-        local horizontalTangent = Vector3.new(tangent.X, 0, tangent.Z)
-
-        if horizontalTangent.Magnitude > 0.001 then
-            horizontalTangent = horizontalTangent.Unit
-        else
-            local nextDir = nextNode.Position - currentNode.Position
-            local horizontalNext = Vector3.new(nextDir.X, 0, nextDir.Z)
-            horizontalTangent = horizontalNext.Magnitude > 0.001 and horizontalNext.Unit or Vector3.zero
-        end
-
-        local pathPos = currentNode.Position:Lerp(nextNode.Position, alpha)
-        local correction = pathPos - currentPos
-        local horizontalCorrection = Vector3.new(correction.X, 0, correction.Z)
-        local moveDir = horizontalTangent
-
-        if horizontalCorrection.Magnitude > 0.35 then
-            local correctionWeight = math.clamp(horizontalCorrection.Magnitude / maxCorrectionDistance, 0.08, 0.35)
-            local blended = horizontalTangent * (1 - correctionWeight) + horizontalCorrection.Unit * correctionWeight
-            if blended.Magnitude > 0.001 then
-                moveDir = blended.Unit
-            end
-        end
-
-        if moveDir.Magnitude > 0.001 then
-            Humanoid:Move(moveDir, false)
-        else
+            RootPart.Anchored = true
+            Humanoid.AutoRotate = false
             Humanoid:Move(Vector3.zero, false)
+
+            if distance <= 0.001 then
+                RootPart.AssemblyLinearVelocity = Vector3.zero
+                RootPart.AssemblyAngularVelocity = Vector3.zero
+                RootPart.Anchored = wasAnchored
+                Humanoid.AutoRotate = wasAutoRotate
+                state.isPlaying = false
+                state.isPaused = false
+                state.playbackID = state.playbackID + 1
+                updateStatus("IDLE")
+                if state.isAutoWalk then task.defer(executePlayback) end
+                return
+            end
+
+            local duration = math.max(distance / speed, 1 / 30)
+
+            activeTween = TweenService:Create(
+                RootPart,
+                TweenInfo.new(duration, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut),
+                {CFrame = startCF}
+            )
+
+            activeConnection = activeTween.Completed:Connect(function(playbackState)
+                disconnectTween()
+                activeTween = nil
+
+                if playbackState ~= Enum.PlaybackState.Completed then return end
+                if not state.isPlaying or state.playbackID ~= playbackID then return end
+
+                -- Return Tween is already exactly at START.
+                RootPart.AssemblyLinearVelocity = Vector3.zero
+                RootPart.AssemblyAngularVelocity = Vector3.zero
+                RootPart.Anchored = wasAnchored
+                Humanoid.AutoRotate = wasAutoRotate
+
+                state.isPlaying = false
+                state.isPaused = false
+                state.playbackID = state.playbackID + 1
+                updateStatus("IDLE")
+
+                if state.isAutoWalk then
+                    task.defer(executePlayback)
+                end
+            end)
+
+            activeTween:Play()
+            updateStatus("WALKING TO START")
+            return
         end
 
+        state.isPlaying = false
+        state.isPaused = false
+        state.playbackID = state.playbackID + 1
+        restore()
+        updateStatus("IDLE")
     end
-end)
 
+    local function playSegment(index)
+        if not state.isPlaying or state.playbackID ~= playbackID then return end
+        if not isCharacterAlive() then
+            state.isPlaying = false
+            return
+        end
+
+        if index >= #timeline then
+            currentIndex = #timeline
+            applyRecordedNode(timeline[currentIndex])
+            finishPlayback()
+            return
+        end
+
+        currentIndex = index
+
+        local node = timeline[index]
+        local nextNode = timeline[index + 1]
+        local toCF = nextNode.CFrame or CFrame.new(nextNode.Position)
+
+        local t0 = tonumber(node.RelativeTimestamp) or 0
+        local t1 = tonumber(nextNode.RelativeTimestamp) or t0
+        local duration = math.max(t1 - t0, 1 / 240)
+
+        applyRecordedNode(node)
+
+        -- TweenService is the sole position/rotation driver.
+        -- The previous Tween already ended exactly at this node.
+        RootPart.Anchored = true
+        RootPart.AssemblyLinearVelocity = Vector3.zero
+        RootPart.AssemblyAngularVelocity = Vector3.zero
+
+        activeTween = TweenService:Create(
+            RootPart,
+            TweenInfo.new(duration, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut),
+            {CFrame = toCF}
+        )
+
+        activeConnection = activeTween.Completed:Connect(function(playbackState)
+            disconnectTween()
+            activeTween = nil
+
+            if playbackState ~= Enum.PlaybackState.Completed then return end
+            if not state.isPlaying or state.playbackID ~= playbackID then return end
+
+            -- No CFrame assignment here. Continue from the exact completed node.
+            playSegment(index + 1)
+        end)
+
+        activeTween:Play()
+    end
+
+    local function beginStartTransition()
+        if not isCharacterAlive() then
+            state.isPlaying = false
+            return
+        end
+
+        currentIndex = 1
+        finished = false
+        paused = false
+
+        local startCF = firstNode.CFrame or CFrame.new(firstNode.Position)
+        local currentCF = RootPart.CFrame
+
+        RootPart.Anchored = true
+        Humanoid.AutoRotate = false
+        Humanoid:Move(Vector3.zero, false)
+        RootPart.AssemblyLinearVelocity = Vector3.zero
+        RootPart.AssemblyAngularVelocity = Vector3.zero
+
+        local distance = (currentCF.Position - startCF.Position).Magnitude
+        local dot = math.clamp(currentCF.LookVector:Dot(startCF.LookVector), -1, 1)
+        local rotationDifference = math.acos(dot)
+
+        if distance <= 0.001 and rotationDifference <= 0.000001 then
+            applyRecordedNode(firstNode)
+            updateStatus(state.isAutoWalk and "AUTO WALK" or "PLAYING")
+            playSegment(1)
+            return
+        end
+
+        local speed = math.max(
+            tonumber(firstNode.WalkSpeed) or state.originalWalkSpeed or 16,
+            1
+        )
+        local duration = math.max(distance / speed, 1 / 30)
+
+        -- One continuous Tween enters the exact first recorded CFrame.
+        activeTween = TweenService:Create(
+            RootPart,
+            TweenInfo.new(duration, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut),
+            {CFrame = startCF}
+        )
+
+        activeConnection = activeTween.Completed:Connect(function(playbackState)
+            disconnectTween()
+            activeTween = nil
+
+            if playbackState ~= Enum.PlaybackState.Completed then return end
+            if not state.isPlaying or state.playbackID ~= playbackID then return end
+            if not isCharacterAlive() then
+                state.isPlaying = false
+                return
+            end
+
+            -- Start Tween already ended exactly at firstNode.CFrame.
+            RootPart.AssemblyLinearVelocity = Vector3.zero
+            RootPart.AssemblyAngularVelocity = Vector3.zero
+            applyRecordedNode(firstNode)
+            updateStatus(state.isAutoWalk and "AUTO WALK" or "PLAYING")
+            playSegment(1)
+        end)
+
+        activeTween:Play()
+    end
+
+    state.playbackCancel = function()
+        state.isPlaying = false
+        state.isPaused = false
+        state.playbackID = state.playbackID + 1
+        restore()
+        updateStatus("IDLE")
+    end
+
+    state.playbackPause = function()
+        if not state.isPlaying or not activeTween or paused then return end
+        paused = true
+        state.isPaused = true
+        pcall(function() activeTween:Pause() end)
+        updateStatus("PAUSED")
+    end
+
+    state.playbackResume = function()
+        if not state.isPlaying or not activeTween or not paused then return end
+        paused = false
+        state.isPaused = false
+        applyRecordedNode(timeline[currentIndex])
+        pcall(function() activeTween:Play() end)
+        updateStatus(state.isAutoWalk and "AUTO WALK" or "PLAYING")
+    end
+
+    RootPart.Anchored = true
+    Humanoid.AutoRotate = false
+    beginStartTransition()
 end
 
 local function toggleAutoWalk()
@@ -830,13 +1238,13 @@ end
 end)
 
 for i = 1, 5 do
-createBtn("FILE " .. i, 9 + i, function()
+createFileBtn("FILE " .. i, i, function()
 state.selectedFile = i
 updateStatus("IDLE")
 end)
 end
 
-createBtn("SAVE FILE", 15, function()
+createFileBtn("SAVE FILE", 7, function()
 if #state.timeline > 0 then
 normalizeTimeline(state.timeline)
 state.savedFiles[state.selectedFile] = {
@@ -847,7 +1255,7 @@ updateStatus("SAVED FILE " .. state.selectedFile)
 end
 end)
 
-createBtn("LOAD FILE", 16, function()
+createFileBtn("LOAD FILE", 8, function()
 local fileData = state.savedFiles[state.selectedFile]
 if fileData and fileData.timeline then
 stopPlayback(true)
@@ -858,6 +1266,14 @@ state.cutEnd = #state.timeline
 updateStatus("LOADED FILE " .. state.selectedFile)
 end
 end)
+
+table.insert(currentConnections, FileButton.Activated:Connect(function()
+    FileFrame.Visible = not FileFrame.Visible
+end))
+
+table.insert(currentConnections, FileClose.Activated:Connect(function()
+    FileFrame.Visible = false
+end))
 
 createBtn("CLEAR", 17, function()
 stopPlayback(true)
