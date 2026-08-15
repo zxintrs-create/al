@@ -573,9 +573,9 @@ local currentIndex = 1
 local lastJumpConsumedIndex = 0
 local timeoutTimer = tick() + 30
 
-local filteredTarget = startPos
-local lastMoveDirection = Vector3.zero
-local correctionCooldown = 0
+local smoothLook = nil
+local startBlendUntil = 0
+local lastTargetDirection = nil
 
 updateStatus("WALKING TO START")
 
@@ -589,24 +589,23 @@ RunService:BindToRenderStep("AldoKnightXorzV437_Playback", Enum.RenderPriority.C
     if state.isPaused then
         if pauseStartTime == 0 then
             pauseStartTime = tick()
-            if Humanoid then
-                Humanoid:Move(Vector3.zero, false)
-            end
+            if Humanoid then Humanoid:Move(Vector3.zero, true) end
+        end
+        if RootPart then
+            RootPart.AssemblyLinearVelocity = Vector3.zero
+            RootPart.AssemblyAngularVelocity = Vector3.zero
         end
         return
     elseif pauseStartTime > 0 then
         totalPauseDuration = totalPauseDuration + (tick() - pauseStartTime)
         pauseStartTime = 0
-        playbackStartTime = playbackStartTime
     end
 
     if playbackState == "WALKING_TO_START" or playbackState == "RETURNING_TO_START" then
-        Humanoid.AutoRotate = true
-
         if stateChanged then
+            Humanoid.AutoRotate = true
             Humanoid:MoveTo(startPos)
             stateChanged = false
-            timeoutTimer = tick() + 30
         end
 
         local dist = (RootPart.Position - startPos).Magnitude
@@ -617,39 +616,36 @@ RunService:BindToRenderStep("AldoKnightXorzV437_Playback", Enum.RenderPriority.C
                 return
             end
 
-            RootPart.CFrame = state.timeline[1].CFrame or CFrame.new(startPos)
-            RootPart.AssemblyLinearVelocity = Vector3.zero
-            RootPart.AssemblyAngularVelocity = Vector3.zero
+            Humanoid:Move(Vector3.zero, true)
 
             playbackState = "PLAYING"
             playbackStartTime = tick()
             totalPauseDuration = 0
             currentIndex = 1
             lastJumpConsumedIndex = 0
-            filteredTarget = RootPart.Position
-            lastMoveDirection = Vector3.zero
-            correctionCooldown = 0
             stateChanged = true
+            startBlendUntil = tick() + 0.35
+            smoothLook = nil
+            lastTargetDirection = nil
+
             updateStatus(state.isAutoWalk and "AUTO WALK" or "PLAYING")
         end
 
     elseif playbackState == "PLAYING" then
-        Humanoid.AutoRotate = true
-
         local currentTime = tick() - playbackStartTime - totalPauseDuration
 
-        while currentIndex < #state.timeline
-            and currentTime >= state.timeline[currentIndex + 1].RelativeTimestamp do
+        while currentIndex < #state.timeline and currentTime >= state.timeline[currentIndex + 1].RelativeTimestamp do
             currentIndex = currentIndex + 1
         end
 
         if currentIndex >= #state.timeline then
-            Humanoid:Move(Vector3.zero, false)
-
             if state.isAutoWalk then
                 playbackState = "RETURNING_TO_START"
                 stateChanged = true
                 timeoutTimer = tick() + 30
+                smoothLook = nil
+                lastTargetDirection = nil
+                Humanoid.AutoRotate = true
                 updateStatus("WALKING TO START")
             else
                 stopPlayback(false)
@@ -672,58 +668,59 @@ RunService:BindToRenderStep("AldoKnightXorzV437_Playback", Enum.RenderPriority.C
         local timeDiff = nextNode.RelativeTimestamp - currentNode.RelativeTimestamp
         local alpha = 0
         if timeDiff > 0 then
-            alpha = math.clamp(
-                (currentTime - currentNode.RelativeTimestamp) / timeDiff,
-                0,
-                1
-            )
+            alpha = math.clamp((currentTime - currentNode.RelativeTimestamp) / timeDiff, 0, 1)
         end
 
         local targetPos = currentNode.Position:Lerp(nextNode.Position, alpha)
         local currentPos = RootPart.Position
+        local direction = targetPos - currentPos
+        local totalDist = direction.Magnitude
 
-        -- Smooth the playback target instead of forcing RootPart.CFrame every frame.
-        -- This removes the main source of visual/physics jitter.
-        local smoothAlpha = 1 - math.exp(-dt * 14)
-        filteredTarget = filteredTarget:Lerp(targetPos, smoothAlpha)
+        local horizontalTarget = Vector3.new(targetPos.X, currentPos.Y, targetPos.Z)
+        local horizontalDirection = horizontalTarget - currentPos
 
-        local direction = filteredTarget - currentPos
-        local horizontal = Vector3.new(direction.X, 0, direction.Z)
-        local horizontalDistance = horizontal.Magnitude
+        if horizontalDirection.Magnitude > 0.01 then
+            local desiredDirection = horizontalDirection.Unit
 
-        if horizontalDistance > 0.12 then
-            local moveDirection = horizontal.Unit
-
-            -- Prevent tiny frame-to-frame direction changes from causing shaking.
-            if lastMoveDirection.Magnitude > 0.01 then
-                local directionBlend = 1 - math.exp(-dt * 18)
-                moveDirection = lastMoveDirection:Lerp(moveDirection, directionBlend)
-                if moveDirection.Magnitude > 0.01 then
-                    moveDirection = moveDirection.Unit
-                end
+            if lastTargetDirection then
+                desiredDirection = lastTargetDirection:Lerp(desiredDirection, math.clamp(dt * 12, 0, 1)).Unit
             end
 
-            lastMoveDirection = moveDirection
-            Humanoid:Move(moveDirection, false)
+            lastTargetDirection = desiredDirection
+            Humanoid.AutoRotate = false
+            Humanoid:Move(desiredDirection, false)
+
+            if not smoothLook then
+                smoothLook = desiredDirection
+            else
+                local turnAlpha = math.clamp(dt * 10, 0, 1)
+                smoothLook = smoothLook:Lerp(desiredDirection, turnAlpha).Unit
+            end
+
+            local flatLook = Vector3.new(smoothLook.X, 0, smoothLook.Z)
+            if flatLook.Magnitude > 0.001 then
+                local desiredCF = CFrame.lookAt(RootPart.Position, RootPart.Position + flatLook)
+
+                if startBlendUntil > tick() then
+                    local blendAlpha = math.clamp(dt * 5, 0, 1)
+                    RootPart.CFrame = RootPart.CFrame:Lerp(desiredCF, blendAlpha)
+                else
+                    local blendAlpha = math.clamp(dt * 9, 0, 1)
+                    RootPart.CFrame = RootPart.CFrame:Lerp(desiredCF, blendAlpha)
+                end
+            end
         else
-            Humanoid:Move(Vector3.zero, false)
-            lastMoveDirection = Vector3.zero
+            Humanoid:Move(Vector3.zero, true)
         end
 
-        -- Only perform a positional correction when playback has genuinely
-        -- fallen far behind the recorded route. Normal movement remains
-        -- physics/Humanoid driven, which keeps the motion natural.
-        correctionCooldown = math.max(0, correctionCooldown - dt)
-
-        local routeError = (Vector3.new(targetPos.X, 0, targetPos.Z)
-            - Vector3.new(currentPos.X, 0, currentPos.Z)).Magnitude
-
-        if routeError > 3.5 and correctionCooldown <= 0 then
-            local correctionPos = Vector3.new(targetPos.X, currentPos.Y, targetPos.Z)
-            RootPart.CFrame = CFrame.new(correctionPos, correctionPos + RootPart.CFrame.LookVector)
-            RootPart.AssemblyLinearVelocity = Vector3.new(0, RootPart.AssemblyLinearVelocity.Y, 0)
-            correctionCooldown = 0.35
-            filteredTarget = correctionPos
+        if totalDist > 3.0 then
+            local preservedRotation = RootPart.CFrame - RootPart.Position
+            RootPart.CFrame = CFrame.new(targetPos) * preservedRotation
+        elseif totalDist > 0.08 then
+            local positionAlpha = math.clamp(dt * 14, 0.15, 0.65)
+            local newPosition = RootPart.Position:Lerp(targetPos, positionAlpha)
+            local preservedRotation = RootPart.CFrame - RootPart.Position
+            RootPart.CFrame = CFrame.new(newPosition) * preservedRotation
         end
     end
 end)
