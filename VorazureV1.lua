@@ -4,6 +4,7 @@ OpenMenu.Size=UDim2.fromOffset(58,58)
 OpenMenu.Position=UDim2.new(0.05,0,0.5,0)
 OpenMenu.BackgroundColor3=Color3.fromRGB(15,15,20)
 OpenMenu.BackgroundTransparency=0.2
+OpenMenu.BorderSizePixel=0
 OpenMenu.ZIndex=10
 OpenMenu.Parent=ScreenGui
 
@@ -21,12 +22,6 @@ OpenGradient.Color=ColorSequence.new({
 	ColorSequenceKeypoint.new(1,Color3.fromRGB(255,255,0))
 })
 OpenGradient.Parent=OpenStroke
-
-TweenService:Create(
-	OpenGradient,
-	TweenInfo.new(4,Enum.EasingStyle.Linear,Enum.EasingDirection.InOut,-1),
-	{Offset=Vector2.new(1,0)}
-):Play()
 
 local IconImage=Instance.new("ImageLabel")
 IconImage.Name="Icon"
@@ -63,18 +58,13 @@ MenuGradient.Color=ColorSequence.new({
 })
 MenuGradient.Parent=MenuStroke
 
-TweenService:Create(
-	MenuGradient,
-	TweenInfo.new(4,Enum.EasingStyle.Linear,Enum.EasingDirection.InOut,-1),
-	{Offset=Vector2.new(1,0)}
-):Play()
-
 local OpenDragging=false
 local OpenDragStart
 local OpenStartPosition
 
 OpenMenu.InputBegan:Connect(function(Input)
-	if Input.UserInputType==Enum.UserInputType.MouseButton1 or Input.UserInputType==Enum.UserInputType.Touch then
+	if Input.UserInputType==Enum.UserInputType.MouseButton1
+	or Input.UserInputType==Enum.UserInputType.Touch then
 		OpenDragging=true
 		OpenDragStart=Input.Position
 		OpenStartPosition=OpenMenu.Position
@@ -82,7 +72,8 @@ OpenMenu.InputBegan:Connect(function(Input)
 end)
 
 OpenMenu.InputEnded:Connect(function(Input)
-	if Input.UserInputType==Enum.UserInputType.MouseButton1 or Input.UserInputType==Enum.UserInputType.Touch then
+	if Input.UserInputType==Enum.UserInputType.MouseButton1
+	or Input.UserInputType==Enum.UserInputType.Touch then
 		OpenDragging=false
 	end
 end)
@@ -92,7 +83,8 @@ local MenuDragStart
 local MenuStartPosition
 
 MenuFrame.InputBegan:Connect(function(Input)
-	if Input.UserInputType==Enum.UserInputType.MouseButton1 or Input.UserInputType==Enum.UserInputType.Touch then
+	if Input.UserInputType==Enum.UserInputType.MouseButton1
+	or Input.UserInputType==Enum.UserInputType.Touch then
 		MenuDragging=true
 		MenuDragStart=Input.Position
 		MenuStartPosition=MenuFrame.Position
@@ -100,18 +92,21 @@ MenuFrame.InputBegan:Connect(function(Input)
 end)
 
 MenuFrame.InputEnded:Connect(function(Input)
-	if Input.UserInputType==Enum.UserInputType.MouseButton1 or Input.UserInputType==Enum.UserInputType.Touch then
+	if Input.UserInputType==Enum.UserInputType.MouseButton1
+	or Input.UserInputType==Enum.UserInputType.Touch then
 		MenuDragging=false
 	end
 end)
 
 UserInputService.InputChanged:Connect(function(Input)
-	if Input.UserInputType~=Enum.UserInputType.MouseMovement and Input.UserInputType~=Enum.UserInputType.Touch then
+	if Input.UserInputType~=Enum.UserInputType.MouseMovement
+	and Input.UserInputType~=Enum.UserInputType.Touch then
 		return
 	end
 
 	if OpenDragging then
 		local Delta=Input.Position-OpenDragStart
+
 		OpenMenu.Position=UDim2.new(
 			OpenStartPosition.X.Scale,
 			OpenStartPosition.X.Offset+Delta.X,
@@ -122,6 +117,7 @@ UserInputService.InputChanged:Connect(function(Input)
 
 	if MenuDragging then
 		local Delta=Input.Position-MenuDragStart
+
 		MenuFrame.Position=UDim2.new(
 			MenuStartPosition.X.Scale,
 			MenuStartPosition.X.Offset+Delta.X,
@@ -135,27 +131,24 @@ OpenMenu.Activated:Connect(function()
 	MenuFrame.Visible=not MenuFrame.Visible
 end)
 
-local StrokeGradients={}
-
-for _,Object in ipairs(ScreenGui:GetDescendants()) do
-	if Object:IsA("UIStroke") then
-		local Gradient=Object:FindFirstChildOfClass("UIGradient")
-
-		if Gradient then
-			table.insert(StrokeGradients,Gradient)
-		end
-	end
-end
+local StrokeGradients={
+	OpenGradient,
+	MenuGradient
+}
 
 local StrokeRotation=0
 local StrokeSpeed=45
 
 RunService.RenderStepped:Connect(function(DeltaTime)
-	StrokeRotation=(StrokeRotation+(StrokeSpeed*DeltaTime))%360
+	StrokeRotation=(StrokeRotation+StrokeSpeed*DeltaTime)%360
 
-	for _,Gradient in ipairs(StrokeGradients) do
+	for i=#StrokeGradients,1,-1 do
+		local Gradient=StrokeGradients[i]
+
 		if Gradient and Gradient.Parent then
 			Gradient.Rotation=StrokeRotation
+		else
+			table.remove(StrokeGradients,i)
 		end
 	end
 end)
