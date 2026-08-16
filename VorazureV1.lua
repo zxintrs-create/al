@@ -1,6 +1,22 @@
+local Players=game:GetService("Players")
 local RunService=game:GetService("RunService")
 local UserInputService=game:GetService("UserInputService")
-local TweenService=game:GetService("TweenService")
+
+local Player=Players.LocalPlayer
+if not Player then return end
+
+local PlayerGui=Player:WaitForChild("PlayerGui")
+
+local OldGui=PlayerGui:FindFirstChild("PremiumMenuGui")
+if OldGui then
+	OldGui:Destroy()
+end
+
+local ScreenGui=Instance.new("ScreenGui")
+ScreenGui.Name="PremiumMenuGui"
+ScreenGui.ResetOnSpawn=false
+ScreenGui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
+ScreenGui.Parent=PlayerGui
 
 local OpenMenu=Instance.new("ImageButton")
 OpenMenu.Name="OpenMenu"
