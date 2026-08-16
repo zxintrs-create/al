@@ -1,16 +1,8 @@
 local Players=game:GetService("Players")
 local RunService=game:GetService("RunService")
-local UserInputService=game:GetService("UserInputService")
 
 local Player=Players.LocalPlayer
-if not Player then return end
-
 local PlayerGui=Player:WaitForChild("PlayerGui")
-
-local OldGui=PlayerGui:FindFirstChild("PremiumMenuGui")
-if OldGui then
-	OldGui:Destroy()
-end
 
 local ScreenGui=Instance.new("ScreenGui")
 ScreenGui.Name="PremiumMenuGui"
@@ -21,7 +13,7 @@ ScreenGui.Parent=PlayerGui
 local OpenMenu=Instance.new("ImageButton")
 OpenMenu.Name="OpenMenu"
 OpenMenu.Size=UDim2.fromOffset(58,58)
-OpenMenu.Position=UDim2.new(0.05,0,0.5,0)
+OpenMenu.Position=UDim2.new(0.05,0,0.25,0)
 OpenMenu.BackgroundColor3=Color3.fromRGB(15,15,20)
 OpenMenu.BackgroundTransparency=0.2
 OpenMenu.BorderSizePixel=0
@@ -34,6 +26,7 @@ OpenCorner.Parent=OpenMenu
 
 local OpenStroke=Instance.new("UIStroke")
 OpenStroke.Thickness=2
+OpenStroke.Color=Color3.fromRGB(255,255,255)
 OpenStroke.Parent=OpenMenu
 
 local OpenGradient=Instance.new("UIGradient")
@@ -58,7 +51,7 @@ MenuFrame.Size=UDim2.fromOffset(650,450)
 MenuFrame.Position=UDim2.new(0.5,-325,0.5,-225)
 MenuFrame.BackgroundColor3=Color3.fromRGB(12,12,18)
 MenuFrame.BorderSizePixel=0
-MenuFrame.Active=true
+MenuFrame.Active=false
 MenuFrame.Visible=false
 MenuFrame.ZIndex=2
 MenuFrame.Parent=ScreenGui
@@ -69,6 +62,7 @@ MenuCorner.Parent=MenuFrame
 
 local MenuStroke=Instance.new("UIStroke")
 MenuStroke.Thickness=2
+MenuStroke.Color=Color3.fromRGB(255,255,255)
 MenuStroke.Parent=MenuFrame
 
 local MenuGradient=Instance.new("UIGradient")
@@ -77,75 +71,6 @@ MenuGradient.Color=ColorSequence.new({
 	ColorSequenceKeypoint.new(1,Color3.fromRGB(255,255,0))
 })
 MenuGradient.Parent=MenuStroke
-
-local OpenDragging=false
-local OpenDragStart
-local OpenStartPosition
-
-OpenMenu.InputBegan:Connect(function(Input)
-	if Input.UserInputType==Enum.UserInputType.MouseButton1
-	or Input.UserInputType==Enum.UserInputType.Touch then
-		OpenDragging=true
-		OpenDragStart=Input.Position
-		OpenStartPosition=OpenMenu.Position
-	end
-end)
-
-OpenMenu.InputEnded:Connect(function(Input)
-	if Input.UserInputType==Enum.UserInputType.MouseButton1
-	or Input.UserInputType==Enum.UserInputType.Touch then
-		OpenDragging=false
-	end
-end)
-
-local MenuDragging=false
-local MenuDragStart
-local MenuStartPosition
-
-MenuFrame.InputBegan:Connect(function(Input)
-	if Input.UserInputType==Enum.UserInputType.MouseButton1
-	or Input.UserInputType==Enum.UserInputType.Touch then
-		MenuDragging=true
-		MenuDragStart=Input.Position
-		MenuStartPosition=MenuFrame.Position
-	end
-end)
-
-MenuFrame.InputEnded:Connect(function(Input)
-	if Input.UserInputType==Enum.UserInputType.MouseButton1
-	or Input.UserInputType==Enum.UserInputType.Touch then
-		MenuDragging=false
-	end
-end)
-
-UserInputService.InputChanged:Connect(function(Input)
-	if Input.UserInputType~=Enum.UserInputType.MouseMovement
-	and Input.UserInputType~=Enum.UserInputType.Touch then
-		return
-	end
-
-	if OpenDragging then
-		local Delta=Input.Position-OpenDragStart
-
-		OpenMenu.Position=UDim2.new(
-			OpenStartPosition.X.Scale,
-			OpenStartPosition.X.Offset+Delta.X,
-			OpenStartPosition.Y.Scale,
-			OpenStartPosition.Y.Offset+Delta.Y
-		)
-	end
-
-	if MenuDragging then
-		local Delta=Input.Position-MenuDragStart
-
-		MenuFrame.Position=UDim2.new(
-			MenuStartPosition.X.Scale,
-			MenuStartPosition.X.Offset+Delta.X,
-			MenuStartPosition.Y.Scale,
-			MenuStartPosition.Y.Offset+Delta.Y
-		)
-	end
-end)
 
 OpenMenu.Activated:Connect(function()
 	MenuFrame.Visible=not MenuFrame.Visible
@@ -162,13 +87,11 @@ local StrokeSpeed=45
 RunService.RenderStepped:Connect(function(DeltaTime)
 	StrokeRotation=(StrokeRotation+StrokeSpeed*DeltaTime)%360
 
-	for i=#StrokeGradients,1,-1 do
+	for i=1,#StrokeGradients do
 		local Gradient=StrokeGradients[i]
 
 		if Gradient and Gradient.Parent then
 			Gradient.Rotation=StrokeRotation
-		else
-			table.remove(StrokeGradients,i)
 		end
 	end
 end)
