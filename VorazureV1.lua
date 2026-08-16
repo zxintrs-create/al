@@ -1,4 +1,5 @@
 local RunService=game:GetService("RunService")
+local ContentProvider=game:GetService("ContentProvider")
 local ScreenGui=Instance.new("ScreenGui")
 ScreenGui.Name="VZMenu"
 ScreenGui.ResetOnSpawn=false
@@ -33,13 +34,27 @@ Image.Name="Image"
 Image.Size=UDim2.new(0.8,0,0.8,0)
 Image.Position=UDim2.new(0.1,0,0.1,0)
 Image.BackgroundTransparency=1
-Image.Image="rbxassetid://101640388423900"
+Image.Image="rbxassetid://139928547001912"
+Image.ImageTransparency=0
 Image.Visible=true
 Image.ZIndex=11
 Image.Parent=OpenMenu
 local ImageCorner=Instance.new("UICorner")
 ImageCorner.CornerRadius=UDim.new(8,0)
 ImageCorner.Parent=Image
+task.spawn(function()
+for i=1,3 do
+pcall(function()
+ContentProvider:PreloadAsync({Image})
+end)
+if Image.IsLoaded then
+break
+end
+task.wait(0.5)
+end
+Image.Visible=true
+Image.ImageTransparency=0
+end)
 local MenuFrame=Instance.new("Frame")
 MenuFrame.Name="MenuFrame"
 MenuFrame.Size=UDim2.fromOffset(650,450)
