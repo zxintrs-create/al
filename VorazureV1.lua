@@ -1,4 +1,6 @@
 local RunService=game:GetService("RunService")
+local UserInputService=game:GetService("UserInputService")
+
 local ScreenGui=Instance.new("ScreenGui")
 ScreenGui.Name="VZMenu"
 ScreenGui.ResetOnSpawn=false
@@ -38,7 +40,7 @@ Image.Name="Image"
 Image.Size=UDim2.new(0.8,0,0.8,0)
 Image.Position=UDim2.new(0.1,0,0.1,0)
 Image.BackgroundTransparency=1
-Image.Image="rbxassetid://101640388423900"
+Image.Image="rbxassetid://95844752147381"
 Image.ZIndex=11
 Image.Parent=OpenMenu
 
@@ -74,14 +76,19 @@ ColorSequenceKeypoint.new(1,Color3.fromRGB(255,255,0))
 MenuGradient.Parent=MenuStroke
 
 OpenMenu.Activated:Connect(function()
-	MenuFrame.Visible=not MenuFrame.Visible
+MenuFrame.Visible=not MenuFrame.Visible
 end)
 
 local StrokeRotation=0
 local StrokeSpeed=45
+local ImageRotation=0
+local ImageSpeed=45
 
 RunService.RenderStepped:Connect(function(dt)
 StrokeRotation=(StrokeRotation+StrokeSpeed*dt)%360
+ImageRotation=(ImageRotation+ImageSpeed*dt)%360
+
 OpenGradient.Rotation=StrokeRotation
 MenuGradient.Rotation=StrokeRotation
+Image.Rotation=ImageRotation
 end)
