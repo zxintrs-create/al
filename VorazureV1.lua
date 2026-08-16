@@ -1,5 +1,4 @@
 local RunService=game:GetService("RunService")
-local UserInputService=game:GetService("UserInputService")
 
 local ScreenGui=Instance.new("ScreenGui")
 ScreenGui.Name="VZMenu"
@@ -7,26 +6,26 @@ ScreenGui.ResetOnSpawn=false
 ScreenGui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
 ScreenGui.Parent=game:GetService("CoreGui")
 
-local OpenButton=Instance.new("ImageButton")
-OpenButton.Name="OpenButton"
-OpenButton.Size=UDim2.fromOffset(58,58)
-OpenButton.Position=UDim2.new(0.05,0,0.15,0)
-OpenButton.BackgroundColor3=Color3.fromRGB(15,15,20)
-OpenButton.BackgroundTransparency=0.2
-OpenButton.BorderSizePixel=0
-OpenButton.AutoButtonColor=false
-OpenButton.Active=true
-OpenButton.ZIndex=10
-OpenButton.Parent=ScreenGui
+local OpenMenu=Instance.new("ImageButton")
+OpenMenu.Name="OpenMenu"
+OpenMenu.Size=UDim2.fromOffset(58,58)
+OpenMenu.Position=UDim2.new(0.05,0,0.15,0)
+OpenMenu.BackgroundColor3=Color3.fromRGB(15,15,20)
+OpenMenu.BackgroundTransparency=0.2
+OpenMenu.BorderSizePixel=0
+OpenMenu.AutoButtonColor=false
+OpenMenu.Active=true
+OpenMenu.ZIndex=10
+OpenMenu.Parent=ScreenGui
 
 local OpenCorner=Instance.new("UICorner")
 OpenCorner.CornerRadius=UDim.new(8,0)
-OpenCorner.Parent=OpenButton
+OpenCorner.Parent=OpenMenu
 
 local OpenStroke=Instance.new("UIStroke")
 OpenStroke.Thickness=2
 OpenStroke.Color=Color3.fromRGB(255,255,255)
-OpenStroke.Parent=OpenButton
+OpenStroke.Parent=OpenMenu
 
 local OpenGradient=Instance.new("UIGradient")
 OpenGradient.Color=ColorSequence.new({
@@ -41,8 +40,9 @@ Image.Size=UDim2.new(0.8,0,0.8,0)
 Image.Position=UDim2.new(0.1,0,0.1,0)
 Image.BackgroundTransparency=1
 Image.Image="rbxassetid://101640388423900"
+Image.Visible=true
 Image.ZIndex=11
-Image.Parent=OpenButton
+Image.Parent=OpenMenu
 
 local ImageCorner=Instance.new("UICorner")
 ImageCorner.CornerRadius=UDim.new(8,0)
@@ -75,13 +75,12 @@ MenuGradient.Color=ColorSequence.new({
 })
 MenuGradient.Parent=MenuStroke
 
-OpenButton.Activated:Connect(function()
+OpenMenu.Activated:Connect(function()
 	MenuFrame.Visible=not MenuFrame.Visible
 end)
 
 local StrokeRotation=0
 local ImageRotation=0
-
 local StrokeSpeed=45
 local ImageSpeed=45
 
