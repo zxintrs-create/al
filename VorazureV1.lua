@@ -23,18 +23,24 @@ OpenStroke.Thickness=2
 OpenStroke.Color=Color3.fromRGB(255,255,255)
 OpenStroke.Parent=OpenMenu
 local OpenGradient=Instance.new("UIGradient")
-OpenGradient.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(255,0,0)),ColorSequenceKeypoint.new(1,Color3.fromRGB(255,255,0))})
+OpenGradient.Color=ColorSequence.new({
+ColorSequenceKeypoint.new(0,Color3.fromRGB(255,0,0)),
+ColorSequenceKeypoint.new(1,Color3.fromRGB(255,255,0))
+})
 OpenGradient.Parent=OpenStroke
 local Image=Instance.new("ImageLabel")
 Image.Name="Image"
 Image.Size=UDim2.new(0.8,0,0.8,0)
 Image.Position=UDim2.new(0.1,0,0.1,0)
+Image.AnchorPoint=Vector2.new(0,0)
 Image.BackgroundTransparency=1
 Image.BorderSizePixel=0
 Image.Image="rbxassetid://95844752147381"
+Image.ImageColor3=Color3.fromRGB(255,255,255)
 Image.ImageTransparency=0
 Image.Visible=true
-Image.ZIndex=20
+Image.Active=false
+Image.ZIndex=11
 Image.Parent=OpenMenu
 local ImageCorner=Instance.new("UICorner")
 ImageCorner.CornerRadius=UDim.new(8,0)
@@ -57,7 +63,10 @@ MenuStroke.Thickness=2
 MenuStroke.Color=Color3.fromRGB(255,255,255)
 MenuStroke.Parent=MenuFrame
 local MenuGradient=Instance.new("UIGradient")
-MenuGradient.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(255,0,0)),ColorSequenceKeypoint.new(1,Color3.fromRGB(255,255,0))})
+MenuGradient.Color=ColorSequence.new({
+ColorSequenceKeypoint.new(0,Color3.fromRGB(255,0,0)),
+ColorSequenceKeypoint.new(1,Color3.fromRGB(255,255,0))
+})
 MenuGradient.Parent=MenuStroke
 OpenMenu.Activated:Connect(function()
 MenuFrame.Visible=not MenuFrame.Visible
