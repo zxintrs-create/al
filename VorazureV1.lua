@@ -293,4 +293,4 @@ Players.PlayerRemoving:Connect(function(player)
     end  
 end)
 
-print("ALDO VORA ZURE")  
+print("ALDO VOXA ZORU")  
