@@ -1,6 +1,5 @@
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
-local ContentProvider = game:GetService("ContentProvider")
 local CoreGui = game:GetService("CoreGui")
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
@@ -66,37 +65,29 @@ OpenMenu.Active = true
 OpenMenu.ZIndex = 10
 OpenMenu.Parent = ScreenGui
 
-local OpenCorner = Instance.new("UICorner")
-OpenCorner.CornerRadius = UDim.new(8, 0)
-OpenCorner.Parent = OpenMenu
-
-local OpenStroke = Instance.new("UIStroke")
+Instance.new("UICorner", OpenMenu).CornerRadius = UDim.new(8, 0)
+local OpenStroke = Instance.new("UIStroke", OpenMenu)
 OpenStroke.Thickness = 2
 OpenStroke.Color = Color3.fromRGB(255, 255, 255)
-OpenStroke.Parent = OpenMenu
 
-local OpenGradient = Instance.new("UIGradient")
+local OpenGradient = Instance.new("UIGradient", OpenStroke)
 OpenGradient.Color = ColorSequence.new({
 	ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 0, 0)),
 	ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 255, 0))
 })
-OpenGradient.Parent = OpenStroke
 
-local Image = Instance.new("ImageLabel")
+local Image = Instance.new("ImageLabel", OpenMenu)
 Image.Name = "Image"
 Image.AnchorPoint = Vector2.new(0.5, 0.5)
 Image.Size = UDim2.new(0.8, 0, 0.8, 0)
 Image.Position = UDim2.new(0.5, 0, 0.5, 0)
 Image.BackgroundTransparency = 1
 Image.Image = "rbxassetid://95844752147381"
-Image.Visible = true
 Image.ZIndex = 11
-Image.Parent = OpenMenu
-
 Instance.new("UICorner", Image).CornerRadius = UDim.new(8, 0)
 
 -- MENU FRAME UTAMA
-local MenuFrame = Instance.new("Frame")
+local MenuFrame = Instance.new("Frame", ScreenGui)
 MenuFrame.Name = "MenuFrame"
 MenuFrame.Size = UDim2.fromOffset(680, 420)
 MenuFrame.Position = UDim2.new(0.5, -340, 0.5, -210)
@@ -104,21 +95,17 @@ MenuFrame.BackgroundColor3 = Color3.fromRGB(12, 12, 18)
 MenuFrame.BorderSizePixel = 0
 MenuFrame.Visible = false
 MenuFrame.ZIndex = 2
-MenuFrame.Parent = ScreenGui
 
 Instance.new("UICorner", MenuFrame).CornerRadius = UDim.new(0, 8)
-
-local MenuStroke = Instance.new("UIStroke")
+local MenuStroke = Instance.new("UIStroke", MenuFrame)
 MenuStroke.Thickness = 2
 MenuStroke.Color = Color3.fromRGB(255, 255, 255)
-MenuStroke.Parent = MenuFrame
 
-local MenuGradient = Instance.new("UIGradient")
+local MenuGradient = Instance.new("UIGradient", MenuStroke)
 MenuGradient.Color = ColorSequence.new({
 	ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 0, 0)),
 	ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 255, 0))
 })
-MenuGradient.Parent = MenuStroke
 
 -- TOP BAR (STATUS FPS & PING)
 local TopBar = Instance.new("Frame", MenuFrame)
@@ -141,7 +128,6 @@ TitleInfo.TextXAlignment = Enum.TextXAlignment.Left
 TitleInfo.Text = "ALDO VORA ZURE      FPS : 0      PING : 0 ms"
 TitleInfo.ZIndex = 4
 
--- Update FPS & Ping
 task.spawn(function()
 	local lastUpdate = tick()
 	local frames = 0
@@ -161,7 +147,7 @@ end)
 
 -- SIDEBAR MENU (KIRI)
 local Sidebar = Instance.new("Frame", MenuFrame)
-Sidebar.Name = "UIScrollingMenu"
+Sidebar.Name = "Sidebar"
 Sidebar.Size = UDim2.new(0.28, 0, 1, -35)
 Sidebar.Position = UDim2.new(0, 0, 0, 35)
 Sidebar.BackgroundColor3 = Color3.fromRGB(15, 15, 22)
@@ -177,7 +163,7 @@ SidebarLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 local MenuLabel = Instance.new("TextLabel", Sidebar)
 MenuLabel.Size = UDim2.new(1, 0, 0, 35)
 MenuLabel.BackgroundTransparency = 1
-MenuLabel.Text = "MENU :"
+MenuLabel.Text = "MENU   :"
 MenuLabel.TextColor3 = Color3.fromRGB(255, 220, 0)
 MenuLabel.Font = Enum.Font.GothamBlack
 MenuLabel.TextSize = 14
@@ -192,13 +178,11 @@ ContentArea.BackgroundTransparency = 1
 ContentArea.ZIndex = 3
 
 local function CreateMainFrame(name)
-	local frame = Instance.new("ScrollingFrame", ContentArea)
+	local frame = Instance.new("Frame", ContentArea)
 	frame.Name = name
 	frame.Size = UDim2.new(1, 0, 1, 0)
 	frame.BackgroundTransparency = 1
 	frame.Visible = false
-	frame.CanvasSize = UDim2.new(0, 0, 1.4, 0)
-	frame.ScrollBarThickness = 4
 	frame.ZIndex = 4
 	
 	local layout = Instance.new("UIListLayout", frame)
@@ -237,14 +221,13 @@ CreateNavButton("Jump", MainFrameJump)
 CreateNavButton("Shift lock", MainFrameShiftLock)
 CreateNavButton("Emote", MainFrameDance)
 
--- Helper Tombol Konten Grid Kustom (Desain Tata Letak Panah & Size)
 local function CreateControlBtn(parent, text, callback)
 	local btn = Instance.new("TextButton", parent)
-	btn.Size = UDim2.new(0.85, 0, 0, 35)
+	btn.Size = UDim2.new(0.85, 0, 0, 32)
 	btn.BackgroundColor3 = Color3.fromRGB(22, 22, 32)
 	btn.TextColor3 = Color3.fromRGB(255, 255, 255)
 	btn.Font = Enum.Font.GothamBold
-	btn.TextSize = 14
+	btn.TextSize = 13
 	btn.Text = text
 	btn.ZIndex = 5
 	Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
@@ -254,20 +237,20 @@ end
 
 local function CreateControlLbl(parent, text)
 	local lbl = Instance.new("TextLabel", parent)
-	lbl.Size = UDim2.new(0.85, 0, 0, 30)
+	lbl.Size = UDim2.new(0.85, 0, 0, 25)
 	lbl.BackgroundTransparency = 1
 	lbl.TextColor3 = Color3.fromRGB(255, 220, 0)
 	lbl.Font = Enum.Font.GothamBlack
-	lbl.TextSize = 15
+	lbl.TextSize = 14
 	lbl.Text = text
 	lbl.ZIndex = 5
 	return lbl
 end
 
 -- ==========================================================
--- 1. MAINFRAME JUMP
+-- 1. MAINFRAME JUMP SETTING
 -- ==========================================================
-CreateControlLbl(MainFrameJump, "JUMP SETTING")
+CreateControlLbl(MainFrameJump, "Jump  setting")
 
 local jumpButtonRef
 local function getJumpButton()
@@ -285,77 +268,62 @@ local function updateJumpPos()
 	end
 end
 
+-- Tombol Atas (↑)
 CreateControlBtn(MainFrameJump, "↑", function()
 	config.JumpY = math.clamp(config.JumpY - 0.05, 0.05, 0.95)
 	updateJumpPos()
-	saveConfig()
 end)
 
-CreateControlBtn(MainFrameJump, "←     →", function()
-	-- Tombol Gabung Kiri Kanan atau terpisah, dibuat opsi interaktif
-end)
--- Agar sesuai layout panah Anda (Atas di atas, Kiri Kanan di tengah, Bawah di bawah)
--- Kita buat struktur tombol khusus arah:
-local function makeDirectionalLayout(parent, onMove)
-	CreateControlBtn(parent, "↑", function() onMove(0, -0.05) end)
-	
-	local row = Instance.new("Frame", parent)
-	row.Size = UDim2.new(0.85, 0, 0, 35)
-	row.BackgroundTransparency = 1
-	row.ZIndex = 5
-	
-	local btnL = Instance.new("TextButton", row)
-	btnL.Size = UDim2.new(0.48, 0, 1, 0)
-	btnL.BackgroundColor3 = Color3.fromRGB(22, 22, 32)
-	btnL.TextColor3 = Color3.new(1,1,1)
-	btnL.Font = Enum.Font.GothamBold
-	btnL.Text = "←"
-	btnL.ZIndex = 5
-	Instance.new("UICorner", btnL).CornerRadius = UDim.new(0, 6)
-	btnL.MouseButton1Click:Connect(function() onMove(-0.05, 0) end)
-	
-	local btnR = Instance.new("TextButton", row)
-	btnR.Size = UDim2.new(0.48, 0, 1, 0)
-	btnR.Position = UDim2.new(0.52, 0, 0, 0)
-	btnR.BackgroundColor3 = Color3.fromRGB(22, 22, 32)
-	btnR.TextColor3 = Color3.new(1,1,1)
-	btnR.Font = Enum.Font.GothamBold
-	btnR.Text = "→"
-	btnR.ZIndex = 5
-	Instance.new("UICorner", btnR).CornerRadius = UDim.new(0, 6)
-	btnR.MouseButton1Click:Connect(function() onMove(0.05, 0) end)
-	
-	CreateControlBtn(parent, "↓", function() onMove(0, 0.05) end)
-end
+-- Baris Tengah (←   →)
+local rowJumpLR = Instance.new("Frame", MainFrameJump)
+rowJumpLR.Size = UDim2.new(0.85, 0, 0, 32)
+rowJumpLR.BackgroundTransparency = 1
+rowJumpLR.ZIndex = 5
 
--- Refresh isi MainFrameJump dengan struktur panah persis permintaan
-MainFrameJump:ClearAllChildren()
-local jl = Instance.new("UIListLayout", MainFrameJump)
-jl.SortOrder = Enum.SortOrder.LayoutOrder
-jl.Padding = UDim.new(0, 6)
-jl.HorizontalAlignment = Enum.HorizontalAlignment.Center
-jl.VerticalAlignment = Enum.VerticalAlignment.Center
-
-CreateControlLbl(MainFrameJump, "JUMP SETTING")
-
-makeDirectionalLayout(MainFrameJump, function(dx, dy)
-	config.JumpX = math.clamp(config.JumpX + dx, 0.05, 0.95)
-	config.JumpY = math.clamp(config.JumpY + dy, 0.05, 0.95)
+local btnJumpL = Instance.new("TextButton", rowJumpLR)
+btnJumpL.Size = UDim2.new(0.48, 0, 1, 0)
+btnJumpL.BackgroundColor3 = Color3.fromRGB(22, 22, 32)
+btnJumpL.TextColor3 = Color3.new(1,1,1)
+btnJumpL.Font = Enum.Font.GothamBold
+btnJumpL.Text = "←"
+btnJumpL.ZIndex = 5
+Instance.new("UICorner", btnJumpL).CornerRadius = UDim.new(0, 6)
+btnJumpL.MouseButton1Click:Connect(function()
+	config.JumpX = math.clamp(config.JumpX - 0.05, 0.05, 0.95)
 	updateJumpPos()
-	saveConfig()
 end)
 
-local sizeRowJump = Instance.new("Frame", MainFrameJump)
-sizeRowJump.Size = UDim2.new(0.85, 0, 0, 35)
-sizeRowJump.BackgroundTransparency = 1
-sizeRowJump.ZIndex = 5
+local btnJumpR = Instance.new("TextButton", rowJumpLR)
+btnJumpR.Size = UDim2.new(0.48, 0, 1, 0)
+btnJumpR.Position = UDim2.new(0.52, 0, 0, 0)
+btnJumpR.BackgroundColor3 = Color3.fromRGB(22, 22, 32)
+btnJumpR.TextColor3 = Color3.new(1,1,1)
+btnJumpR.Font = Enum.Font.GothamBold
+btnJumpR.Text = "→"
+btnJumpR.ZIndex = 5
+Instance.new("UICorner", btnJumpR).CornerRadius = UDim.new(0, 6)
+btnJumpR.MouseButton1Click:Connect(function()
+	config.JumpX = math.clamp(config.JumpX + 0.05, 0.05, 0.95)
+	updateJumpPos()
+end)
 
-local bSzPlusJump = Instance.new("TextButton", sizeRowJump)
+-- Tombol Bawah (↓)
+CreateControlBtn(MainFrameJump, "↓", function()
+	config.JumpY = math.clamp(config.JumpY + 0.05, 0.05, 0.95)
+	updateJumpPos()
+end)
+
+local rowJumpSize = Instance.new("Frame", MainFrameJump)
+rowJumpSize.Size = UDim2.new(0.85, 0, 0, 32)
+rowJumpSize.BackgroundTransparency = 1
+rowJumpSize.ZIndex = 5
+
+local bSzPlusJump = Instance.new("TextButton", rowJumpSize)
 bSzPlusJump.Size = UDim2.new(0.48, 0, 1, 0)
 bSzPlusJump.BackgroundColor3 = Color3.fromRGB(22, 22, 32)
 bSzPlusJump.TextColor3 = Color3.new(1,1,1)
 bSzPlusJump.Font = Enum.Font.GothamBold
-bSzPlusJump.Text = "Size +"
+bSzPlusJump.Text = "size+"
 bSzPlusJump.ZIndex = 5
 Instance.new("UICorner", bSzPlusJump).CornerRadius = UDim.new(0, 6)
 bSzPlusJump.MouseButton1Click:Connect(function()
@@ -365,16 +333,15 @@ bSzPlusJump.MouseButton1Click:Connect(function()
 		local sz = math.max(40, math.floor(workspace.CurrentCamera.ViewportSize.Y * config.JumpSize))
 		jBtn.Size = UDim2.fromOffset(sz, sz)
 	end
-	saveConfig()
 end)
 
-local bSzMinJump = Instance.new("TextButton", sizeRowJump)
+local bSzMinJump = Instance.new("TextButton", rowJumpSize)
 bSzMinJump.Size = UDim2.new(0.48, 0, 1, 0)
 bSzMinJump.Position = UDim2.new(0.52, 0, 0, 0)
 bSzMinJump.BackgroundColor3 = Color3.fromRGB(22, 22, 32)
 bSzMinJump.TextColor3 = Color3.new(1,1,1)
 bSzMinJump.Font = Enum.Font.GothamBold
-bSzMinJump.Text = "Size -"
+bSzMinJump.Text = "size-"
 bSzMinJump.ZIndex = 5
 Instance.new("UICorner", bSzMinJump).CornerRadius = UDim.new(0, 6)
 bSzMinJump.MouseButton1Click:Connect(function()
@@ -384,12 +351,45 @@ bSzMinJump.MouseButton1Click:Connect(function()
 		local sz = math.max(40, math.floor(workspace.CurrentCamera.ViewportSize.Y * config.JumpSize))
 		jBtn.Size = UDim2.fromOffset(sz, sz)
 	end
+end)
+local rowJumpSR = Instance.new("Frame", MainFrameJump)
+rowJumpSR.Size = UDim2.new(0.85, 0, 0, 32)
+rowJumpSR.BackgroundTransparency = 1
+rowJumpSR.ZIndex = 5
+
+local btnSave = Instance.new("TextButton", rowJumpSR)
+btnSave.Size = UDim2.new(0.48, 0, 1, 0)
+btnSave.BackgroundColor3 = Color3.fromRGB(22, 22, 32)
+btnSave.TextColor3 = Color3.fromRGB(0, 255, 100)
+btnSave.Font = Enum.Font.GothamBold
+btnSave.Text = "Save"
+btnSave.ZIndex = 5
+Instance.new("UICorner", btnSave).CornerRadius = UDim.new(0, 6)
+btnSave.MouseButton1Click:Connect(function()
 	saveConfig()
 end)
 
--- ==========================================================
--- 2. MAINFRAME SHIFT LOCK
--- ==========================================================
+local btnReset = Instance.new("TextButton", rowJumpSR)
+btnReset.Size = UDim2.new(0.48, 0, 1, 0)
+btnReset.Position = UDim2.new(0.52, 0, 0, 0)
+btnReset.BackgroundColor3 = Color3.fromRGB(22, 22, 32)
+btnReset.TextColor3 = Color3.fromRGB(255, 50, 50)
+btnReset.Font = Enum.Font.GothamBold
+btnReset.Text = "reset"
+btnReset.ZIndex = 5
+Instance.new("UICorner", btnReset).CornerRadius = UDim.new(0, 6)
+btnReset.MouseButton1Click:Connect(function()
+	config.JumpX = defaultConfig.JumpX
+	config.JumpY = defaultConfig.JumpY
+	config.JumpSize = defaultConfig.JumpSize
+	updateJumpPos()
+	local jBtn = getJumpButton()
+	if jBtn then
+		local sz = math.max(40, math.floor(workspace.CurrentCamera.ViewportSize.Y * config.JumpSize))
+		jBtn.Size = UDim2.fromOffset(sz, sz)
+	end
+	saveConfig()
+end)
 _G.ShiftLocked = false
 local crosshair = Instance.new("Frame", ScreenGui)
 crosshair.Name = "ShiftLockCrosshair"
@@ -423,66 +423,117 @@ local function toggleShiftLock()
 end
 btnShiftLock.Activated:Connect(toggleShiftLock)
 
-local sl = Instance.new("UIListLayout", MainFrameShiftLock)
-sl.SortOrder = Enum.SortOrder.LayoutOrder
-sl.Padding = UDim.new(0, 6)
-sl.HorizontalAlignment = Enum.HorizontalAlignment.Center
-sl.VerticalAlignment = Enum.VerticalAlignment.Center
+CreateControlLbl(MainFrameShiftLock, "Shift lock setting")
 
-CreateControlLbl(MainFrameShiftLock, "SHIFT LOCK SETTING")
-
-makeDirectionalLayout(MainFrameShiftLock, function(dx, dy)
-	config.ShiftX = math.clamp(config.ShiftX + dx, 0.05, 0.95)
-	config.ShiftY = math.clamp(config.ShiftY + dy, 0.05, 0.95)
+CreateControlBtn(MainFrameShiftLock, "↑", function()
+	config.ShiftY = math.clamp(config.ShiftY - 0.05, 0.05, 0.95)
 	btnShiftLock.Position = UDim2.new(config.ShiftX, 0, config.ShiftY, 0)
-	saveConfig()
 end)
 
-local sizeRowShift = Instance.new("Frame", MainFrameShiftLock)
-sizeRowShift.Size = UDim2.new(0.85, 0, 0, 35)
-sizeRowShift.BackgroundTransparency = 1
-sizeRowShift.ZIndex = 5
+local rowShiftLR = Instance.new("Frame", MainFrameShiftLock)
+rowShiftLR.Size = UDim2.new(0.85, 0, 0, 32)
+rowShiftLR.BackgroundTransparency = 1
+rowShiftLR.ZIndex = 5
 
-local bSzPlusShift = Instance.new("TextButton", sizeRowShift)
+local btnShiftL = Instance.new("TextButton", rowShiftLR)
+btnShiftL.Size = UDim2.new(0.48, 0, 1, 0)
+btnShiftL.BackgroundColor3 = Color3.fromRGB(22, 22, 32)
+btnShiftL.TextColor3 = Color3.new(1,1,1)
+btnShiftL.Font = Enum.Font.GothamBold
+btnShiftL.Text = "←"
+btnShiftL.ZIndex = 5
+Instance.new("UICorner", btnShiftL).CornerRadius = UDim.new(0, 6)
+btnShiftL.MouseButton1Click:Connect(function()
+	config.ShiftX = math.clamp(config.ShiftX - 0.05, 0.05, 0.95)
+	btnShiftLock.Position = UDim2.new(config.ShiftX, 0, config.ShiftY, 0)
+end)
+
+local btnShiftR = Instance.new("TextButton", rowShiftLR)
+btnShiftR.Size = UDim2.new(0.48, 0, 1, 0)
+btnShiftR.Position = UDim2.new(0.52, 0, 0, 0)
+btnShiftR.BackgroundColor3 = Color3.fromRGB(22, 22, 32)
+btnShiftR.TextColor3 = Color3.new(1,1,1)
+btnShiftR.Font = Enum.Font.GothamBold
+btnShiftR.Text = "→"
+btnShiftR.ZIndex = 5
+Instance.new("UICorner", btnShiftR).CornerRadius = UDim.new(0, 6)
+btnShiftR.MouseButton1Click:Connect(function()
+	config.ShiftX = math.clamp(config.ShiftX + 0.05, 0.05, 0.95)
+	btnShiftLock.Position = UDim2.new(config.ShiftX, 0, config.ShiftY, 0)
+end)
+
+CreateControlBtn(MainFrameShiftLock, "↓", function()
+	config.ShiftY = math.clamp(config.ShiftY + 0.05, 0.05, 0.95)
+	btnShiftLock.Position = UDim2.new(config.ShiftX, 0, config.ShiftY, 0)
+end)
+
+local rowShiftSize = Instance.new("Frame", MainFrameShiftLock)
+rowShiftSize.Size = UDim2.new(0.85, 0, 0, 32)
+rowShiftSize.BackgroundTransparency = 1
+rowShiftSize.ZIndex = 5
+
+local bSzPlusShift = Instance.new("TextButton", rowShiftSize)
 bSzPlusShift.Size = UDim2.new(0.48, 0, 1, 0)
 bSzPlusShift.BackgroundColor3 = Color3.fromRGB(22, 22, 32)
 bSzPlusShift.TextColor3 = Color3.new(1,1,1)
 bSzPlusShift.Font = Enum.Font.GothamBold
-bSzPlusShift.Text = "Size +"
+bSzPlusShift.Text = "size+"
 bSzPlusShift.ZIndex = 5
 Instance.new("UICorner", bSzPlusShift).CornerRadius = UDim.new(0, 6)
 bSzPlusShift.MouseButton1Click:Connect(function()
 	config.ShiftSize = math.clamp(config.ShiftSize + 5, 20, 100)
 	btnShiftLock.Size = UDim2.fromOffset(config.ShiftSize, config.ShiftSize)
-	saveConfig()
 end)
 
-local bSzMinShift = Instance.new("TextButton", sizeRowShift)
+local bSzMinShift = Instance.new("TextButton", rowShiftSize)
 bSzMinShift.Size = UDim2.new(0.48, 0, 1, 0)
 bSzMinShift.Position = UDim2.new(0.52, 0, 0, 0)
 bSzMinShift.BackgroundColor3 = Color3.fromRGB(22, 22, 32)
 bSzMinShift.TextColor3 = Color3.new(1,1,1)
 bSzMinShift.Font = Enum.Font.GothamBold
-bSzMinShift.Text = "Size -"
+bSzMinShift.Text = "size-"
 bSzMinShift.ZIndex = 5
 Instance.new("UICorner", bSzMinShift).CornerRadius = UDim.new(0, 6)
 bSzMinShift.MouseButton1Click:Connect(function()
 	config.ShiftSize = math.clamp(config.ShiftSize - 5, 20, 100)
 	btnShiftLock.Size = UDim2.fromOffset(config.ShiftSize, config.ShiftSize)
+end)
+
+local rowShiftSR = Instance.new("Frame", MainFrameShiftLock)
+rowShiftSR.Size = UDim2.new(0.85, 0, 0, 32)
+rowShiftSR.BackgroundTransparency = 1
+rowShiftSR.ZIndex = 5
+
+local btnSaveShift = Instance.new("TextButton", rowShiftSR)
+btnSaveShift.Size = UDim2.new(0.48, 0, 1, 0)
+btnSaveShift.BackgroundColor3 = Color3.fromRGB(22, 22, 32)
+btnSaveShift.TextColor3 = Color3.fromRGB(0, 255, 100)
+btnSaveShift.Font = Enum.Font.GothamBold
+btnSaveShift.Text = "Save"
+btnSaveShift.ZIndex = 5
+Instance.new("UICorner", btnSaveShift).CornerRadius = UDim.new(0, 6)
+btnSaveShift.MouseButton1Click:Connect(function()
 	saveConfig()
 end)
 
--- ==========================================================
--- 3. MAINFRAME DANCE / EMOTE
--- ==========================================================
-local dl = Instance.new("UIListLayout", MainFrameDance)
-dl.SortOrder = Enum.SortOrder.LayoutOrder
-dl.Padding = UDim.new(0, 6)
-dl.HorizontalAlignment = Enum.HorizontalAlignment.Center
-dl.VerticalAlignment = Enum.VerticalAlignment.Center
-
-CreateControlLbl(MainFrameDance, "EMOTES & DANCES")
-
+local btnResetShift = Instance.new("TextButton", rowShiftSR)
+btnResetShift.Size = UDim2.new(0.48, 0, 1, 0)
+btnResetShift.Position = UDim2.new(0.52, 0, 0, 0)
+btnResetShift.BackgroundColor3 = Color3.fromRGB(22, 22, 32)
+btnResetShift.TextColor3 = Color3.fromRGB(255, 50, 50)
+btnResetShift.Font = Enum.Font.GothamBold
+btnResetShift.Text = "reset"
+btnResetShift.ZIndex = 5
+Instance.new("UICorner", btnResetShift).CornerRadius = UDim.new(0, 6)
+btnResetShift.MouseButton1Click:Connect(function()
+	config.ShiftX = defaultConfig.ShiftX
+	config.ShiftY = defaultConfig.ShiftY
+	config.ShiftSize = defaultConfig.ShiftSize
+	btnShiftLock.Position = UDim2.new(config.ShiftX, 0, config.ShiftY, 0)
+	btnShiftLock.Size = UDim2.fromOffset(config.ShiftSize, config.ShiftSize)
+	saveConfig()
+end)
+CreateControlLbl(MainFrameDance, "Emotes & Dances")
 local function PlayAnimation(assetId)
 	local char = LocalPlayer.Character
 	if char and char:FindFirstChild("Humanoid") then
@@ -498,8 +549,6 @@ CreateControlBtn(MainFrameDance, "Dance 2", function() PlayAnimation(507719543) 
 CreateControlBtn(MainFrameDance, "Emote 1", function() PlayAnimation(591577311) end)
 CreateControlBtn(MainFrameDance, "Emote 2", function() PlayAnimation(591578361) end)
 CreateControlBtn(MainFrameDance, "Jump Style", function() PlayAnimation(3338871789) end)
-
--- NOCLIP SERVICE
 RunService.Stepped:Connect(function()
 	for _, p in ipairs(Players:GetPlayers()) do
 		local char = p.Character
@@ -511,18 +560,8 @@ RunService.Stepped:Connect(function()
 	end
 end)
 
--- BUKA/TUTUP MENU
-local Loaded = false
-local Loading = false
-
 OpenMenu.Activated:Connect(function()
-	if Loading then return end
-	if Loaded then
-		MenuFrame.Visible = not MenuFrame.Visible
-		return
-	end
-	Loaded = true
-	MenuFrame.Visible = true
+	MenuFrame.Visible = not MenuFrame.Visible
 end)
 
 RunService.RenderStepped:Connect(function(dt)
