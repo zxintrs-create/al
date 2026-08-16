@@ -45,11 +45,36 @@ Image.Parent=OpenButton
 local ImageCorner=Instance.new("UICorner")
 ImageCorner.CornerRadius=UDim.new(8,0)
 ImageCorner.Parent=Image
-local ImageRotation=0
-local ImageSpeed=45
-RunService.RenderStepped:Connect(function(dt)
-ImageRotation=(ImageRotation+ImageSpeed*dt)%360
-Image.Rotation=ImageRotation
-end)
+local MenuFrame=Instance.new("Frame")
+MenuFrame.Name="MenuFrame"
+MenuFrame.Size=UDim2.fromOffset(650,450)
+MenuFrame.Position=UDim2.new(0.5,-325,0.5,-225)
+MenuFrame.BackgroundColor3=Color3.fromRGB(12,12,18)
+MenuFrame.BorderSizePixel=0
+MenuFrame.Active=false
+MenuFrame.Visible=false
+MenuFrame.ZIndex=2
+MenuFrame.Parent=ScreenGui
+local MenuCorner=Instance.new("UICorner")
+MenuCorner.CornerRadius=UDim.new(0,8)
+MenuCorner.Parent=MenuFrame
+local MenuStroke=Instance.new("UIStroke")
+MenuStroke.Thickness=2
+MenuStroke.Color=Color3.fromRGB(255,255,255)
+MenuStroke.Parent=MenuFrame
+local MenuGradient=Instance.new("UIGradient")
+MenuGradient.Color=ColorSequence.new({
+ColorSequenceKeypoint.new(0,Color3.fromRGB(255,0,0)),
+ColorSequenceKeypoint.new(1,Color3.fromRGB(255,255,0))
+})
+MenuGradient.Parent=MenuStroke
 OpenButton.Activated:Connect(function()
+MenuFrame.Visible=not MenuFrame.Visible
+end)
+local StrokeRotation=0
+local StrokeSpeed=45
+RunService.RenderStepped:Connect(function(dt)
+StrokeRotation=(StrokeRotation+StrokeSpeed*dt)%360
+OpenGradient.Rotation=StrokeRotation
+MenuGradient.Rotation=StrokeRotation
 end)
