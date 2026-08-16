@@ -30,17 +30,15 @@ Image.Name="Image"
 Image.Size=UDim2.new(0.8,0,0.8,0)
 Image.Position=UDim2.new(0.1,0,0.1,0)
 Image.BackgroundTransparency=1
+Image.BorderSizePixel=0
 Image.Image="rbxassetid://95844752147381"
+Image.ImageTransparency=0
 Image.Visible=true
-Image.ZIndex=11
+Image.ZIndex=20
 Image.Parent=OpenMenu
 local ImageCorner=Instance.new("UICorner")
 ImageCorner.CornerRadius=UDim.new(8,0)
 ImageCorner.Parent=Image
-local ImageRotation=Instance.new("UIRotation")
-ImageRotation.Name="ImageRotation"
-ImageRotation.Rotation=0
-ImageRotation.Parent=Image
 local MenuFrame=Instance.new("Frame")
 MenuFrame.Name="MenuFrame"
 MenuFrame.Size=UDim2.fromOffset(650,450)
@@ -65,13 +63,9 @@ OpenMenu.Activated:Connect(function()
 MenuFrame.Visible=not MenuFrame.Visible
 end)
 local StrokeRotation=0
-local ImageRotationValue=0
 local StrokeSpeed=45
-local ImageSpeed=45
 RunService.RenderStepped:Connect(function(dt)
 StrokeRotation=(StrokeRotation+StrokeSpeed*dt)%360
-ImageRotationValue=(ImageRotationValue+ImageSpeed*dt)%360
 OpenGradient.Rotation=StrokeRotation
 MenuGradient.Rotation=StrokeRotation
-ImageRotation.Rotation=ImageRotationValue
 end)
