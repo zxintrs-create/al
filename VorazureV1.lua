@@ -1,8 +1,11 @@
 local RunService=game:GetService("RunService")
+local UserInputService=game:GetService("UserInputService")
 local TweenService=game:GetService("TweenService")
 local ContentProvider=game:GetService("ContentProvider")
 local CoreGui=game:GetService("CoreGui")
+local Players=game:GetService("Players")
 
+local Player=Players.LocalPlayer
 local ScreenGui=Instance.new("ScreenGui")
 ScreenGui.Name="VZMenu"
 ScreenGui.ResetOnSpawn=false
@@ -12,13 +15,12 @@ ScreenGui.Parent=CoreGui
 local OpenMenu=Instance.new("ImageButton")
 OpenMenu.Name="OpenMenu"
 OpenMenu.Size=UDim2.fromOffset(58,58)
-OpenMenu.Position=UDim2.new(0.05,0,0.12,0)
+OpenMenu.Position=UDim2.new(0.05,0,0.15,0)
 OpenMenu.BackgroundColor3=Color3.fromRGB(15,15,20)
 OpenMenu.BackgroundTransparency=0.2
 OpenMenu.BorderSizePixel=0
 OpenMenu.AutoButtonColor=false
 OpenMenu.Active=true
-OpenMenu.Visible=true
 OpenMenu.ZIndex=10
 OpenMenu.Parent=ScreenGui
 
@@ -40,14 +42,14 @@ OpenGradient.Parent=OpenStroke
 
 local Image=Instance.new("ImageLabel")
 Image.Name="Image"
+Image.AnchorPoint=Vector2.new(0.5,0.5)
 Image.Size=UDim2.new(0.8,0,0.8,0)
-Image.Position=UDim2.new(0.1,0,0.1,0)
+Image.Position=UDim2.new(0.5,0,0.5,0)
 Image.BackgroundTransparency=1
-Image.BorderSizePixel=0
 Image.Image="rbxassetid://95844752147381"
-Image.ImageColor3=Color3.fromRGB(255,255,255)
 Image.ImageTransparency=0
 Image.Visible=true
+Image.Rotation=0
 Image.ZIndex=11
 Image.Parent=OpenMenu
 
@@ -84,7 +86,8 @@ MenuGradient.Parent=MenuStroke
 
 local LoadingScreen=Instance.new("Frame")
 LoadingScreen.Name="LoadingScreen"
-LoadingScreen.Size=UDim2.fromScale(1,1)
+LoadingScreen.Size=UDim2.new(1,0,1,0)
+LoadingScreen.Position=UDim2.new(0,0,0,0)
 LoadingScreen.BackgroundColor3=Color3.fromRGB(12,12,12)
 LoadingScreen.BorderSizePixel=0
 LoadingScreen.Visible=false
@@ -109,8 +112,8 @@ LogoCorner.CornerRadius=UDim.new(0,20)
 LogoCorner.Parent=LogoImage
 
 local LogoStroke=Instance.new("UIStroke")
-LogoStroke.Thickness=3.5
 LogoStroke.Color=Color3.fromRGB(255,255,255)
+LogoStroke.Thickness=3.5
 LogoStroke.Parent=LogoImage
 
 local LogoGradient=Instance.new("UIGradient")
@@ -121,44 +124,45 @@ LogoGradient.Color=ColorSequence.new({
 })
 LogoGradient.Parent=LogoStroke
 
-local LoadingTitle=Instance.new("TextLabel")
-LoadingTitle.Size=UDim2.new(1,0,0,60)
-LoadingTitle.Position=UDim2.new(0,0,0.52,0)
-LoadingTitle.BackgroundTransparency=1
-LoadingTitle.Text="ALDO ZORA XORE"
-LoadingTitle.TextColor3=Color3.fromRGB(255,255,255)
-LoadingTitle.Font=Enum.Font.GothamBlack
-LoadingTitle.TextSize=45
-LoadingTitle.ZIndex=21
-LoadingTitle.Parent=LoadingScreen
+local OuterText=Instance.new("TextLabel")
+OuterText.Size=UDim2.new(1,0,0,60)
+OuterText.AnchorPoint=Vector2.new(0.5,0)
+OuterText.Position=UDim2.new(0.5,0,0.52,0)
+OuterText.BackgroundTransparency=1
+OuterText.Text="ALDO ZORA XORE"
+OuterText.TextColor3=Color3.fromRGB(255,255,255)
+OuterText.Font=Enum.Font.GothamBlack
+OuterText.TextSize=45
+OuterText.ZIndex=21
+OuterText.Parent=LoadingScreen
 
-local TitleStroke=Instance.new("UIStroke")
-TitleStroke.Thickness=6
-TitleStroke.Color=Color3.fromRGB(255,255,255)
-TitleStroke.Parent=LoadingTitle
+local OuterStroke=Instance.new("UIStroke")
+OuterStroke.Color=Color3.fromRGB(255,255,255)
+OuterStroke.Thickness=6
+OuterStroke.Parent=OuterText
 
-local TitleInner=Instance.new("TextLabel")
-TitleInner.Size=UDim2.fromScale(1,1)
-TitleInner.BackgroundTransparency=1
-TitleInner.Text="ALDO ZORA XORE"
-TitleInner.TextColor3=Color3.fromRGB(255,255,255)
-TitleInner.Font=Enum.Font.GothamBlack
-TitleInner.TextSize=45
-TitleInner.ZIndex=22
-TitleInner.Parent=LoadingTitle
+local InnerText=Instance.new("TextLabel")
+InnerText.Size=UDim2.new(1,0,1,0)
+InnerText.BackgroundTransparency=1
+InnerText.Text="ALDO ZORA XORE"
+InnerText.TextColor3=Color3.fromRGB(255,255,255)
+InnerText.Font=Enum.Font.GothamBlack
+InnerText.TextSize=45
+InnerText.ZIndex=22
+InnerText.Parent=OuterText
 
 local InnerStroke=Instance.new("UIStroke")
-InnerStroke.Thickness=2.5
 InnerStroke.Color=Color3.fromRGB(255,255,255)
-InnerStroke.Parent=TitleInner
+InnerStroke.Thickness=2.5
+InnerStroke.Parent=InnerText
 
-local TitleGradient=Instance.new("UIGradient")
-TitleGradient.Color=ColorSequence.new({
+local TextGradient=Instance.new("UIGradient")
+TextGradient.Color=ColorSequence.new({
 	ColorSequenceKeypoint.new(0,Color3.fromRGB(255,0,0)),
 	ColorSequenceKeypoint.new(0.5,Color3.fromRGB(255,255,0)),
 	ColorSequenceKeypoint.new(1,Color3.fromRGB(255,0,0))
 })
-TitleGradient.Parent=InnerStroke
+TextGradient.Parent=InnerStroke
 
 local BarBackground=Instance.new("Frame")
 BarBackground.Size=UDim2.new(0.3,0,0.01,0)
@@ -169,9 +173,9 @@ BarBackground.BorderSizePixel=0
 BarBackground.ZIndex=21
 BarBackground.Parent=LoadingScreen
 
-local BarCorner=Instance.new("UICorner")
-BarCorner.CornerRadius=UDim.new(1,0)
-BarCorner.Parent=BarBackground
+local CornerBg=Instance.new("UICorner")
+CornerBg.CornerRadius=UDim.new(1,0)
+CornerBg.Parent=BarBackground
 
 local BarFill=Instance.new("Frame")
 BarFill.Size=UDim2.new(0,0,1,0)
@@ -180,9 +184,9 @@ BarFill.BorderSizePixel=0
 BarFill.ZIndex=22
 BarFill.Parent=BarBackground
 
-local BarFillCorner=Instance.new("UICorner")
-BarFillCorner.CornerRadius=UDim.new(1,0)
-BarFillCorner.Parent=BarFill
+local CornerFill=Instance.new("UICorner")
+CornerFill.CornerRadius=UDim.new(1,0)
+CornerFill.Parent=BarFill
 
 local BarGradient=Instance.new("UIGradient")
 BarGradient.Color=ColorSequence.new({
@@ -204,7 +208,7 @@ LoadingText.ZIndex=21
 LoadingText.Parent=BarBackground
 
 local LogoAnim=TweenService:Create(LogoGradient,TweenInfo.new(2,Enum.EasingStyle.Linear,Enum.EasingDirection.InOut,-1,true),{Offset=Vector2.new(1,0)})
-local TitleAnim=TweenService:Create(TitleGradient,TweenInfo.new(2,Enum.EasingStyle.Linear,Enum.EasingDirection.InOut,-1,true),{Offset=Vector2.new(1,0)})
+local TextAnim=TweenService:Create(TextGradient,TweenInfo.new(2,Enum.EasingStyle.Linear,Enum.EasingDirection.InOut,-1,true),{Offset=Vector2.new(1,0)})
 local PulseAnim=TweenService:Create(LoadingText,TweenInfo.new(0.8,Enum.EasingStyle.Sine,Enum.EasingDirection.InOut,-1,true),{TextTransparency=0.6})
 
 local Loaded=false
@@ -218,9 +222,32 @@ task.spawn(function()
 	Image.ImageTransparency=0
 end)
 
+local function ApplyNoclip()
+	local Character=Player.Character
+	if not Character then return end
+	for _,Part in ipairs(Character:GetDescendants()) do
+		if Part:IsA("BasePart") then
+			Part.CanCollide=false
+			Part.CanTouch=true
+			Part.CanQuery=true
+		end
+	end
+end
+
+RunService.Stepped:Connect(ApplyNoclip)
+
+Player.CharacterAdded:Connect(function(Character)
+	Character:WaitForChild("Humanoid",10)
+	task.wait()
+	ApplyNoclip()
+end)
+
+if Player.Character then
+	ApplyNoclip()
+end
+
 OpenMenu.Activated:Connect(function()
 	if Loading then return end
-
 	if Loaded then
 		MenuFrame.Visible=not MenuFrame.Visible
 		return
@@ -231,29 +258,23 @@ OpenMenu.Activated:Connect(function()
 	LoadingScreen.Visible=true
 
 	LogoAnim:Play()
-	TitleAnim:Play()
+	TextAnim:Play()
 	PulseAnim:Play()
 
-	local FillAnim=TweenService:Create(
-		BarFill,
-		TweenInfo.new(3,Enum.EasingStyle.Quart,Enum.EasingDirection.Out),
-		{Size=UDim2.new(1,0,1,0)}
-	)
-
+	local FillAnim=TweenService:Create(BarFill,TweenInfo.new(3,Enum.EasingStyle.Quart,Enum.EasingDirection.Out),{Size=UDim2.new(1,0,1,0)})
 	FillAnim:Play()
 	FillAnim.Completed:Wait()
 
 	task.wait(0.3)
 
 	local FadeInfo=TweenInfo.new(1,Enum.EasingStyle.Quad,Enum.EasingDirection.Out)
-
 	local FadeList={
 		TweenService:Create(LoadingScreen,FadeInfo,{BackgroundTransparency=1}),
 		TweenService:Create(LogoImage,FadeInfo,{ImageTransparency=1}),
 		TweenService:Create(LogoStroke,FadeInfo,{Transparency=1}),
-		TweenService:Create(LoadingTitle,FadeInfo,{TextTransparency=1}),
-		TweenService:Create(TitleInner,FadeInfo,{TextTransparency=1}),
-		TweenService:Create(TitleStroke,FadeInfo,{Transparency=1}),
+		TweenService:Create(OuterText,FadeInfo,{TextTransparency=1}),
+		TweenService:Create(InnerText,FadeInfo,{TextTransparency=1}),
+		TweenService:Create(OuterStroke,FadeInfo,{Transparency=1}),
 		TweenService:Create(InnerStroke,FadeInfo,{Transparency=1}),
 		TweenService:Create(BarBackground,FadeInfo,{BackgroundTransparency=1}),
 		TweenService:Create(BarFill,FadeInfo,{BackgroundTransparency=1}),
@@ -267,16 +288,16 @@ OpenMenu.Activated:Connect(function()
 	FadeList[1].Completed:Wait()
 
 	LogoAnim:Cancel()
-	TitleAnim:Cancel()
+	TextAnim:Cancel()
 	PulseAnim:Cancel()
 
 	LoadingScreen.Visible=false
 	LoadingScreen.BackgroundTransparency=0
 	LogoImage.ImageTransparency=0
 	LogoStroke.Transparency=0
-	LoadingTitle.TextTransparency=0
-	TitleInner.TextTransparency=0
-	TitleStroke.Transparency=0
+	OuterText.TextTransparency=0
+	InnerText.TextTransparency=0
+	OuterStroke.Transparency=0
 	InnerStroke.Transparency=0
 	BarBackground.BackgroundTransparency=0
 	BarFill.BackgroundTransparency=0
