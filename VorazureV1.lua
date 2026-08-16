@@ -13,9 +13,7 @@ OpenMenu.BackgroundTransparency=0.2
 OpenMenu.BorderSizePixel=0
 OpenMenu.AutoButtonColor=false
 OpenMenu.Active=true
-OpenMenu.Image="rbxassetid://95844752147381"
-OpenMenu.ImageTransparency=0
-OpenMenu.ScaleType=Enum.ScaleType.Fit
+OpenMenu.Image=""
 OpenMenu.ZIndex=10
 OpenMenu.Parent=ScreenGui
 local OpenCorner=Instance.new("UICorner")
@@ -36,9 +34,12 @@ Image.Name="Image"
 Image.Size=UDim2.new(0.8,0,0.8,0)
 Image.Position=UDim2.new(0.1,0,0.1,0)
 Image.BackgroundTransparency=1
-Image.ImageTransparency=1
+Image.BorderSizePixel=0
+Image.Image="rbxassetid://95844752147381"
+Image.ImageColor3=Color3.fromRGB(255,255,255)
+Image.ImageTransparency=0
 Image.Visible=true
-Image.ZIndex=11
+Image.ZIndex=20
 Image.Parent=OpenMenu
 local ImageCorner=Instance.new("UICorner")
 ImageCorner.CornerRadius=UDim.new(8,0)
@@ -70,9 +71,13 @@ OpenMenu.Activated:Connect(function()
 MenuFrame.Visible=not MenuFrame.Visible
 end)
 local StrokeRotation=0
+local ImageRotation=0
 local StrokeSpeed=45
+local ImageSpeed=45
 RunService.RenderStepped:Connect(function(dt)
 StrokeRotation=(StrokeRotation+StrokeSpeed*dt)%360
+ImageRotation=(ImageRotation+ImageSpeed*dt)%360
 OpenGradient.Rotation=StrokeRotation
 MenuGradient.Rotation=StrokeRotation
+Image.Rotation=ImageRotation
 end)
