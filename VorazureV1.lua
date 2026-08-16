@@ -19,7 +19,7 @@ OpenMenu.ZIndex=10
 OpenMenu.Parent=ScreenGui
 
 local OpenCorner=Instance.new("UICorner")
-OpenCorner.CornerRadius=UDim.new(8,0)
+OpenCorner.CornerRadius=UDim.new(0,8)
 OpenCorner.Parent=OpenMenu
 
 local OpenStroke=Instance.new("UIStroke")
@@ -39,13 +39,16 @@ Image.Name="Image"
 Image.Size=UDim2.new(0.8,0,0.8,0)
 Image.Position=UDim2.new(0.1,0,0.1,0)
 Image.BackgroundTransparency=1
+Image.BorderSizePixel=0
 Image.Image="rbxassetid://95844752147381"
+Image.ImageTransparency=0
+Image.ScaleType=Enum.ScaleType.Fit
 Image.Visible=true
 Image.ZIndex=11
 Image.Parent=OpenMenu
 
 local ImageCorner=Instance.new("UICorner")
-ImageCorner.CornerRadius=UDim.new(8,0)
+ImageCorner.CornerRadius=UDim.new(0,8)
 ImageCorner.Parent=Image
 
 local MenuFrame=Instance.new("Frame")
