@@ -1,22 +1,21 @@
-local Players=game:GetService("Players")
 local RunService=game:GetService("RunService")
-
-local Player=Players.LocalPlayer
-local PlayerGui=Player:WaitForChild("PlayerGui")
+local UserInputService=game:GetService("UserInputService")
 
 local ScreenGui=Instance.new("ScreenGui")
-ScreenGui.Name="PremiumMenuGui"
+ScreenGui.Name="VZMenu"
 ScreenGui.ResetOnSpawn=false
 ScreenGui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
-ScreenGui.Parent=PlayerGui
+ScreenGui.Parent=game:GetService("CoreGui")
 
 local OpenMenu=Instance.new("ImageButton")
 OpenMenu.Name="OpenMenu"
 OpenMenu.Size=UDim2.fromOffset(58,58)
-OpenMenu.Position=UDim2.new(0.05,0,0.25,0)
+OpenMenu.Position=UDim2.new(0.05,0,0.35,0)
 OpenMenu.BackgroundColor3=Color3.fromRGB(15,15,20)
 OpenMenu.BackgroundTransparency=0.2
 OpenMenu.BorderSizePixel=0
+OpenMenu.AutoButtonColor=false
+OpenMenu.Active=true
 OpenMenu.ZIndex=10
 OpenMenu.Parent=ScreenGui
 
@@ -51,7 +50,7 @@ MenuFrame.Size=UDim2.fromOffset(650,450)
 MenuFrame.Position=UDim2.new(0.5,-325,0.5,-225)
 MenuFrame.BackgroundColor3=Color3.fromRGB(12,12,18)
 MenuFrame.BorderSizePixel=0
-MenuFrame.Active=false
+MenuFrame.Active=true
 MenuFrame.Visible=false
 MenuFrame.ZIndex=2
 MenuFrame.Parent=ScreenGui
@@ -76,22 +75,11 @@ OpenMenu.Activated:Connect(function()
 	MenuFrame.Visible=not MenuFrame.Visible
 end)
 
-local StrokeGradients={
-	OpenGradient,
-	MenuGradient
-}
-
 local StrokeRotation=0
 local StrokeSpeed=45
 
-RunService.RenderStepped:Connect(function(DeltaTime)
-	StrokeRotation=(StrokeRotation+StrokeSpeed*DeltaTime)%360
-
-	for i=1,#StrokeGradients do
-		local Gradient=StrokeGradients[i]
-
-		if Gradient and Gradient.Parent then
-			Gradient.Rotation=StrokeRotation
-		end
-	end
+RunService.RenderStepped:Connect(function(dt)
+	StrokeRotation=(StrokeRotation+StrokeSpeed*dt)%360
+	OpenGradient.Rotation=StrokeRotation
+	MenuGradient.Rotation=StrokeRotation
 end)
