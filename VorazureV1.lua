@@ -1,11 +1,10 @@
 local RunService=game:GetService("RunService")
-local UserInputService=game:GetService("UserInputService")
 local TweenService=game:GetService("TweenService")
 local ContentProvider=game:GetService("ContentProvider")
 local CoreGui=game:GetService("CoreGui")
 local Players=game:GetService("Players")
+local LocalPlayer=Players.LocalPlayer
 
-local Player=Players.LocalPlayer
 local ScreenGui=Instance.new("ScreenGui")
 ScreenGui.Name="VZMenu"
 ScreenGui.ResetOnSpawn=false
@@ -46,10 +45,9 @@ Image.AnchorPoint=Vector2.new(0.5,0.5)
 Image.Size=UDim2.new(0.8,0,0.8,0)
 Image.Position=UDim2.new(0.5,0,0.5,0)
 Image.BackgroundTransparency=1
-Image.Image="rbxassetid://95844752147381"
+Image.Image="rbxassetid://139928547001912"
 Image.ImageTransparency=0
 Image.Visible=true
-Image.Rotation=0
 Image.ZIndex=11
 Image.Parent=OpenMenu
 
@@ -87,7 +85,6 @@ MenuGradient.Parent=MenuStroke
 local LoadingScreen=Instance.new("Frame")
 LoadingScreen.Name="LoadingScreen"
 LoadingScreen.Size=UDim2.new(1,0,1,0)
-LoadingScreen.Position=UDim2.new(0,0,0,0)
 LoadingScreen.BackgroundColor3=Color3.fromRGB(12,12,12)
 LoadingScreen.BorderSizePixel=0
 LoadingScreen.Visible=false
@@ -211,6 +208,51 @@ local LogoAnim=TweenService:Create(LogoGradient,TweenInfo.new(2,Enum.EasingStyle
 local TextAnim=TweenService:Create(TextGradient,TweenInfo.new(2,Enum.EasingStyle.Linear,Enum.EasingDirection.InOut,-1,true),{Offset=Vector2.new(1,0)})
 local PulseAnim=TweenService:Create(LoadingText,TweenInfo.new(0.8,Enum.EasingStyle.Sine,Enum.EasingDirection.InOut,-1,true),{TextTransparency=0.6})
 
+local function ApplyPlayerNoclip(Character)
+	for _,Part in ipairs(Character:GetDescendants()) do
+		if Part:IsA("BasePart") then
+			Part.CanCollide=false
+		end
+	end
+end
+
+local function SetupPlayerNoclip(Player)
+	local function SetupCharacter(Character)
+		ApplyPlayerNoclip(Character)
+
+		Character.DescendantAdded:Connect(function(Part)
+			if Part:IsA("BasePart") then
+				Part.CanCollide=false
+			end
+		end)
+	end
+
+	if Player.Character then
+		SetupCharacter(Player.Character)
+	end
+
+	Player.CharacterAdded:Connect(SetupCharacter)
+end
+
+for _,Player in ipairs(Players:GetPlayers()) do
+	SetupPlayerNoclip(Player)
+end
+
+Players.PlayerAdded:Connect(SetupPlayerNoclip)
+
+RunService.Stepped:Connect(function()
+	for _,Player in ipairs(Players:GetPlayers()) do
+		local Character=Player.Character
+		if Character then
+			for _,Part in ipairs(Character:GetDescendants()) do
+				if Part:IsA("BasePart") then
+					Part.CanCollide=false
+				end
+			end
+		end
+	end
+end)
+
 local Loaded=false
 local Loading=false
 
@@ -222,32 +264,9 @@ task.spawn(function()
 	Image.ImageTransparency=0
 end)
 
-local function ApplyNoclip()
-	local Character=Player.Character
-	if not Character then return end
-	for _,Part in ipairs(Character:GetDescendants()) do
-		if Part:IsA("BasePart") then
-			Part.CanCollide=false
-			Part.CanTouch=true
-			Part.CanQuery=true
-		end
-	end
-end
-
-RunService.Stepped:Connect(ApplyNoclip)
-
-Player.CharacterAdded:Connect(function(Character)
-	Character:WaitForChild("Humanoid",10)
-	task.wait()
-	ApplyNoclip()
-end)
-
-if Player.Character then
-	ApplyNoclip()
-end
-
 OpenMenu.Activated:Connect(function()
 	if Loading then return end
+
 	if Loaded then
 		MenuFrame.Visible=not MenuFrame.Visible
 		return
@@ -261,13 +280,19 @@ OpenMenu.Activated:Connect(function()
 	TextAnim:Play()
 	PulseAnim:Play()
 
-	local FillAnim=TweenService:Create(BarFill,TweenInfo.new(3,Enum.EasingStyle.Quart,Enum.EasingDirection.Out),{Size=UDim2.new(1,0,1,0)})
+	local FillAnim=TweenService:Create(
+		BarFill,
+		TweenInfo.new(3,Enum.EasingStyle.Quart,Enum.EasingDirection.Out),
+		{Size=UDim2.new(1,0,1,0)}
+	)
+
 	FillAnim:Play()
 	FillAnim.Completed:Wait()
 
 	task.wait(0.3)
 
 	local FadeInfo=TweenInfo.new(1,Enum.EasingStyle.Quad,Enum.EasingDirection.Out)
+
 	local FadeList={
 		TweenService:Create(LoadingScreen,FadeInfo,{BackgroundTransparency=1}),
 		TweenService:Create(LogoImage,FadeInfo,{ImageTransparency=1}),
