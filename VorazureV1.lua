@@ -1,3 +1,7 @@
+local RunService=game:GetService("RunService")
+local UserInputService=game:GetService("UserInputService")
+local TweenService=game:GetService("TweenService")
+
 local OpenMenu=Instance.new("ImageButton")
 OpenMenu.Name="OpenMenu"
 OpenMenu.Size=UDim2.fromOffset(58,58)
