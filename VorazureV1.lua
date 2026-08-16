@@ -313,6 +313,7 @@ CreateControlBtn(MainFrameJump, "↓", function()
 	updateJumpPos()
 end)
 
+-- Baris Ukuran (size+   size-)
 local rowJumpSize = Instance.new("Frame", MainFrameJump)
 rowJumpSize.Size = UDim2.new(0.85, 0, 0, 32)
 rowJumpSize.BackgroundTransparency = 1
@@ -352,6 +353,8 @@ bSzMinJump.MouseButton1Click:Connect(function()
 		jBtn.Size = UDim2.fromOffset(sz, sz)
 	end
 end)
+
+-- Baris Bawah (Save & Reset dengan fungsi writefile)
 local rowJumpSR = Instance.new("Frame", MainFrameJump)
 rowJumpSR.Size = UDim2.new(0.85, 0, 0, 32)
 rowJumpSR.BackgroundTransparency = 1
@@ -390,6 +393,10 @@ btnReset.MouseButton1Click:Connect(function()
 	end
 	saveConfig()
 end)
+
+-- ==========================================================
+-- 2. MAINFRAME SHIFT LOCK SETTING
+-- ==========================================================
 _G.ShiftLocked = false
 local crosshair = Instance.new("Frame", ScreenGui)
 crosshair.Name = "ShiftLockCrosshair"
@@ -533,7 +540,12 @@ btnResetShift.MouseButton1Click:Connect(function()
 	btnShiftLock.Size = UDim2.fromOffset(config.ShiftSize, config.ShiftSize)
 	saveConfig()
 end)
+
+-- ==========================================================
+-- 3. MAINFRAME DANCE / EMOTE
+-- ==========================================================
 CreateControlLbl(MainFrameDance, "Emotes & Dances")
+
 local function PlayAnimation(assetId)
 	local char = LocalPlayer.Character
 	if char and char:FindFirstChild("Humanoid") then
@@ -549,16 +561,6 @@ CreateControlBtn(MainFrameDance, "Dance 2", function() PlayAnimation(507719543) 
 CreateControlBtn(MainFrameDance, "Emote 1", function() PlayAnimation(591577311) end)
 CreateControlBtn(MainFrameDance, "Emote 2", function() PlayAnimation(591578361) end)
 CreateControlBtn(MainFrameDance, "Jump Style", function() PlayAnimation(3338871789) end)
-RunService.Stepped:Connect(function()
-	for _, p in ipairs(Players:GetPlayers()) do
-		local char = p.Character
-		if char then
-			for _, part in ipairs(char:GetDescendants()) do
-				if part:IsA("BasePart") then part.CanCollide = false end
-			end
-		end
-	end
-end)
 
 OpenMenu.Activated:Connect(function()
 	MenuFrame.Visible = not MenuFrame.Visible
