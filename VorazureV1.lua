@@ -127,58 +127,198 @@ MenuGradient.Color=ColorSequence.new({
 }) 
 MenuGradient.Parent=MenuStroke 
 
--- Tab / Scrolling Frame untuk Fitur Tambahan
-local ContentContainer = Instance.new("ScrollingFrame")
-ContentContainer.Name = "ContentContainer"
-ContentContainer.Size = UDim2.new(0.95, 0, 0.82, 0)
-ContentContainer.Position = UDim2.new(0.025, 0, 0.12, 0)
-ContentContainer.BackgroundTransparency = 1
-ContentContainer.CanvasSize = UDim2.new(0, 0, 2.5, 0)
-ContentContainer.ScrollBarThickness = 6
-ContentContainer.ZIndex = 5
-ContentContainer.Parent = MenuFrame
+-- ========================================================
+-- STRUKTUR SIDEBAR & MAIN FRAME (JUMP, SHIFT LOCK, DANCE)
+-- ========================================================
 
-local UIList = Instance.new("UIListLayout")
-UIList.SortOrder = Enum.SortOrder.LayoutOrder
-UIList.Padding = UDim.new(0, 10)
-UIList.Parent = ContentContainer
+-- Sidebar Menu di Kiri
+local Sidebar = Instance.new("ScrollingFrame", MenuFrame)
+Sidebar.Name = "SidebarMenu"
+Sidebar.Size = UDim2.new(0.28, 0, 1, 0)
+Sidebar.BackgroundColor3 = Color3.fromRGB(15, 15, 22)
+Sidebar.BackgroundTransparency = 0.5
+Sidebar.BorderSizePixel = 0
+Sidebar.CanvasSize = UDim2.new(0, 0, 1.2, 0)
+Sidebar.ScrollBarThickness = 4
+Sidebar.ZIndex = 5
 
-local function CreateButton(name, text, callback)
-	local btn = Instance.new("TextButton")
-	btn.Name = name
-	btn.Size = UDim2.new(1, 0, 0, 40)
+local SidebarCorner = Instance.new("UICorner", Sidebar)
+SidebarCorner.CornerRadius = UDim.new(0, 8)
+
+local SidebarLayout = Instance.new("UIListLayout", Sidebar)
+SidebarLayout.SortOrder = Enum.SortOrder.LayoutOrder
+SidebarLayout.Padding = UDim.new(0, 8)
+SidebarLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+
+-- Header Title di Sidebar
+local SidebarTitle = Instance.new("TextLabel", Sidebar)
+SidebarTitle.Size = UDim2.new(1, 0, 0, 45)
+SidebarTitle.BackgroundTransparency = 1
+SidebarTitle.Text = "MENU"
+SidebarTitle.TextColor3 = Color3.fromRGB(255, 220, 0)
+SidebarTitle.Font = Enum.Font.GothamBlack
+SidebarTitle.TextSize = 16
+SidebarTitle.ZIndex = 6
+
+-- Area Konten Utama di Kanan
+local ContentArea = Instance.new("Frame", MenuFrame)
+ContentArea.Name = "ContentArea"
+ContentArea.Size = UDim2.new(0.72, 0, 1, 0)
+ContentArea.Position = UDim2.new(0.28, 0, 0, 0)
+ContentArea.BackgroundTransparency = 1
+ContentArea.ZIndex = 5
+
+-- Fungsi Pembuat MainFrame Kategori
+local function CreateMainFrame(name)
+	local frame = Instance.new("ScrollingFrame", ContentArea)
+	frame.Name = name
+	frame.Size = UDim2.new(1, 0, 1, 0)
+	frame.BackgroundTransparency = 1
+	frame.Visible = false
+	frame.CanvasSize = UDim2.new(0, 0, 1.5, 0)
+	frame.ScrollBarThickness = 4
+	frame.ZIndex = 6
+	
+	local layout = Instance.new("UIListLayout", frame)
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Padding = UDim.new(0, 8)
+	layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	
+	return frame
+end
+
+local MainFrameJump = CreateMainFrame("MainFrameJump")
+local MainFrameShiftLock = CreateMainFrame("MainFrameShiftLock")
+local MainFrameDance = CreateMainFrame("MainFrameDance")
+
+-- Fungsi Switch Menu (Otomatis On/Off Frame Lainnya)
+local function SwitchMenu(selectedFrame)
+	MainFrameJump.Visible = (selectedFrame == MainFrameJump)
+	MainFrameShiftLock.Visible = (selectedFrame == MainFrameShiftLock)
+	MainFrameDance.Visible = (selectedFrame == MainFrameDance)
+end
+
+-- Tombol Navigasi di Sidebar
+local function CreateNavButton(text, targetFrame)
+	local btn = Instance.new("TextButton", Sidebar)
+	btn.Size = UDim2.new(0.9, 0, 0, 38)
 	btn.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
 	btn.TextColor3 = Color3.fromRGB(255, 255, 255)
 	btn.Font = Enum.Font.GothamBold
-	btn.TextSize = 14
+	btn.TextSize = 13
 	btn.Text = text
 	btn.ZIndex = 6
 	
-	local corner = Instance.new("UICorner")
+	local corner = Instance.new("UICorner", btn)
 	corner.CornerRadius = UDim.new(0, 6)
-	corner.Parent = btn
 	
-	btn.MouseButton1Click:Connect(callback)
-	btn.Parent = ContentContainer
+	btn.MouseButton1Click:Connect(function()
+		SwitchMenu(targetFrame)
+	end)
 	return btn
 end
 
-local function CreateHeader(text)
-	local lbl = Instance.new("TextLabel")
-	lbl.Size = UDim2.new(1, 0, 0, 30)
+CreateNavButton("Jump", MainFrameJump)
+CreateNavButton("Shift lock", MainFrameShiftLock)
+CreateNavButton("Emote", MainFrameDance)
+
+-- Helper Tombol Konten
+local function CreateContentButton(parent, text, callback)
+	local btn = Instance.new("TextButton", parent)
+	btn.Size = UDim2.new(0.9, 0, 0, 38)
+	btn.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+	btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	btn.Font = Enum.Font.GothamBold
+	btn.TextSize = 13
+	btn.Text = text
+	btn.ZIndex = 7
+	
+	local corner = Instance.new("UICorner", btn)
+	corner.CornerRadius = UDim.new(0, 6)
+	
+	btn.MouseButton1Click:Connect(callback)
+	return btn
+end
+
+local function CreateContentLabel(parent, text)
+	local lbl = Instance.new("TextLabel", parent)
+	lbl.Size = UDim2.new(0.9, 0, 0, 35)
 	lbl.BackgroundTransparency = 1
 	lbl.TextColor3 = Color3.fromRGB(255, 220, 0)
 	lbl.Font = Enum.Font.GothamBlack
-	lbl.TextSize = 16
+	lbl.TextSize = 15
 	lbl.Text = text
-	lbl.TextXAlignment = Enum.TextXAlignment.Left
-	lbl.ZIndex = 6
-	lbl.Parent = ContentContainer
+	lbl.TextXAlignment = Enum.TextXAlignment.Center
+	lbl.ZIndex = 7
+	return lbl
 end
 
--- Shift Lock & Crosshair Setup
+-- ========================================================
+-- PENGISIAN KONTEN DALAM MASING-MASING MAINFRAME
+-- ========================================================
+
+-- 1. MainFrameJump
+CreateContentLabel(MainFrameJump, "--- JUMP SETTING ---")
+local jumpButtonRef
+local function getJumpButton()
+	if jumpButtonRef and jumpButtonRef.Parent then return jumpButtonRef end
+	local touchGui = playerGui:FindFirstChild("TouchGui")
+	if touchGui then
+		jumpButtonRef = touchGui:FindFirstChild("JumpButton", true)
+	end
+	return jumpButtonRef
+end
+local function updateJumpPos()
+	local jBtn = getJumpButton()
+	if jBtn then
+		jBtn.AnchorPoint = Vector2.new(0.5, 0.5)
+		jBtn.Position = UDim2.new(config.JumpX, 0, config.JumpY, 0)
+	end
+end
+
+CreateContentButton(MainFrameJump, "↑ (Atas)", function()
+	config.JumpY = math.clamp(config.JumpY - 0.05, 0.05, 0.95)
+	updateJumpPos()
+end)
+CreateContentButton(MainFrameJump, "↓ (Bawah)", function()
+	config.JumpY = math.clamp(config.JumpY + 0.05, 0.05, 0.95)
+	updateJumpPos()
+end)
+CreateContentButton(MainFrameJump, "← (Kiri)", function()
+	config.JumpX = math.clamp(config.JumpX - 0.05, 0.05, 0.95)
+	updateJumpPos()
+end)
+CreateContentButton(MainFrameJump, "→ (Kanan)", function()
+	config.JumpX = math.clamp(config.JumpX + 0.05, 0.05, 0.95)
+	updateJumpPos()
+end)
+CreateContentButton(MainFrameJump, "Size +", function()
+	config.JumpSize = math.clamp(config.JumpSize + 0.05, 0.05, 0.50)
+	local jBtn = getJumpButton()
+	if jBtn then
+		local sz = math.max(40, math.floor(workspace.CurrentCamera.ViewportSize.Y * config.JumpSize))
+		jBtn.Size = UDim2.fromOffset(sz, sz)
+	end
+end)
+CreateContentButton(MainFrameJump, "Size -", function()
+	config.JumpSize = math.clamp(config.JumpSize - 0.05, 0.05, 0.50)
+	local jBtn = getJumpButton()
+	if jBtn then
+		local sz = math.max(40, math.floor(workspace.CurrentCamera.ViewportSize.Y * config.JumpSize))
+		jBtn.Size = UDim2.fromOffset(sz, sz)
+	end
+end)
+CreateContentButton(MainFrameJump, "RESET", function()
+	config.JumpX = defaultConfig.JumpX
+	config.JumpY = defaultConfig.JumpY
+	config.JumpSize = defaultConfig.JumpSize
+	updateJumpPos()
+end)
+
+-- 2. MainFrameShiftLock
+CreateContentLabel(MainFrameShiftLock, "--- SHIFT LOCK SETTING ---")
 _G.ShiftLocked = false
-local crosshair = Instance.new("Frame")
+local crosshair = Instance.new("Frame", ScreenGui)
 crosshair.Name = "ShiftLockCrosshair"
 crosshair.Size = UDim2.fromOffset(6,6)
 crosshair.Position = UDim2.new(0.5,-3,0.5,-3)
@@ -186,17 +326,13 @@ crosshair.BackgroundColor3 = Color3.new(1,1,1)
 crosshair.BorderSizePixel = 0
 crosshair.Visible = false
 crosshair.ZIndex = 1000000
-crosshair.Parent = ScreenGui
+Instance.new("UICorner", crosshair).CornerRadius = UDim.new(1,0)
 
-local cc = Instance.new("UICorner")
-cc.CornerRadius = UDim.new(1,0)
-cc.Parent = crosshair
-
-local btnShiftLock = Instance.new("ImageButton")
+local btnShiftLock = Instance.new("ImageButton", ScreenGui)
 btnShiftLock.Name = "ShiftLockButton"
 btnShiftLock.AnchorPoint = Vector2.new(0.5,0.5)
-btnShiftLock.Position = UDim2.new(config.ShiftX,0,config.ShiftY,0)
-btnShiftLock.Size = UDim2.fromOffset(config.ShiftSize,config.ShiftSize)
+btnShiftLock.Position = UDim2.new(config.ShiftX, 0, config.ShiftY, 0)
+btnShiftLock.Size = UDim2.fromOffset(config.ShiftSize, config.ShiftSize)
 btnShiftLock.Image = "rbxassetid://136616143786672"
 btnShiftLock.BackgroundColor3 = Color3.fromRGB(255,255,255)
 btnShiftLock.BackgroundTransparency = 0.2
@@ -204,11 +340,7 @@ btnShiftLock.AutoButtonColor = false
 btnShiftLock.Active = true
 btnShiftLock.BorderSizePixel = 0
 btnShiftLock.ZIndex = 100000
-btnShiftLock.Parent = ScreenGui
-
-local sc = Instance.new("UICorner")
-sc.CornerRadius = UDim.new(1,0)
-sc.Parent = btnShiftLock
+Instance.new("UICorner", btnShiftLock).CornerRadius = UDim.new(1,0)
 
 local function toggleShiftLock()
 	_G.ShiftLocked = not _G.ShiftLocked
@@ -219,128 +351,38 @@ local function toggleShiftLock()
 		character.Humanoid.CameraOffset = Vector3.zero
 	end
 end
-
 btnShiftLock.Activated:Connect(toggleShiftLock)
 
-CreateHeader("--- SHIFT LOCK MOBILE ---")
-CreateButton("ShiftToggleBtn", "Toggle Shift Lock On/Off", function()
+CreateContentButton(MainFrameShiftLock, "Toggle Shift Lock On/Off", function()
 	toggleShiftLock()
 end)
-
-CreateHeader("--- JUMP SETTING ---")
-local targetSettingMode = "JUMP"
-
-CreateButton("ModeJumpToggle", "Target Setting: JUMP BUTTON", function(btn)
-	if targetSettingMode == "JUMP" then
-		targetSettingMode = "SHIFT"
-		btn.Text = "Target Setting: SHIFT LOCK"
-	else
-		targetSettingMode = "JUMP"
-		btn.Text = "Target Setting: JUMP BUTTON"
-	end
-end)
-
-local jumpButtonRef
-local function getJumpButton()
-	if jumpButtonRef and jumpButtonRef.Parent then return jumpButtonRef end
-	local touchGui = playerGui:FindFirstChild("TouchGui")
-	if touchGui then
-		jumpButtonRef = touchGui:FindFirstChild("JumpButton", true)
-	end
-	return jumpButtonRef
-end
-
-local function updateJumpPos()
-	local jBtn = getJumpButton()
-	if jBtn then
-		jBtn.AnchorPoint = Vector2.new(0.5, 0.5)
-		jBtn.Position = UDim2.new(config.JumpX, 0, config.JumpY, 0)
-	end
-end
-
-CreateButton("MoveUp", "Jump/Shift Pos [ ↑ ]", function()
-	if targetSettingMode == "JUMP" then
-		config.JumpY = math.clamp(config.JumpY - 0.05, 0.05, 0.95)
-		updateJumpPos()
-	else
-		config.ShiftY = math.clamp(config.ShiftY - 0.05, 0.05, 0.95)
-		btnShiftLock.Position = UDim2.new(config.ShiftX, 0, config.ShiftY, 0)
-	end
-end)
-
-CreateButton("MoveDown", "Jump/Shift Pos [ ↓ ]", function()
-	if targetSettingMode == "JUMP" then
-		config.JumpY = math.clamp(config.JumpY + 0.05, 0.05, 0.95)
-		updateJumpPos()
-	else
-		config.ShiftY = math.clamp(config.ShiftY + 0.05, 0.05, 0.95)
-		btnShiftLock.Position = UDim2.new(config.ShiftX, 0, config.ShiftY, 0)
-	end
-end)
-
-CreateButton("MoveLeft", "Jump/Shift Pos [ ← ]", function()
-	if targetSettingMode == "JUMP" then
-		config.JumpX = math.clamp(config.JumpX - 0.05, 0.05, 0.95)
-		updateJumpPos()
-	else
-		config.ShiftX = math.clamp(config.ShiftX - 0.05, 0.05, 0.95)
-		btnShiftLock.Position = UDim2.new(config.ShiftX, 0, config.ShiftY, 0)
-	end
-end)
-
-CreateButton("MoveRight", "Jump/Shift Pos [ → ]", function()
-	if targetSettingMode == "JUMP" then
-		config.JumpX = math.clamp(config.JumpX + 0.05, 0.05, 0.95)
-		updateJumpPos()
-	else
-		config.ShiftX = math.clamp(config.ShiftX + 0.05, 0.05, 0.95)
-		btnShiftLock.Position = UDim2.new(config.ShiftX, 0, config.ShiftY, 0)
-	end
-end)
-
-CreateButton("SizePlus", "SIZE +", function()
-	if targetSettingMode == "JUMP" then
-		config.JumpSize = math.clamp(config.JumpSize + 0.05, 0.05, 0.50)
-		local jBtn = getJumpButton()
-		if jBtn then
-			local sz = math.max(40, math.floor(workspace.CurrentCamera.ViewportSize.Y * config.JumpSize))
-			jBtn.Size = UDim2.fromOffset(sz, sz)
-		end
-	else
-		config.ShiftSize = math.clamp(config.ShiftSize + 5, 20, 100)
-		btnShiftLock.Size = UDim2.fromOffset(config.ShiftSize, config.ShiftSize)
-	end
-end)
-
-CreateButton("SizeMinus", "SIZE -", function()
-	if targetSettingMode == "JUMP" then
-		config.JumpSize = math.clamp(config.JumpSize - 0.05, 0.05, 0.50)
-		local jBtn = getJumpButton()
-		if jBtn then
-			local sz = math.max(40, math.floor(workspace.CurrentCamera.ViewportSize.Y * config.JumpSize))
-			jBtn.Size = UDim2.fromOffset(sz, sz)
-		end
-	else
-		config.ShiftSize = math.clamp(config.ShiftSize - 5, 20, 100)
-		btnShiftLock.Size = UDim2.fromOffset(config.ShiftSize, config.ShiftSize)
-	end
-end)
-
-CreateButton("ResetConfig", "RESET DEFAULT SETTING", function()
-	config.JumpX = defaultConfig.JumpX
-	config.JumpY = defaultConfig.JumpY
-	config.JumpSize = defaultConfig.JumpSize
-	config.ShiftX = defaultConfig.ShiftX
-	config.ShiftY = defaultConfig.ShiftY
-	config.ShiftSize = defaultConfig.ShiftSize
-	updateJumpPos()
+CreateContentButton(MainFrameShiftLock, "↑ (Atas)", function()
+	config.ShiftY = math.clamp(config.ShiftY - 0.05, 0.05, 0.95)
 	btnShiftLock.Position = UDim2.new(config.ShiftX, 0, config.ShiftY, 0)
+end)
+CreateContentButton(MainFrameShiftLock, "↓ (Bawah)", function()
+	config.ShiftY = math.clamp(config.ShiftY + 0.05, 0.05, 0.95)
+	btnShiftLock.Position = UDim2.new(config.ShiftX, 0, config.ShiftY, 0)
+end)
+CreateContentButton(MainFrameShiftLock, "← (Kiri)", function()
+	config.ShiftX = math.clamp(config.ShiftX - 0.05, 0.05, 0.95)
+	btnShiftLock.Position = UDim2.new(config.ShiftX, 0, config.ShiftY, 0)
+end)
+CreateContentButton(MainFrameShiftLock, "→ (Kanan)", function()
+	config.ShiftX = math.clamp(config.ShiftX + 0.05, 0.05, 0.95)
+	btnShiftLock.Position = UDim2.new(config.ShiftX, 0, config.ShiftY, 0)
+end)
+CreateContentButton(MainFrameShiftLock, "Size +", function()
+	config.ShiftSize = math.clamp(config.ShiftSize + 5, 20, 100)
+	btnShiftLock.Size = UDim2.fromOffset(config.ShiftSize, config.ShiftSize)
+end)
+CreateContentButton(MainFrameShiftLock, "Size -", function()
+	config.ShiftSize = math.clamp(config.ShiftSize - 5, 20, 100)
 	btnShiftLock.Size = UDim2.fromOffset(config.ShiftSize, config.ShiftSize)
 end)
 
--- EMOTE & DANCE SECTION
-CreateHeader("--- EMOTES & DANCES ---")
-
+-- 3. MainFrameDance (Emote & Dance)
+CreateContentLabel(MainFrameDance, "--- EMOTES & DANCES ---")
 local function PlayAnimation(assetId)
 	local char = LocalPlayer.Character
 	if char and char:FindFirstChild("Humanoid") then
@@ -351,11 +393,15 @@ local function PlayAnimation(assetId)
 	end
 end
 
-CreateButton("Dance1", "DANCE 1 ★", function() PlayAnimation(507710273) end)
-CreateButton("Dance2", "DANCE 2 ★", function() PlayAnimation(507719543) end)
-CreateButton("Emote1", "EMOTE 1 ★", function() PlayAnimation(591577311) end)
-CreateButton("Emote2", "EMOTE 2 ★", function() PlayAnimation(591578361) end)
-CreateButton("JumpStyle", "Jump Style ★", function() PlayAnimation(3338871789) end)
+CreateContentButton(MainFrameDance, "DANCE 1 ★", function() PlayAnimation(507710273) end)
+CreateContentButton(MainFrameDance, "DANCE 2 ★", function() PlayAnimation(507719543) end)
+CreateContentButton(MainFrameDance, "EMOTE 1 ★", function() PlayAnimation(591577311) end)
+CreateContentButton(MainFrameDance, "EMOTE 2 ★", function() PlayAnimation(591578361) end)
+CreateContentButton(MainFrameDance, "Jump Style ★", function() PlayAnimation(3338871789) end)
+
+-- ========================================================
+-- BAGIAN LOADING SCREEN & FITUR ASLI ANDA
+-- ========================================================
 
 local LoadingScreen=Instance.new("Frame") 
 LoadingScreen.Name="LoadingScreen" 
