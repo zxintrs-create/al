@@ -1,10 +1,13 @@
 local RunService=game:GetService("RunService")
+local UserInputService=game:GetService("UserInputService")
+local TweenService=game:GetService("TweenService")
+local ContentProvider=game:GetService("ContentProvider")
 local CoreGui=game:GetService("CoreGui")
 local ScreenGui=Instance.new("ScreenGui")
 ScreenGui.Name="VZMenu"
 ScreenGui.ResetOnSpawn=false
 ScreenGui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
-ScreenGui.Parent=CoreGui 
+ScreenGui.Parent=CoreGui
 local OpenMenu=Instance.new("ImageButton")
 OpenMenu.Name="OpenMenu"
 OpenMenu.Size=UDim2.fromOffset(58,58)
@@ -67,8 +70,174 @@ ColorSequenceKeypoint.new(0,Color3.fromRGB(255,0,0)),
 ColorSequenceKeypoint.new(1,Color3.fromRGB(255,255,0))
 })
 MenuGradient.Parent=MenuStroke
+local LoadingScreen=Instance.new("Frame")
+LoadingScreen.Name="LoadingScreen"
+LoadingScreen.Size=UDim2.new(1,0,1,0)
+LoadingScreen.Position=UDim2.new(0,0,0,0)
+LoadingScreen.BackgroundColor3=Color3.fromRGB(12,12,12)
+LoadingScreen.BorderSizePixel=0
+LoadingScreen.Visible=false
+LoadingScreen.ZIndex=20
+LoadingScreen.Parent=MenuFrame
+local LoadingCorner=Instance.new("UICorner")
+LoadingCorner.CornerRadius=UDim.new(0,8)
+LoadingCorner.Parent=LoadingScreen
+local LogoImage=Instance.new("ImageLabel")
+LogoImage.Size=UDim2.fromOffset(160,160)
+LogoImage.AnchorPoint=Vector2.new(0.5,0.5)
+LogoImage.Position=UDim2.new(0.5,0,0.35,0)
+LogoImage.BackgroundTransparency=1
+LogoImage.Image="rbxassetid://112921115907036"
+LogoImage.ZIndex=21
+LogoImage.Parent=LoadingScreen
+local LogoCorner=Instance.new("UICorner")
+LogoCorner.CornerRadius=UDim.new(0,20)
+LogoCorner.Parent=LogoImage
+local LogoStroke=Instance.new("UIStroke")
+LogoStroke.Color=Color3.fromRGB(255,255,255)
+LogoStroke.Thickness=3.5
+LogoStroke.Parent=LogoImage
+local LogoGradient=Instance.new("UIGradient")
+LogoGradient.Color=ColorSequence.new({
+ColorSequenceKeypoint.new(0,Color3.fromRGB(255,0,0)),
+ColorSequenceKeypoint.new(0.5,Color3.fromRGB(255,255,0)),
+ColorSequenceKeypoint.new(1,Color3.fromRGB(255,0,0))
+})
+LogoGradient.Parent=LogoStroke
+local OuterText=Instance.new("TextLabel")
+OuterText.Size=UDim2.new(1,0,0,60)
+OuterText.AnchorPoint=Vector2.new(0.5,0)
+OuterText.Position=UDim2.new(0.5,0,0.52,0)
+OuterText.BackgroundTransparency=1
+OuterText.Text="ALDO ZORA XORE"
+OuterText.TextColor3=Color3.fromRGB(255,255,255)
+OuterText.Font=Enum.Font.GothamBlack
+OuterText.TextSize=45
+OuterText.ZIndex=21
+OuterText.Parent=LoadingScreen
+local OuterStroke=Instance.new("UIStroke")
+OuterStroke.Color=Color3.fromRGB(255,255,255)
+OuterStroke.Thickness=6
+OuterStroke.Parent=OuterText
+local InnerText=Instance.new("TextLabel")
+InnerText.Size=UDim2.new(1,0,1,0)
+InnerText.BackgroundTransparency=1
+InnerText.Text="ALDO ZORA XORE"
+InnerText.TextColor3=Color3.fromRGB(255,255,255)
+InnerText.Font=Enum.Font.GothamBlack
+InnerText.TextSize=45
+InnerText.ZIndex=22
+InnerText.Parent=OuterText
+local InnerStroke=Instance.new("UIStroke")
+InnerStroke.Color=Color3.fromRGB(255,255,255)
+InnerStroke.Thickness=2.5
+InnerStroke.Parent=InnerText
+local TextGradient=Instance.new("UIGradient")
+TextGradient.Color=ColorSequence.new({
+ColorSequenceKeypoint.new(0,Color3.fromRGB(255,0,0)),
+ColorSequenceKeypoint.new(0.5,Color3.fromRGB(255,255,0)),
+ColorSequenceKeypoint.new(1,Color3.fromRGB(255,0,0))
+})
+TextGradient.Parent=InnerStroke
+local BarBackground=Instance.new("Frame")
+BarBackground.Size=UDim2.new(0.3,0,0.01,0)
+BarBackground.AnchorPoint=Vector2.new(0.5,0)
+BarBackground.Position=UDim2.new(0.5,0,0.68,0)
+BarBackground.BackgroundColor3=Color3.fromRGB(30,30,30)
+BarBackground.BorderSizePixel=0
+BarBackground.ZIndex=21
+BarBackground.Parent=LoadingScreen
+local CornerBg=Instance.new("UICorner")
+CornerBg.CornerRadius=UDim.new(1,0)
+CornerBg.Parent=BarBackground
+local BarFill=Instance.new("Frame")
+BarFill.Size=UDim2.new(0,0,1,0)
+BarFill.BackgroundColor3=Color3.fromRGB(255,255,255)
+BarFill.BorderSizePixel=0
+BarFill.ZIndex=22
+BarFill.Parent=BarBackground
+local CornerFill=Instance.new("UICorner")
+CornerFill.CornerRadius=UDim.new(1,0)
+CornerFill.Parent=BarFill
+local BarGradient=Instance.new("UIGradient")
+BarGradient.Color=ColorSequence.new({
+ColorSequenceKeypoint.new(0,Color3.fromRGB(255,50,50)),
+ColorSequenceKeypoint.new(1,Color3.fromRGB(255,220,0))
+})
+BarGradient.Parent=BarFill
+local LoadingText=Instance.new("TextLabel")
+LoadingText.Size=UDim2.new(1,0,4,0)
+LoadingText.AnchorPoint=Vector2.new(0.5,1)
+LoadingText.Position=UDim2.new(0.5,0,-0.5,0)
+LoadingText.BackgroundTransparency=1
+LoadingText.Text="LOADING EXPERIENCE..."
+LoadingText.TextColor3=Color3.fromRGB(200,200,200)
+LoadingText.Font=Enum.Font.GothamMedium
+LoadingText.TextSize=13
+LoadingText.ZIndex=21
+LoadingText.Parent=BarBackground
+local LogoAnim=TweenService:Create(LogoGradient,TweenInfo.new(2,Enum.EasingStyle.Linear,Enum.EasingDirection.InOut,-1,true),{Offset=Vector2.new(1,0)})
+local TextAnim=TweenService:Create(TextGradient,TweenInfo.new(2,Enum.EasingStyle.Linear,Enum.EasingDirection.InOut,-1,true),{Offset=Vector2.new(1,0)})
+local PulseAnim=TweenService:Create(LoadingText,TweenInfo.new(0.8,Enum.EasingStyle.Sine,Enum.EasingDirection.InOut,-1,true),{TextTransparency=0.6})
+local Loaded=false
+local Loading=false
+task.spawn(function()
+pcall(function()
+ContentProvider:PreloadAsync({Image,LogoImage})
+end)
+Image.Visible=true
+Image.ImageTransparency=0
+end)
 OpenMenu.Activated:Connect(function()
+if Loading then return end
+if Loaded then
 MenuFrame.Visible=not MenuFrame.Visible
+return
+end
+Loading=true
+MenuFrame.Visible=true
+LoadingScreen.Visible=true
+LogoAnim:Play()
+TextAnim:Play()
+PulseAnim:Play()
+local FillAnim=TweenService:Create(BarFill,TweenInfo.new(3,Enum.EasingStyle.Quart,Enum.EasingDirection.Out),{Size=UDim2.new(1,0,1,0)})
+FillAnim:Play()
+FillAnim.Completed:Wait()
+task.wait(0.3)
+local FadeInfo=TweenInfo.new(1,Enum.EasingStyle.Quad,Enum.EasingDirection.Out)
+local FadeList={
+TweenService:Create(LoadingScreen,FadeInfo,{BackgroundTransparency=1}),
+TweenService:Create(LogoImage,FadeInfo,{ImageTransparency=1}),
+TweenService:Create(LogoStroke,FadeInfo,{Transparency=1}),
+TweenService:Create(OuterText,FadeInfo,{TextTransparency=1}),
+TweenService:Create(InnerText,FadeInfo,{TextTransparency=1}),
+TweenService:Create(OuterStroke,FadeInfo,{Transparency=1}),
+TweenService:Create(InnerStroke,FadeInfo,{Transparency=1}),
+TweenService:Create(BarBackground,FadeInfo,{BackgroundTransparency=1}),
+TweenService:Create(BarFill,FadeInfo,{BackgroundTransparency=1}),
+TweenService:Create(LoadingText,FadeInfo,{TextTransparency=1})
+}
+for _,Tween in ipairs(FadeList) do
+Tween:Play()
+end
+FadeList[1].Completed:Wait()
+LogoAnim:Cancel()
+TextAnim:Cancel()
+PulseAnim:Cancel()
+LoadingScreen.Visible=false
+LoadingScreen.BackgroundTransparency=0
+LogoImage.ImageTransparency=0
+LogoStroke.Transparency=0
+OuterText.TextTransparency=0
+InnerText.TextTransparency=0
+OuterStroke.Transparency=0
+InnerStroke.Transparency=0
+BarBackground.BackgroundTransparency=0
+BarFill.BackgroundTransparency=0
+LoadingText.TextTransparency=0
+BarFill.Size=UDim2.new(0,0,1,0)
+Loaded=true
+Loading=false
 end)
 local StrokeRotation=0
 local ImageRotation=0
@@ -81,135 +250,3 @@ OpenGradient.Rotation=StrokeRotation
 MenuGradient.Rotation=StrokeRotation
 Image.Rotation=ImageRotation
 end)
-local TweenService = game:GetService("TweenService")
-local Players = game:GetService("Players")
-local player = Players.LocalPlayer
-local menuFrame = script.Parent
-local baseFrame = Instance.new("Frame")
-baseFrame.Size = UDim2.new(1, 0, 1, 0) 
-baseFrame.BackgroundColor3 = Color3.fromRGB(12, 12, 12) 
-baseFrame.BorderSizePixel = 0
-baseFrame.Parent = menuFrame
-local logoImage = Instance.new("ImageLabel")
-logoImage.Size = UDim2.new(0, 160, 0, 160)
-logoImage.AnchorPoint = Vector2.new(0.5, 0.5)
-logoImage.Position = UDim2.new(0.5, 0, 0.35, 0)
-logoImage.BackgroundTransparency = 1
-logoImage.Image = "rbxassetid://112921115907036"
-logoImage.Parent = baseFrame
-local logoCorner = Instance.new("UICorner")
-logoCorner.CornerRadius = UDim.new(0, 20)
-logoCorner.Parent = logoImage
-local logoStroke = Instance.new("UIStroke")
-logoStroke.Color = Color3.fromRGB(255, 255, 255)
-logoStroke.Thickness = 3.5
-logoStroke.Parent = logoImage
-local logoStrokeGradient = Instance.new("UIGradient")
-logoStrokeGradient.Color = ColorSequence.new({
-ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 0, 0)),
-ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 255, 0)),
-ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 0, 0))
-})
-logoStrokeGradient.Parent = logoStroke
-local logoStrokeAnim = TweenService:Create(logoStrokeGradient, TweenInfo.new(2, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, -1, true), {Offset = Vector2.new(1, 0)})
-logoStrokeAnim:Play()
-local outerText = Instance.new("TextLabel")
-outerText.Size = UDim2.new(1, 0, 0, 60)
-outerText.AnchorPoint = Vector2.new(0.5, 0)
-outerText.Position = UDim2.new(0.5, 0, 0.52, 0)
-outerText.BackgroundTransparency = 1
-outerText.Text = "ALDO ZORA XORE" 
-outerText.TextColor3 = Color3.fromRGB(255, 255, 255)
-outerText.Font = Enum.Font.GothamBlack 
-outerText.TextSize = 45 
-outerText.Parent = baseFrame
-local outerStroke = Instance.new("UIStroke")
-outerStroke.Color = Color3.fromRGB(255, 255, 255) 
-outerStroke.Thickness = 6 
-outerStroke.Parent = outerText
-local innerText = Instance.new("TextLabel")
-innerText.Size = UDim2.new(1, 0, 1, 0)
-innerText.BackgroundTransparency = 1
-innerText.Text = "ALDO ZORA XORE"
-innerText.TextColor3 = Color3.fromRGB(255, 255, 255) 
-innerText.Font = Enum.Font.GothamBlack
-innerText.TextSize = 45
-innerText.ZIndex = 2 
-innerText.Parent = outerText
-local innerStroke = Instance.new("UIStroke")
-innerStroke.Color = Color3.fromRGB(255, 255, 255) 
-innerStroke.Thickness = 2.5 
-innerStroke.Parent = innerText
-local textGradient = Instance.new("UIGradient")
-textGradient.Color = ColorSequence.new({
-ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 0, 0)),
-ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 255, 0)),
-ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 0, 0))
-})
-textGradient.Parent = innerStroke
-local textGradientAnim = TweenService:Create(textGradient, TweenInfo.new(2, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, -1, true), {Offset = Vector2.new(1, 0)})
-textGradientAnim:Play()
-local barBackground = Instance.new("Frame")
-barBackground.Size = UDim2.new(0.3, 0, 0.01, 0) 
-barBackground.AnchorPoint = Vector2.new(0.5, 0)
-barBackground.Position = UDim2.new(0.5, 0, 0.68, 0) 
-barBackground.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-barBackground.BorderSizePixel = 0
-barBackground.Parent = baseFrame
-local cornerBg = Instance.new("UICorner")
-cornerBg.CornerRadius = UDim.new(1, 0)
-cornerBg.Parent = barBackground
-local barFill = Instance.new("Frame")
-barFill.Size = UDim2.new(0, 0, 1, 0) 
-barFill.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-barFill.BorderSizePixel = 0
-barFill.Parent = barBackground
-local cornerFill = Instance.new("UICorner")
-cornerFill.CornerRadius = UDim.new(1, 0)
-cornerFill.Parent = barFill
-local barGradient = Instance.new("UIGradient")
-barGradient.Color = ColorSequence.new({
-ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 50, 50)),
-ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 220, 0))
-})
-barGradient.Parent = barFill
-local loadingText = Instance.new("TextLabel")
-loadingText.Size = UDim2.new(1, 0, 4, 0)
-loadingText.AnchorPoint = Vector2.new(0.5, 1)
-loadingText.Position = UDim2.new(0.5, 0, -0.5, 0)
-loadingText.BackgroundTransparency = 1
-loadingText.Text = "LOADING EXPERIENCE..."
-loadingText.TextColor3 = Color3.fromRGB(200, 200, 200)
-loadingText.Font = Enum.Font.GothamMedium
-loadingText.TextSize = 13
-loadingText.Parent = barBackground
-local pulseAnim = TweenService:Create(loadingText, TweenInfo.new(0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {TextTransparency = 0.6})
-pulseAnim:Play()
-if not game:IsLoaded() then
-game.Loaded:Wait()
-end
-local fillAnim = TweenService:Create(barFill, TweenInfo.new(3, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Size = UDim2.new(1, 0, 1, 0)})
-fillAnim:Play()
-fillAnim.Completed:Wait() 
-task.wait(0.3)
-local fadeInfo = TweenInfo.new(1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-local tweensToPlay = {
-TweenService:Create(baseFrame, fadeInfo, {BackgroundTransparency = 1}),
-TweenService:Create(logoImage, fadeInfo, {ImageTransparency = 1}),
-TweenService:Create(logoStroke, fadeInfo, {Transparency = 1}),
-TweenService:Create(outerText, fadeInfo, {TextTransparency = 1}),
-TweenService:Create(innerText, fadeInfo, {TextTransparency = 1}),
-TweenService:Create(outerStroke, fadeInfo, {Transparency = 1}),
-TweenService:Create(innerStroke, fadeInfo, {Transparency = 1}),
-TweenService:Create(barBackground, fadeInfo, {BackgroundTransparency = 1}),
-TweenService:Create(barFill, fadeInfo, {BackgroundTransparency = 1}),
-TweenService:Create(loadingText, fadeInfo, {TextTransparency = 1})
-}
-for _, tween in ipairs(tweensToPlay) do
-tween:Play()
-end
-tweensToPlay[1].Completed:Wait()
-textGradientAnim:Cancel() 
-logoStrokeAnim:Cancel()
-pulseAnim:Cancel() 
-baseFrame:Destroy()
