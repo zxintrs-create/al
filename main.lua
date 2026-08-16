@@ -1,8 +1,8 @@
 local RunService=game:GetService("RunService")
 local TweenService=game:GetService("TweenService")
 local ContentProvider=game:GetService("ContentProvider")
-local CoreGui=game:GetService("CoreGui")
 local Players=game:GetService("Players")
+local CoreGui=game:GetService("CoreGui")
 local LocalPlayer=Players.LocalPlayer
 
 local ScreenGui=Instance.new("ScreenGui")
@@ -45,9 +45,11 @@ Image.AnchorPoint=Vector2.new(0.5,0.5)
 Image.Size=UDim2.new(0.8,0,0.8,0)
 Image.Position=UDim2.new(0.5,0,0.5,0)
 Image.BackgroundTransparency=1
+Image.BorderSizePixel=0
 Image.Image="rbxassetid://95844752147381"
 Image.ImageTransparency=0
 Image.Visible=true
+Image.Rotation=0
 Image.ZIndex=11
 Image.Parent=OpenMenu
 
@@ -216,7 +218,11 @@ local function setupCharacter(Char)
 	Humanoid.AutoRotate=not ShiftLocked
 end
 
-setupCharacter(LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait())
+if LocalPlayer.Character then
+	setupCharacter(LocalPlayer.Character)
+else
+	setupCharacter(LocalPlayer.CharacterAdded:Wait())
+end
 
 LocalPlayer.CharacterAdded:Connect(setupCharacter)
 
@@ -266,24 +272,6 @@ local CrossCorner=Instance.new("UICorner")
 CrossCorner.CornerRadius=UDim.new(1,0)
 CrossCorner.Parent=Crosshair
 
-local function updateShiftLock()
-	if ShiftLocked then
-		ShiftLockButton.BackgroundColor3=Color3.fromRGB(45,145,255)
-		Crosshair.Visible=true
-	else
-		ShiftLockButton.BackgroundColor3=Color3.fromRGB(8,8,8)
-		Crosshair.Visible=false
-	end
-end
-
-ShiftLockButton.Activated:Connect(function()
-	ShiftLocked=not ShiftLocked
-	if Humanoid and Humanoid.Parent then
-		Humanoid.AutoRotate=not ShiftLocked
-	end
-	updateShiftLock()
-end)
-
 local LogoAnim=TweenService:Create(
 	LogoGradient,
 	TweenInfo.new(2,Enum.EasingStyle.Linear,Enum.EasingDirection.InOut,-1,true),
@@ -313,10 +301,26 @@ task.spawn(function()
 	Image.ImageTransparency=0
 end)
 
-OpenMenu.Activated:Connect(function()
-	if Loading then
-		return
+local function updateShiftLock()
+	if ShiftLocked then
+		ShiftLockButton.BackgroundColor3=Color3.fromRGB(45,145,255)
+		Crosshair.Visible=true
+	else
+		ShiftLockButton.BackgroundColor3=Color3.fromRGB(8,8,8)
+		Crosshair.Visible=false
 	end
+end
+
+ShiftLockButton.Activated:Connect(function()
+	ShiftLocked=not ShiftLocked
+	if Humanoid and Humanoid.Parent then
+		Humanoid.AutoRotate=not ShiftLocked
+	end
+	updateShiftLock()
+end)
+
+OpenMenu.Activated:Connect(function()
+	if Loading then return end
 	if Loaded then
 		MenuFrame.Visible=not MenuFrame.Visible
 		return
@@ -327,6 +331,7 @@ OpenMenu.Activated:Connect(function()
 	LogoAnim:Play()
 	TextAnim:Play()
 	PulseAnim:Play()
+	BarFill.Size=UDim2.new(0,0,1,0)
 	local FillAnim=TweenService:Create(
 		BarFill,
 		TweenInfo.new(3,Enum.EasingStyle.Quart,Enum.EasingDirection.Out),
