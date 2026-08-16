@@ -29,23 +29,32 @@ OpenStroke.Parent=OpenMenu
 
 local OpenGradient=Instance.new("UIGradient")
 OpenGradient.Color=ColorSequence.new({
-ColorSequenceKeypoint.new(0,Color3.fromRGB(255,0,0)),
-ColorSequenceKeypoint.new(1,Color3.fromRGB(255,255,0))
+	ColorSequenceKeypoint.new(0,Color3.fromRGB(255,0,0)),
+	ColorSequenceKeypoint.new(1,Color3.fromRGB(255,255,0))
 })
 OpenGradient.Parent=OpenStroke
 
+local ImageHolder=Instance.new("Frame")
+ImageHolder.Name="ImageHolder"
+ImageHolder.Size=UDim2.new(0.8,0,0.8,0)
+ImageHolder.Position=UDim2.new(0.1,0,0.1,0)
+ImageHolder.BackgroundTransparency=1
+ImageHolder.BorderSizePixel=0
+ImageHolder.ZIndex=11
+ImageHolder.Parent=OpenMenu
+
 local Image=Instance.new("ImageLabel")
 Image.Name="Image"
-Image.Size=UDim2.new(0.8,0,0.8,0)
-Image.Position=UDim2.new(0.1,0,0.1,0)
+Image.Size=UDim2.fromScale(1,1)
+Image.Position=UDim2.fromScale(0,0)
 Image.BackgroundTransparency=1
 Image.BorderSizePixel=0
-Image.Image="rbxassetid://112921115907036"
+Image.Image="rbxassetid://95844752147381"
 Image.ImageTransparency=0
 Image.ScaleType=Enum.ScaleType.Fit
 Image.Visible=true
-Image.ZIndex=11
-Image.Parent=OpenMenu
+Image.ZIndex=12
+Image.Parent=ImageHolder
 
 local ImageCorner=Instance.new("UICorner")
 ImageCorner.CornerRadius=UDim.new(0,8)
@@ -73,25 +82,23 @@ MenuStroke.Parent=MenuFrame
 
 local MenuGradient=Instance.new("UIGradient")
 MenuGradient.Color=ColorSequence.new({
-ColorSequenceKeypoint.new(0,Color3.fromRGB(255,0,0)),
-ColorSequenceKeypoint.new(1,Color3.fromRGB(255,255,0))
+	ColorSequenceKeypoint.new(0,Color3.fromRGB(255,0,0)),
+	ColorSequenceKeypoint.new(1,Color3.fromRGB(255,255,0))
 })
 MenuGradient.Parent=MenuStroke
 
 OpenMenu.Activated:Connect(function()
-MenuFrame.Visible=not MenuFrame.Visible
+	MenuFrame.Visible=not MenuFrame.Visible
 end)
 
 local StrokeRotation=0
 local ImageRotation=0
-local StrokeSpeed=45
-local ImageSpeed=45
 
 RunService.RenderStepped:Connect(function(dt)
-StrokeRotation=(StrokeRotation+StrokeSpeed*dt)%360
-ImageRotation=(ImageRotation+ImageSpeed*dt)%360
+	StrokeRotation=(StrokeRotation+45*dt)%360
+	ImageRotation=(ImageRotation+45*dt)%360
 
-OpenGradient.Rotation=StrokeRotation
-MenuGradient.Rotation=StrokeRotation
-Image.Rotation=ImageRotation
+	OpenGradient.Rotation=StrokeRotation
+	MenuGradient.Rotation=StrokeRotation
+	ImageHolder.Rotation=ImageRotation
 end)
