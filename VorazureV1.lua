@@ -79,7 +79,7 @@ MenuFrame.Visible=not MenuFrame.Visible
 end)
 
 local StrokeRotation=0
-local StrokeSpeed=45
+local StrokeSpeed=75
 
 RunService.RenderStepped:Connect(function(dt)
 StrokeRotation=(StrokeRotation+StrokeSpeed*dt)%360
