@@ -1,6 +1,4 @@
 local RunService=game:GetService("RunService")
-local UserInputService=game:GetService("UserInputService")
-
 local ScreenGui=Instance.new("ScreenGui")
 ScreenGui.Name="VZMenu"
 ScreenGui.ResetOnSpawn=false
@@ -15,6 +13,7 @@ OpenMenu.BackgroundColor3=Color3.fromRGB(15,15,20)
 OpenMenu.BackgroundTransparency=0.2
 OpenMenu.BorderSizePixel=0
 OpenMenu.AutoButtonColor=false
+OpenMenu.Active=true
 OpenMenu.ZIndex=10
 OpenMenu.Parent=ScreenGui
 
@@ -34,18 +33,18 @@ ColorSequenceKeypoint.new(1,Color3.fromRGB(255,255,0))
 })
 OpenGradient.Parent=OpenStroke
 
-local IconImage=Instance.new("ImageLabel")
-IconImage.Name="Icon"
-IconImage.Size=UDim2.new(0.8,0,0.8,0)
-IconImage.Position=UDim2.new(0.1,0,0.1,0)
-IconImage.BackgroundTransparency=1
-IconImage.Image="rbxassetid://101640388423900"
-IconImage.ZIndex=11
-IconImage.Parent=OpenMenu
+local Image=Instance.new("ImageLabel")
+Image.Name="Image"
+Image.Size=UDim2.new(0.8,0,0.8,0)
+Image.Position=UDim2.new(0.1,0,0.1,0)
+Image.BackgroundTransparency=1
+Image.Image="rbxassetid://101640388423900"
+Image.ZIndex=11
+Image.Parent=OpenMenu
 
 local ImageCorner=Instance.new("UICorner")
 ImageCorner.CornerRadius=UDim.new(8,0)
-ImageCorner.Parent=IconImage
+ImageCorner.Parent=Image
 
 local MenuFrame=Instance.new("Frame")
 MenuFrame.Name="MenuFrame"
@@ -75,11 +74,11 @@ ColorSequenceKeypoint.new(1,Color3.fromRGB(255,255,0))
 MenuGradient.Parent=MenuStroke
 
 OpenMenu.Activated:Connect(function()
-MenuFrame.Visible=not MenuFrame.Visible
+	MenuFrame.Visible=not MenuFrame.Visible
 end)
 
 local StrokeRotation=0
-local StrokeSpeed=75
+local StrokeSpeed=45
 
 RunService.RenderStepped:Connect(function(dt)
 StrokeRotation=(StrokeRotation+StrokeSpeed*dt)%360
