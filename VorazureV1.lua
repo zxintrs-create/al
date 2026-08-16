@@ -1,41 +1,55 @@
 local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 
 local LocalPlayer = Players.LocalPlayer
 
--- CONFIG
 local CONFIG = {
     MaxDistance = 45,
-    AntiFlingPower = 1.5
+    AntiFlingPower = 1.5,
+
+    GrabAnimation = "rbxassetid://7691396275",
+    ChokeAnimation = "rbxassetid://3752886447"
 }
 
--- STATE
 local selectedPlayer = nil
+local selectedHighlight = nil
+
 local flingProtectionActive = false
 local antiFlingConnection = nil
+
 local currentAnimTrack = nil
 
--- UI Creation
+local dragging = false
+local dragStart = nil
+local dragStartPosition = nil
+
+local function getPlayerGui()
+    return LocalPlayer:WaitForChild("PlayerGui")
+end
+
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "VZCombatSuite"
 ScreenGui.ResetOnSpawn = false
+ScreenGui.IgnoreGuiInset = true
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+ScreenGui.Parent = getPlayerGui()
 
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.fromOffset(340, 200)
-MainFrame.Position = UDim2.new(0.5, -170, 0.5, -100)
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.fromOffset(340, 210)
+MainFrame.Position = UDim2.new(0.5, -170, 0.5, -105)
 MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-MainFrame.BackgroundTransparency = 0.15
+MainFrame.BackgroundTransparency = 0.1
+MainFrame.Active = true
 MainFrame.Parent = ScreenGui
 
-local UICorner = Instance.new("UICorner")
-UICorner.CornerRadius = UDim.new(0, 12)
-UICorner.Parent = MainFrame
+local MainCorner = Instance.new("UICorner")
+MainCorner.CornerRadius = UDim.new(0, 12)
+MainCorner.Parent = MainFrame
 
 local TitleLabel = Instance.new("TextLabel")
+TitleLabel.Name = "Title"
 TitleLabel.Size = UDim2.new(1, -20, 0, 32)
 TitleLabel.Position = UDim2.fromOffset(10, 8)
 TitleLabel.BackgroundTransparency = 1
@@ -43,102 +57,161 @@ TitleLabel.Text = "VZ COMBAT | LOCAL"
 TitleLabel.Font = Enum.Font.GothamBold
 TitleLabel.TextSize = 18
 TitleLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
+TitleLabel.TextXAlignment = Enum.TextXAlignment.Center
+TitleLabel.Active = true
 TitleLabel.Parent = MainFrame
 
 local TargetLabel = Instance.new("TextLabel")
+TargetLabel.Name = "Target"
 TargetLabel.Size = UDim2.new(1, -20, 0, 24)
-TargetLabel.Position = UDim2.fromOffset(10, 45)
+TargetLabel.Position = UDim2.fromOffset(10, 44)
 TargetLabel.BackgroundTransparency = 1
 TargetLabel.Text = "Target: NONE"
 TargetLabel.Font = Enum.Font.Gotham
 TargetLabel.TextSize = 14
 TargetLabel.TextColor3 = Color3.fromRGB(180, 180, 220)
+TargetLabel.TextXAlignment = Enum.TextXAlignment.Center
 TargetLabel.Parent = MainFrame
 
--- Buttons
-local function createButton(text, position, sizeX, sizeY)
-    local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(sizeX, 0, 0, sizeY)
-    btn.Position = position
-    btn.Text = text
-    btn.Font = Enum.Font.GothamBold
-    btn.TextSize = 14
-    btn.TextColor3 = Color3.fromRGB(240, 240, 240)
-    btn.BackgroundColor3 = Color3.fromRGB(50, 50, 70)
-    btn.AutoButtonColor = true
-    btn.Parent = MainFrame
+local StatusLabel = Instance.new("TextLabel")
+StatusLabel.Name = "Status"
+StatusLabel.Size = UDim2.new(1, -20, 0, 20)
+StatusLabel.Position = UDim2.fromOffset(10, 65)
+StatusLabel.BackgroundTransparency = 1
+StatusLabel.Text = "Status: READY"
+StatusLabel.Font = Enum.Font.Gotham
+StatusLabel.TextSize = 11
+StatusLabel.TextColor3 = Color3.fromRGB(150, 200, 150)
+StatusLabel.TextXAlignment = Enum.TextXAlignment.Center
+StatusLabel.Parent = MainFrame
 
-    local btnCorner = Instance.new("UICorner")
-    btnCorner.CornerRadius = UDim.new(0, 6)
-    btnCorner.Parent = btn
+local function createButton(name, text, position, width)
+    local button = Instance.new("TextButton")
 
-    return btn
+    button.Name = name
+    button.Size = UDim2.new(width, 0, 0, 32)
+    button.Position = position
+
+    button.BackgroundColor3 = Color3.fromRGB(50, 50, 70)
+    button.TextColor3 = Color3.fromRGB(240, 240, 240)
+
+    button.Text = text
+    button.Font = Enum.Font.GothamBold
+    button.TextSize = 13
+
+    button.AutoButtonColor = true
+    button.Active = true
+
+    button.Parent = MainFrame
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 6)
+    corner.Parent = button
+
+    return button
 end
 
 local SelectBtn = createButton(
+    "SelectButton",
     "SELECT",
-    UDim2.new(0.03, 0, 0, 78),
-    0.46,
-    32
+    UDim2.new(0.03, 0, 0, 91),
+    0.46
 )
 
 local AntiFlingBtn = createButton(
+    "AntiFlingButton",
     "ANTI-FLING",
-    UDim2.new(0.51, 0, 0, 78),
-    0.46,
-    32
+    UDim2.new(0.51, 0, 0, 91),
+    0.46
 )
 
 local GrabBtn = createButton(
+    "GrabButton",
     "GRAB",
-    UDim2.new(0.03, 0, 0, 118),
-    0.46,
-    32
+    UDim2.new(0.03, 0, 0, 129),
+    0.46
 )
 
 local ChokeBtn = createButton(
+    "ChokeButton",
     "CHOKE",
-    UDim2.new(0.51, 0, 0, 118),
-    0.46,
-    32
+    UDim2.new(0.51, 0, 0, 129),
+    0.46
 )
 
 local ClearBtn = createButton(
+    "ClearButton",
     "CLEAR",
-    UDim2.new(0.03, 0, 0, 158),
-    0.94,
-    32
+    UDim2.new(0.03, 0, 0, 167),
+    0.94
 )
 
--- Selection Highlight
-local selectedHighlight = nil
+local function setStatus(text)
+    StatusLabel.Text = "Status: " .. text
+end
 
-local function removeSelectionHighlight()
+local function removeHighlight()
     if selectedHighlight then
-        selectedHighlight:Destroy()
+        pcall(function()
+            selectedHighlight:Destroy()
+        end)
+
         selectedHighlight = nil
     end
 end
 
-local function addSelectionHighlight(player)
-    removeSelectionHighlight()
+local function addHighlight(player)
+    removeHighlight()
 
-    if not player or not player.Character then
+    if not player then
+        return
+    end
+
+    local character = player.Character
+
+    if not character then
         return
     end
 
     local highlight = Instance.new("Highlight")
     highlight.Name = "VZSelectedTarget"
-    highlight.Adornee = player.Character
-    highlight.FillTransparency = 0.75
+    highlight.Adornee = character
+    highlight.FillTransparency = 0.8
     highlight.OutlineTransparency = 0.1
-    highlight.Parent = player.Character
+    highlight.Parent = character
 
     selectedHighlight = highlight
 end
 
--- Get Player From Screen Position
-local function getPlayerFromScreenPosition(screenPosition)
+local function clearTarget()
+    selectedPlayer = nil
+
+    removeHighlight()
+
+    TargetLabel.Text = "Target: NONE"
+
+    setStatus("READY")
+end
+
+local function findPlayerFromInstance(instance)
+    local current = instance
+
+    while current and current ~= workspace do
+        if current:IsA("Model") then
+            local player = Players:GetPlayerFromCharacter(current)
+
+            if player and player ~= LocalPlayer then
+                return player
+            end
+        end
+
+        current = current.Parent
+    end
+
+    return nil
+end
+
+local function raycastPlayer(screenPosition)
     local camera = workspace.CurrentCamera
 
     if not camera then
@@ -151,6 +224,7 @@ local function getPlayerFromScreenPosition(screenPosition)
     )
 
     local params = RaycastParams.new()
+
     params.FilterType = Enum.RaycastFilterType.Exclude
     params.IgnoreWater = true
 
@@ -162,7 +236,7 @@ local function getPlayerFromScreenPosition(screenPosition)
 
     local result = workspace:Raycast(
         ray.Origin,
-        ray.Direction * 500,
+        ray.Direction * 1000,
         params
     )
 
@@ -170,148 +244,119 @@ local function getPlayerFromScreenPosition(screenPosition)
         return nil
     end
 
-    local instance = result.Instance
-
-    while instance and instance ~= workspace do
-        local player = Players:GetPlayerFromCharacter(instance)
-
-        if player and player ~= LocalPlayer then
-            return player
-        end
-
-        instance = instance.Parent
-    end
-
-    return nil
+    return findPlayerFromInstance(result.Instance)
 end
 
--- Desktop Selection
-local function getPlayerFromRay()
-    local camera = workspace.CurrentCamera
-
-    if not camera then
-        return nil
+local function getDistanceToPlayer(player)
+    if not player then
+        return math.huge
     end
 
-    local mouse = LocalPlayer:GetMouse()
+    local myCharacter = LocalPlayer.Character
+    local targetCharacter = player.Character
 
-    return getPlayerFromScreenPosition(
-        Vector2.new(mouse.X, mouse.Y)
+    if not myCharacter or not targetCharacter then
+        return math.huge
+    end
+
+    local myRoot =
+        myCharacter:FindFirstChild("HumanoidRootPart")
+
+    local targetRoot =
+        targetCharacter:FindFirstChild("HumanoidRootPart")
+
+    if not myRoot or not targetRoot then
+        return math.huge
+    end
+
+    return (
+        targetRoot.Position -
+        myRoot.Position
+    ).Magnitude
+end
+
+local function selectPlayer(player)
+    if not player then
+        clearTarget()
+        setStatus("NO PLAYER FOUND")
+        return
+    end
+
+    if player == LocalPlayer then
+        clearTarget()
+        setStatus("CANNOT SELECT SELF")
+        return
+    end
+
+    local distance = getDistanceToPlayer(player)
+
+    if distance > CONFIG.MaxDistance then
+        clearTarget()
+        setStatus("TARGET TOO FAR")
+        return
+    end
+
+    selectedPlayer = player
+
+    TargetLabel.Text =
+        "Target: " .. player.DisplayName
+
+    addHighlight(player)
+
+    setStatus(
+        "SELECTED • "
+        .. math.floor(distance)
+        .. " STUDS"
     )
 end
 
--- Set Target
-local function setTarget(player)
-    removeSelectionHighlight()
+local function getMousePosition()
+    local mouse = LocalPlayer:GetMouse()
 
-    if not player then
-        selectedPlayer = nil
-        TargetLabel.Text = "Target: NONE"
-        return
-    end
-
-    local myChar = LocalPlayer.Character
-    local targetChar = player.Character
-
-    if myChar and targetChar then
-        local myRoot = myChar:FindFirstChild("HumanoidRootPart")
-        local targetRoot = targetChar:FindFirstChild("HumanoidRootPart")
-
-        if myRoot and targetRoot then
-            local dist = (
-                targetRoot.Position
-                - myRoot.Position
-            ).Magnitude
-
-            if dist <= CONFIG.MaxDistance then
-                selectedPlayer = player
-
-                TargetLabel.Text =
-                    "Target: " .. player.DisplayName
-
-                addSelectionHighlight(player)
-
-                return
-            end
-        end
-    end
-
-    selectedPlayer = nil
-    TargetLabel.Text = "Target: TOO FAR / INVALID"
+    return Vector2.new(
+        mouse.X,
+        mouse.Y
+    )
 end
 
--- Clear Target
-local function clearTarget()
-    selectedPlayer = nil
-    TargetLabel.Text = "Target: NONE"
-    removeSelectionHighlight()
+local function selectFromMouse()
+    local position = getMousePosition()
+
+    local player = raycastPlayer(position)
+
+    selectPlayer(player)
 end
 
--- Anti-Fling System
-local function toggleAntiFling()
-    flingProtectionActive = not flingProtectionActive
+local function stopLocalAnimation()
+    if currentAnimTrack then
+        pcall(function()
+            currentAnimTrack:Stop(0.1)
+            currentAnimTrack:Destroy()
+        end)
 
-    if flingProtectionActive then
-        AntiFlingBtn.Text = "ANTI-FLING [ON]"
-        AntiFlingBtn.BackgroundColor3 =
-            Color3.fromRGB(80, 180, 80)
-
-        if antiFlingConnection then
-            antiFlingConnection:Disconnect()
-            antiFlingConnection = nil
-        end
-
-        antiFlingConnection = RunService.Heartbeat:Connect(
-            function()
-                local char = LocalPlayer.Character
-
-                if not char then
-                    return
-                end
-
-                local root =
-                    char:FindFirstChild("HumanoidRootPart")
-
-                if not root then
-                    return
-                end
-
-                root.AssemblyLinearVelocity =
-                    Vector3.new(0, 0, 0)
-
-                root.AssemblyAngularVelocity =
-                    Vector3.new(0, 0, 0)
-            end
-        )
-    else
-        AntiFlingBtn.Text = "ANTI-FLING"
-        AntiFlingBtn.BackgroundColor3 =
-            Color3.fromRGB(50, 50, 70)
-
-        if antiFlingConnection then
-            antiFlingConnection:Disconnect()
-            antiFlingConnection = nil
-        end
+        currentAnimTrack = nil
     end
 end
 
--- Local Animation Functions
 local function playLocalAnimation(animationId)
-    if not animationId then
-        return
+    if not animationId or animationId == "" then
+        setStatus("ANIMATION ID INVALID")
+        return false
     end
 
-    local char = LocalPlayer.Character
+    local character = LocalPlayer.Character
 
-    if not char then
-        return
+    if not character then
+        setStatus("CHARACTER NOT READY")
+        return false
     end
 
     local humanoid =
-        char:FindFirstChildOfClass("Humanoid")
+        character:FindFirstChildOfClass("Humanoid")
 
     if not humanoid then
-        return
+        setStatus("HUMANOID NOT FOUND")
+        return false
     end
 
     local animator =
@@ -322,14 +367,7 @@ local function playLocalAnimation(animationId)
         animator.Parent = humanoid
     end
 
-    if currentAnimTrack then
-        pcall(function()
-            currentAnimTrack:Stop(0.1)
-            currentAnimTrack:Destroy()
-        end)
-
-        currentAnimTrack = nil
-    end
+    stopLocalAnimation()
 
     local animation = Instance.new("Animation")
     animation.AnimationId = animationId
@@ -340,49 +378,199 @@ local function playLocalAnimation(animationId)
 
     animation:Destroy()
 
-    if success and track then
-        currentAnimTrack = track
-        track.Priority = Enum.AnimationPriority.Action
-        track.Looped = false
-        track:Play(0.1)
+    if not success then
+        warn("[VZ] LoadAnimation failed:", track)
+
+        setStatus("ANIMATION LOAD FAILED")
+
+        return false
+    end
+
+    if not track then
+        setStatus("ANIMATION TRACK INVALID")
+        return false
+    end
+
+    currentAnimTrack = track
+
+    track.Priority = Enum.AnimationPriority.Action
+    track.Looped = false
+
+    local playSuccess, playError =
+        pcall(function()
+            track:Play(0.1, 1, 1)
+        end)
+
+    if not playSuccess then
+        warn("[VZ] Animation Play failed:", playError)
+
+        setStatus("ANIMATION PLAY FAILED")
+
+        pcall(function()
+            track:Destroy()
+        end)
+
+        currentAnimTrack = nil
+
+        return false
+    end
+
+    setStatus("ANIMATION PLAYING")
+
+    return true
+end
+
+local function toggleAntiFling()
+    flingProtectionActive =
+        not flingProtectionActive
+
+    if antiFlingConnection then
+        antiFlingConnection:Disconnect()
+        antiFlingConnection = nil
+    end
+
+    if flingProtectionActive then
+
+        AntiFlingBtn.Text = "ANTI-FLING [ON]"
+
+        AntiFlingBtn.BackgroundColor3 =
+            Color3.fromRGB(70, 150, 80)
+
+        antiFlingConnection =
+            RunService.Heartbeat:Connect(function()
+
+                local character =
+                    LocalPlayer.Character
+
+                if not character then
+                    return
+                end
+
+                local root =
+                    character:FindFirstChild(
+                        "HumanoidRootPart"
+                    )
+
+                if not root then
+                    return
+                end
+
+                if root.AssemblyLinearVelocity.Magnitude >
+                    CONFIG.AntiFlingPower then
+
+                    root.AssemblyLinearVelocity =
+                        Vector3.zero
+                end
+
+                if root.AssemblyAngularVelocity.Magnitude >
+                    CONFIG.AntiFlingPower then
+
+                    root.AssemblyAngularVelocity =
+                        Vector3.zero
+                end
+            end)
+
+        setStatus("ANTI-FLING ON")
+
+    else
+
+        AntiFlingBtn.Text = "ANTI-FLING"
+
+        AntiFlingBtn.BackgroundColor3 =
+            Color3.fromRGB(50, 50, 70)
+
+        setStatus("ANTI-FLING OFF")
     end
 end
 
--- Button Connections
-
-SelectBtn.MouseButton1Click:Connect(function()
-    local player = getPlayerFromRay()
-    setTarget(player)
+SelectBtn.Activated:Connect(function()
+    selectFromMouse()
 end)
 
-AntiFlingBtn.MouseButton1Click:Connect(function()
+AntiFlingBtn.Activated:Connect(function()
     toggleAntiFling()
 end)
 
-GrabBtn.MouseButton1Click:Connect(function()
+GrabBtn.Activated:Connect(function()
+    if not selectedPlayer then
+        setStatus("SELECT A PLAYER FIRST")
+        return
+    end
+
+    if getDistanceToPlayer(selectedPlayer) >
+        CONFIG.MaxDistance then
+
+        clearTarget()
+        setStatus("TARGET TOO FAR")
+        return
+    end
+
     playLocalAnimation(
-        "rbxassetid://7691396275"
+        CONFIG.GrabAnimation
     )
 end)
 
-ChokeBtn.MouseButton1Click:Connect(function()
+ChokeBtn.Activated:Connect(function()
+    if not selectedPlayer then
+        setStatus("SELECT A PLAYER FIRST")
+        return
+    end
+
+    if getDistanceToPlayer(selectedPlayer) >
+        CONFIG.MaxDistance then
+
+        clearTarget()
+        setStatus("TARGET TOO FAR")
+        return
+    end
+
     playLocalAnimation(
-        "rbxassetid://3752886447"
+        CONFIG.ChokeAnimation
     )
 end)
 
-ClearBtn.MouseButton1Click:Connect(function()
+ClearBtn.Activated:Connect(function()
     clearTarget()
 end)
 
--- Mobile Touch Selection
-UserInputService.TouchTap:Connect(
-    function(touchPositions, processed)
+UserInputService.InputBegan:Connect(
+    function(input, processed)
+
         if processed then
             return
         end
 
-        if not touchPositions then
+        if input.KeyCode == Enum.KeyCode.X then
+
+            clearTarget()
+
+        elseif input.KeyCode == Enum.KeyCode.G then
+
+            if selectedPlayer then
+                playLocalAnimation(
+                    CONFIG.GrabAnimation
+                )
+            end
+
+        elseif input.KeyCode == Enum.KeyCode.C then
+
+            if selectedPlayer then
+                playLocalAnimation(
+                    CONFIG.ChokeAnimation
+                )
+            end
+
+        elseif input.KeyCode == Enum.KeyCode.F then
+
+            toggleAntiFling()
+        end
+    end
+)
+
+UserInputService.TouchTap:Connect(
+    function(touchPositions, processed)
+
+        if processed then
             return
         end
 
@@ -392,128 +580,147 @@ UserInputService.TouchTap:Connect(
             return
         end
 
-        -- Jangan memilih player ketika menyentuh
-        -- tombol GUI.
         local guiObjects =
             LocalPlayer.PlayerGui:GetGuiObjectsAtPosition(
                 position.X,
                 position.Y
             )
 
-        for _, guiObject in ipairs(guiObjects) do
-            if guiObject:IsDescendantOf(MainFrame) then
+        for _, object in ipairs(guiObjects) do
+
+            if object:IsDescendantOf(MainFrame) then
                 return
             end
         end
 
         local player =
-            getPlayerFromScreenPosition(position)
+            raycastPlayer(position)
 
-        setTarget(player)
+        selectPlayer(player)
     end
 )
-
--- Hotkey System
-UserInputService.InputBegan:Connect(
-    function(input, processed)
-        if processed then
-            return
-        end
-
-        if input.KeyCode == Enum.KeyCode.X then
-            clearTarget()
-
-        elseif input.KeyCode == Enum.KeyCode.G then
-            playLocalAnimation(
-                "rbxassetid://7691396275"
-            )
-
-        elseif input.KeyCode == Enum.KeyCode.C then
-            playLocalAnimation(
-                "rbxassetid://3752886447"
-            )
-
-        elseif input.KeyCode == Enum.KeyCode.F then
-            toggleAntiFling()
-        end
-    end
-)
-
--- UI Dragging
-local dragging = false
-local dragStart
-local startPos
 
 TitleLabel.InputBegan:Connect(
     function(input)
-        if input.UserInputType ==
+
+        if input.UserInputType ~=
             Enum.UserInputType.MouseButton1
-            or input.UserInputType ==
+            and input.UserInputType ~=
             Enum.UserInputType.Touch then
 
-            dragging = true
-            dragStart = input.Position
-            startPos = MainFrame.Position
-
-            input.Changed:Connect(
-                function()
-                    if input.UserInputState ==
-                        Enum.UserInputState.End then
-
-                        dragging = false
-                    end
-                end
-            )
+            return
         end
+
+        dragging = true
+
+        dragStart = input.Position
+
+        dragStartPosition =
+            MainFrame.Position
+
+        input.Changed:Connect(
+            function()
+
+                if input.UserInputState ==
+                    Enum.UserInputState.End then
+
+                    dragging = false
+                end
+            end
+        )
     end
 )
 
 UserInputService.InputChanged:Connect(
     function(input)
+
         if not dragging then
             return
         end
 
-        if input.UserInputType ==
+        if input.UserInputType ~=
             Enum.UserInputType.MouseMovement
-            or input.UserInputType ==
+            and input.UserInputType ~=
             Enum.UserInputType.Touch then
 
-            local delta =
-                input.Position - dragStart
-
-            MainFrame.Position = UDim2.new(
-                startPos.X.Scale,
-                startPos.X.Offset + delta.X,
-                startPos.Y.Scale,
-                startPos.Y.Offset + delta.Y
-            )
+            return
         end
+
+        local delta =
+            input.Position - dragStart
+
+        MainFrame.Position = UDim2.new(
+            dragStartPosition.X.Scale,
+            dragStartPosition.X.Offset + delta.X,
+
+            dragStartPosition.Y.Scale,
+            dragStartPosition.Y.Offset + delta.Y
+        )
     end
 )
 
--- Cleanup
 LocalPlayer.CharacterAdded:Connect(
     function()
-        if currentAnimTrack then
-            pcall(function()
-                currentAnimTrack:Stop()
-                currentAnimTrack:Destroy()
-            end)
 
-            currentAnimTrack = nil
+        stopLocalAnimation()
+
+        if antiFlingConnection then
+            antiFlingConnection:Disconnect()
+            antiFlingConnection = nil
         end
 
+        flingProtectionActive = false
+
+        AntiFlingBtn.Text = "ANTI-FLING"
+
+        AntiFlingBtn.BackgroundColor3 =
+            Color3.fromRGB(50, 50, 70)
+
         clearTarget()
+
+        task.wait(1)
+
+        setStatus("READY")
     end
 )
 
 Players.PlayerRemoving:Connect(
     function(player)
+
         if player == selectedPlayer then
             clearTarget()
         end
     end
 )
+
+task.spawn(function()
+
+    while ScreenGui.Parent do
+
+        task.wait(1)
+
+        if selectedPlayer then
+
+            if not selectedPlayer.Parent then
+                clearTarget()
+                continue
+            end
+
+            local distance =
+                getDistanceToPlayer(
+                    selectedPlayer
+                )
+
+            if distance > CONFIG.MaxDistance then
+
+                TargetLabel.Text =
+                    "Target: "
+                    .. selectedPlayer.DisplayName
+                    .. " [FAR]"
+
+            end
+        end
+    end
+end)
 
 print("ALDO VOXA ZORU")
