@@ -1,5 +1,4 @@
 local RunService=game:GetService("RunService")
-local UserInputService=game:GetService("UserInputService")
 
 local ScreenGui=Instance.new("ScreenGui")
 ScreenGui.Name="VZMenu"
@@ -41,6 +40,7 @@ Image.Size=UDim2.new(0.8,0,0.8,0)
 Image.Position=UDim2.new(0.1,0,0.1,0)
 Image.BackgroundTransparency=1
 Image.Image="rbxassetid://95844752147381"
+Image.Visible=true
 Image.ZIndex=11
 Image.Parent=OpenMenu
 
@@ -80,8 +80,8 @@ MenuFrame.Visible=not MenuFrame.Visible
 end)
 
 local StrokeRotation=0
-local StrokeSpeed=45
 local ImageRotation=0
+local StrokeSpeed=45
 local ImageSpeed=45
 
 RunService.RenderStepped:Connect(function(dt)
