@@ -15,14 +15,15 @@ local defaultConfig = {
 	ShiftY = 0.65,
 	ShiftSize = 35,
 	Sensitivity = 1.0,
-    AnalogX = 0.17,
-    AnalogY = 0.78,
-    AnalogSize = 150
+	AnalogX = 0.17,
+	AnalogY = 0.78,
+	AnalogSize = 150,
+	TouchSupport = 4
 }
 
 -- costum id foto
-local SHIFT_LOCK_IMAGE = "rbxassetid://6031068426"
-local OPEN_MENU_IMAGE = "rbxassetid://1234567890"
+local SHIFT_LOCK_IMAGE = "rbxassetid://6031068426" -- Ganti angka ini dengan ID gambar Shift Lock kamu
+local OPEN_MENU_IMAGE = "rbxassetid://1234567890"  -- Ganti angka ini dengan ID gambar Open Menu kamu
 
 local config = {}
 for k, v in pairs(defaultConfig) do
@@ -30,26 +31,29 @@ for k, v in pairs(defaultConfig) do
 end
 
 local function saveConfig()
-	pcall(function()
-		if writefile then
-			writefile(CONFIG_FILE, HttpService:JSONEncode(config))
-		end
+	if type(writefile) ~= "function" then return false end
+	local ok, data = pcall(function()
+		return HttpService:JSONEncode(config)
+	end)
+	if not ok or type(data) ~= "string" then return false end
+	return pcall(function()
+		writefile(CONFIG_FILE,data)
 	end)
 end
 
 local function loadConfig()
-	pcall(function()
-		if readfile and isfile and isfile(CONFIG_FILE) then
-			local data = HttpService:JSONDecode(readfile(CONFIG_FILE))
-			if type(data) == "table" then
-				for k, v in pairs(data) do
-					if defaultConfig[k] ~= nil and type(v) == type(defaultConfig[k]) then
-						config[k] = v
-					end
-				end
-			end
-		end
+	if type(readfile) ~= "function" or type(isfile) ~= "function" then return false end
+	local ok, data = pcall(function()
+		if not isfile(CONFIG_FILE) then return nil end
+		return HttpService:JSONDecode(readfile(CONFIG_FILE))
 	end)
+	if not ok or type(data) ~= "table" then return false end
+	for k, defaultValue in pairs(defaultConfig) do
+		if type(data[k]) == type(defaultValue) then
+			config[k] = data[k]
+		end
+	end
+	return true
 end
 
 loadConfig()
@@ -60,10 +64,11 @@ config.JumpSize = math.clamp(tonumber(config.JumpSize) or defaultConfig.JumpSize
 config.ShiftX = math.clamp(tonumber(config.ShiftX) or defaultConfig.ShiftX,.02,.98)
 config.ShiftY = math.clamp(tonumber(config.ShiftY) or defaultConfig.ShiftY,.02,.98)
 config.ShiftSize = math.clamp(tonumber(config.ShiftSize) or defaultConfig.ShiftSize,20,100)
+config.Sensitivity = math.clamp(tonumber(config.Sensitivity) or defaultConfig.Sensitivity,.1,10)
 config.AnalogX = math.clamp(tonumber(config.AnalogX) or defaultConfig.AnalogX,.10,.90)
 config.AnalogY = math.clamp(tonumber(config.AnalogY) or defaultConfig.AnalogY,.10,.90)
 config.AnalogSize = math.clamp(tonumber(config.AnalogSize) or defaultConfig.AnalogSize,90,220)
-config.Sensitivity = math.clamp(tonumber(config.Sensitivity) or defaultConfig.Sensitivity,.1,10)
+config.TouchSupport = math.clamp(math.floor(tonumber(config.TouchSupport) or defaultConfig.TouchSupport),2,4)
 
 if _G.DeltaMobileControlsCleanup then
 	pcall(_G.DeltaMobileControlsCleanup)
@@ -117,24 +122,48 @@ local humanoid = character:WaitForChild("Humanoid")
 
 _G.ShiftLocked = false
 
-
-local buttonDefaults = {}
-local activeInputs = {}
-
-local function visual(button, pressed)
-	if not button or not button.Parent then return end
-	if pressed then
-		button.BackgroundColor3 = PRESSED_COLOR
-	else
-		button.BackgroundColor3 = buttonDefaults[button] or MAIN_COLOR
-	end
-end
-
 local btnShiftLock
 
-local function clearMovement()
-    clearAnalog()
-    resetAnalogVisual()
+local SHIFT_OFF = Color3.fromRGB(255,255,255)
+local SHIFT_ON = Color3.fromRGB(170,0,255)
+
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "DeltaMobileControls"
+screenGui.ResetOnSpawn = false
+screenGui.IgnoreGuiInset = true
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+screenGui.DisplayOrder = 999999
+screenGui.Parent = playerGui
+
+local crosshair = Instance.new("Frame")
+crosshair.Name = "ShiftLockCrosshair"
+crosshair.Size = UDim2.fromOffset(6,6)
+crosshair.Position = UDim2.new(.5,-3,.5,-3)
+crosshair.BackgroundColor3 = Color3.new(1,1,1)
+crosshair.BorderSizePixel = 0
+crosshair.Visible = false
+crosshair.ZIndex = 1000000
+crosshair.Parent = screenGui
+
+local cc = Instance.new("UICorner")
+cc.CornerRadius = UDim.new(1,0)
+cc.Parent = crosshair
+
+local function toggleShiftLock()
+	if destroyed then return end
+
+	_G.ShiftLocked = not _G.ShiftLocked
+
+	if btnShiftLock and btnShiftLock.Parent then
+		btnShiftLock.BackgroundColor3 = _G.ShiftLocked and SHIFT_ON or SHIFT_OFF
+	end
+
+	crosshair.Visible = _G.ShiftLocked
+
+	if humanoid and humanoid.Parent then
+		humanoid.AutoRotate = not _G.ShiftLocked
+		humanoid.CameraOffset = Vector3.zero
+	end
 end
 
 -- SHIFT LOCK BUTTON
@@ -168,40 +197,42 @@ connect(btnShiftLock.Activated, toggleShiftLock)
 
 -- CLASSIC ROBLOX MOBILE ANALOG
 local analogState = {
-    touch = nil,
-    x = 0,
-    y = 0
+	touch = nil,
+	x = 0,
+	y = 0
 }
 
-local MAX_CONTROL_TOUCHES = 4
-local EDGE_IGNORE = 8
-
 local trackedTouches = {}
+local edgeIgnore = 8
+local analogKnob
 
-local function countTrackedTouches()
-    local n = 0
-    for input in pairs(trackedTouches) do
-        if input.UserInputState ~= Enum.UserInputState.End then
-            n += 1
-        end
-    end
-    return n
+local function resetAnalog()
+	analogState.touch = nil
+	analogState.x = 0
+	analogState.y = 0
+	if analogKnob and analogKnob.Parent then
+		analogKnob.Position = UDim2.fromScale(.5,.5)
+	end
 end
 
-local function isEdgeTouch(position)
-    local camera = workspace.CurrentCamera
-    if not camera then return false end
-    local viewport = camera.ViewportSize
-    return position.X <= EDGE_IGNORE
-        or position.Y <= EDGE_IGNORE
-        or position.X >= viewport.X - EDGE_IGNORE
-        or position.Y >= viewport.Y - EDGE_IGNORE
+local function trackedCount()
+	local count = 0
+	for input in pairs(trackedTouches) do
+		if input.UserInputState ~= Enum.UserInputState.End then
+			count += 1
+		end
+	end
+	return count
 end
 
-local function clearAnalog()
-    analogState.touch = nil
-    analogState.x = 0
-    analogState.y = 0
+local function edgeTouch(position)
+	local camera = workspace.CurrentCamera
+	if not camera then return false end
+	local size = camera.ViewportSize
+	return position.X <= edgeIgnore
+		or position.Y <= edgeIgnore
+		or position.X >= size.X-edgeIgnore
+		or position.Y >= size.Y-edgeIgnore
 end
 
 local analogGui = Instance.new("Frame")
@@ -223,206 +254,168 @@ analogCorner.Parent = analogGui
 
 local analogStroke = Instance.new("UIStroke")
 analogStroke.Thickness = 2
-analogStroke.Transparency = .45
-analogStroke.Color = Color3.fromRGB(0,0,0)
+analogStroke.Transparency = .35
+analogStroke.Color = Color3.fromRGB(255,255,255)
 analogStroke.Parent = analogGui
 
-local analogKnob = Instance.new("Frame")
+analogKnob = Instance.new("Frame")
 analogKnob.Name = "Thumb"
 analogKnob.AnchorPoint = Vector2.new(.5,.5)
 analogKnob.Position = UDim2.fromScale(.5,.5)
 analogKnob.Size = UDim2.fromScale(.42,.42)
-analogKnob.BackgroundColor3 = Color3.fromRGB(90,90,90)
-analogKnob.BackgroundTransparency = .15
+analogKnob.BackgroundColor3 = Color3.fromRGB(95,95,105)
+analogKnob.BackgroundTransparency = .12
 analogKnob.BorderSizePixel = 0
 analogKnob.Active = false
 analogKnob.ZIndex = 21
 analogKnob.Parent = analogGui
 
-local knobCorner = Instance.new("UICorner")
-knobCorner.CornerRadius = UDim.new(1,0)
-knobCorner.Parent = analogKnob
+local analogKnobCorner = Instance.new("UICorner")
+analogKnobCorner.CornerRadius = UDim.new(1,0)
+analogKnobCorner.Parent = analogKnob
 
-local function resetAnalogVisual()
-    analogState.x = 0
-    analogState.y = 0
-    analogKnob.Position = UDim2.fromScale(.5,.5)
-end
+local function setAnalogPosition(position)
+	if destroyed or not analogState.touch then return end
 
-local function updateAnalogFromPosition(position)
-    if destroyed or not analogState.touch then return end
+	local center = analogGui.AbsolutePosition + analogGui.AbsoluteSize*.5
+	local radius = math.max(1,math.min(analogGui.AbsoluteSize.X,analogGui.AbsoluteSize.Y)*.5)
+	local delta = Vector2.new(position.X-center.X,position.Y-center.Y)
 
-    local center = analogGui.AbsolutePosition + analogGui.AbsoluteSize * .5
-    local radius = math.max(1, math.min(analogGui.AbsoluteSize.X,analogGui.AbsoluteSize.Y) * .5)
+	if delta.Magnitude > radius then
+		delta = delta.Unit*radius
+	end
 
-    local delta = Vector2.new(position.X - center.X, position.Y - center.Y)
-    local magnitude = delta.Magnitude
+	analogState.x = math.clamp(delta.X/radius,-1,1)
+	analogState.y = math.clamp(delta.Y/radius,-1,1)
 
-    if magnitude > radius then
-        delta = delta.Unit * radius
-        magnitude = radius
-    end
-
-    local nx = math.clamp(delta.X / radius,-1,1)
-    local ny = math.clamp(delta.Y / radius,-1,1)
-
-    analogState.x = nx
-    analogState.y = ny
-
-    analogKnob.Position = UDim2.new(.5,nx * radius,.5,ny * radius)
+	analogKnob.Position = UDim2.new(.5,analogState.x*radius,.5,analogState.y*radius)
 end
 
 local function beginAnalog(input)
-    if destroyed then return end
-    if input.UserInputType ~= Enum.UserInputType.Touch then return end
-    if analogState.touch then return end
-    if isEdgeTouch(input.Position) then return end
+	if destroyed or analogState.touch then return end
+	if input.UserInputType ~= Enum.UserInputType.Touch then return end
+	if edgeTouch(input.Position) then return end
+	if trackedCount() >= config.TouchSupport then return end
 
-    if countTrackedTouches() >= MAX_CONTROL_TOUCHES then
-        return
-    end
+	trackedTouches[input] = true
+	analogState.touch = input
+	setAnalogPosition(input.Position)
+end
 
-    trackedTouches[input] = true
-    analogState.touch = input
-    updateAnalogFromPosition(input.Position)
+local function finishTouch(input)
+	trackedTouches[input] = nil
+	if input == analogState.touch then
+		resetAnalog()
+	end
 end
 
 connect(analogGui.InputBegan,function(input)
-    beginAnalog(input)
+	beginAnalog(input)
 end)
 
 connect(UserInputService.InputChanged,function(input)
-    if destroyed then return end
-    if input.UserInputType == Enum.UserInputType.Touch and input == analogState.touch then
-        updateAnalogFromPosition(input.Position)
-    end
+	if input.UserInputType == Enum.UserInputType.Touch and input == analogState.touch then
+		setAnalogPosition(input.Position)
+	end
 end)
 
 connect(UserInputService.TouchMoved,function(input)
-    if destroyed then return end
-    if input == analogState.touch then
-        updateAnalogFromPosition(input.Position)
-    end
+	if input == analogState.touch then
+		setAnalogPosition(input.Position)
+	end
 end)
 
-local function endTouch(input)
-    trackedTouches[input] = nil
-    if input == analogState.touch then
-        clearAnalog()
-        resetAnalogVisual()
-    end
-end
-
 connect(UserInputService.InputEnded,function(input)
-    if input.UserInputType == Enum.UserInputType.Touch then
-        endTouch(input)
-    end
+	if input.UserInputType == Enum.UserInputType.Touch then
+		finishTouch(input)
+	end
 end)
 
 connect(UserInputService.TouchEnded,function(input)
-    endTouch(input)
+	finishTouch(input)
 end)
 
 connect(RunService.RenderStepped,function()
-    if destroyed then return end
+	if destroyed then return end
 
-    if analogState.touch then
-        if analogState.touch.UserInputState == Enum.UserInputState.End then
-            endTouch(analogState.touch)
-        end
-    end
+	if analogState.touch and analogState.touch.UserInputState == Enum.UserInputState.End then
+		finishTouch(analogState.touch)
+	end
 
-    for input in pairs(trackedTouches) do
-        if input.UserInputState == Enum.UserInputState.End then
-            trackedTouches[input] = nil
-        end
-    end
+	for input in pairs(trackedTouches) do
+		if input.UserInputState == Enum.UserInputState.End then
+			trackedTouches[input] = nil
+		end
+	end
 end)
 
 local cachedForward = Vector3.new(0,0,-1)
 local cachedSide = Vector3.new(1,0,0)
 
 local function updateCameraVectors()
-    local camera = workspace.CurrentCamera
-    if not camera then return end
+	local camera = workspace.CurrentCamera
+	if not camera then return end
 
-    local look = camera.CFrame.LookVector
-    local right = camera.CFrame.RightVector
+	local look = camera.CFrame.LookVector
+	local right = camera.CFrame.RightVector
+	local forward = Vector3.new(look.X,0,look.Z)
+	local side = Vector3.new(right.X,0,right.Z)
 
-    local forward = Vector3.new(look.X,0,look.Z)
-    local side = Vector3.new(right.X,0,right.Z)
-
-    if forward.Magnitude > .001 then
-        cachedForward = forward.Unit
-    end
-
-    if side.Magnitude > .001 then
-        cachedSide = side.Unit
-    end
+	if forward.Magnitude > .001 then cachedForward = forward.Unit end
+	if side.Magnitude > .001 then cachedSide = side.Unit end
 end
 
 local function getMoveVector()
-    local x = analogState.x
-    local z = -analogState.y
+	local x = analogState.x
+	local z = -analogState.y
 
-    if math.abs(x) < .06 then x = 0 end
-    if math.abs(z) < .06 then z = 0 end
+	if math.abs(x) < .06 then x = 0 end
+	if math.abs(z) < .06 then z = 0 end
 
-    if x == 0 and z == 0 then
-        return Vector3.zero
-    end
+	local magnitude = math.sqrt(x*x+z*z)
+	if magnitude <= .001 then return Vector3.zero end
+	if magnitude > 1 then
+		x /= magnitude
+		z /= magnitude
+		magnitude = 1
+	end
 
-    local magnitude = math.sqrt(x*x + z*z)
-    if magnitude > 1 then
-        x /= magnitude
-        z /= magnitude
-    end
+	local movement = cachedSide*x + cachedForward*z
+	if movement.Magnitude <= .001 then return Vector3.zero end
+	return movement.Unit*magnitude
+end
 
-    local movement = cachedSide * x + cachedForward * z
-
-    if movement.Magnitude < .001 then
-        return Vector3.zero
-    end
-
-    return movement.Unit * math.clamp(magnitude,0,1)
+local function clearMovement()
+	resetAnalog()
+	for input in pairs(trackedTouches) do
+		trackedTouches[input] = nil
+	end
 end
 
 connect(RunService.RenderStepped,function()
-    if destroyed then return end
-    if not character or not character.Parent then return end
-    if not humanoid or humanoid.Health <= 0 then return end
+	if destroyed then return end
+	if not character or not character.Parent then return end
+	if not humanoid or humanoid.Health <= 0 then return end
 
-    updateCameraVectors()
+	updateCameraVectors()
+	humanoid:Move(getMoveVector(),false)
 
-    local movement = getMoveVector()
+	if _G.ShiftLocked then
+		local camera = workspace.CurrentCamera
+		local root = character:FindFirstChild("HumanoidRootPart")
+		if camera and root then
+			local look = camera.CFrame.LookVector
+			local flat = Vector3.new(look.X,0,look.Z)
+			if flat.Magnitude > .001 then
+				root.CFrame = CFrame.lookAt(root.Position,root.Position+flat.Unit,Vector3.yAxis)
+			end
+		end
+		humanoid.AutoRotate = false
+	else
+		humanoid.AutoRotate = true
+	end
 
-    -- Only feeds the normal Humanoid movement pipeline.
-    -- No WalkSpeed, JumpPower, gravity, or physics values are changed.
-    humanoid:Move(movement,false)
-
-    if _G.ShiftLocked then
-        local camera = workspace.CurrentCamera
-        local root = character:FindFirstChild("HumanoidRootPart")
-
-        if camera and root then
-            local look = camera.CFrame.LookVector
-            local flatLook = Vector3.new(look.X,0,look.Z)
-
-            if flatLook.Magnitude > .001 then
-                root.CFrame = CFrame.lookAt(
-                    root.Position,
-                    root.Position + flatLook.Unit,
-                    Vector3.yAxis
-                )
-            end
-        end
-
-        humanoid.AutoRotate = false
-    else
-        humanoid.AutoRotate = true
-    end
-
-    humanoid.CameraOffset = Vector3.zero
+	humanoid.CameraOffset = Vector3.zero
 end)
 
 -- SETTINGS
@@ -444,10 +437,10 @@ local function makeButton(parent,name,pos,size,text,bg,z)
 	b.Size = size
 	b.Text = text
 	b.BackgroundColor3 = bg or Color3.fromRGB(245,245,245)
-	b.BackgroundTransparency = .05
-	b.TextColor3 = Color3.fromRGB(20,20,20)
+	b.BackgroundTransparency = .04
+	b.TextColor3 = Color3.fromRGB(20,20,25)
 	b.Font = Enum.Font.GothamBold
-	b.TextSize = 22
+	b.TextSize = 18
 	b.AutoButtonColor = false
 	b.Active = true
 	b.Selectable = false
@@ -459,17 +452,26 @@ local function makeButton(parent,name,pos,size,text,bg,z)
 	c.CornerRadius = UDim.new(0,12)
 	c.Parent = b
 
+	local s = Instance.new("UIStroke")
+	s.Thickness = 1
+	s.Transparency = .35
+	s.Color = Color3.fromRGB(255,255,255)
+	s.Parent = b
+
 	return b
 end
 
 local menu = Instance.new("ImageButton")
 menu.Name = "OpenMenu"
-menu.Position = UDim2.new(1,-72,1,-72)
+menu.AnchorPoint = Vector2.new(1,1)
+menu.Position = UDim2.new(1,-14,1,-14)
 menu.Size = UDim2.fromOffset(60,60)
 menu.Image = OPEN_MENU_IMAGE
 menu.BackgroundColor3 = Color3.fromRGB(245,245,245)
-menu.BackgroundTransparency = 0.05
+menu.BackgroundTransparency = .04
 menu.AutoButtonColor = false
+menu.Active = true
+menu.Selectable = false
 menu.ZIndex = 100
 menu.Parent = gui
 
@@ -477,40 +479,72 @@ local menuCorner = Instance.new("UICorner")
 menuCorner.CornerRadius = UDim.new(1,0)
 menuCorner.Parent = menu
 
+local menuStroke = Instance.new("UIStroke")
+menuStroke.Thickness = 2
+menuStroke.Transparency = .15
+menuStroke.Color = Color3.fromRGB(255,255,255)
+menuStroke.Parent = menu
+
 local settings = Instance.new("Frame")
 settings.Name = "SettingsFrame"
-settings.Size = UDim2.fromOffset(300,620)
-settings.Position = UDim2.new(.5,-150,.5,-310)
-settings.BackgroundColor3 = Color3.fromRGB(245,245,245)
-settings.BackgroundTransparency = .05
+settings.Size = UDim2.fromOffset(320,620)
+settings.AnchorPoint = Vector2.new(.5,.5)
+settings.Position = UDim2.new(.5,0,.5,0)
+settings.BackgroundColor3 = Color3.fromRGB(25,25,32)
+settings.BackgroundTransparency = .03
 settings.BorderSizePixel = 0
 settings.Visible = false
 settings.ZIndex = 40
 settings.Parent = gui
 
 local settingsCorner = Instance.new("UICorner")
-settingsCorner.CornerRadius = UDim.new(0,18)
+settingsCorner.CornerRadius = UDim.new(0,20)
 settingsCorner.Parent = settings
 
 local settingsStroke = Instance.new("UIStroke")
 settingsStroke.Thickness = 1.5
-settingsStroke.Transparency = .18
-settingsStroke.Color = Color3.fromRGB(255,255,255)
+settingsStroke.Transparency = .1
+settingsStroke.Color = Color3.fromRGB(170,0,255)
 settingsStroke.Parent = settings
 
 local settingsGradient = Instance.new("UIGradient")
 settingsGradient.Rotation = 35
 settingsGradient.Color = ColorSequence.new({
-    ColorSequenceKeypoint.new(0,Color3.fromRGB(250,250,255)),
-    ColorSequenceKeypoint.new(.5,Color3.fromRGB(232,235,245)),
-    ColorSequenceKeypoint.new(1,Color3.fromRGB(248,248,252))
+	ColorSequenceKeypoint.new(0,Color3.fromRGB(40,30,55)),
+	ColorSequenceKeypoint.new(.5,Color3.fromRGB(22,27,42)),
+	ColorSequenceKeypoint.new(1,Color3.fromRGB(34,25,48))
 })
 settingsGradient.Parent = settings
 
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1,-28,0,44)
+title.Position = UDim2.fromOffset(14,10)
+title.Text = "VORAZURE • MOBILE CONTROL"
+title.TextColor3 = Color3.fromRGB(245,240,255)
+title.Font = Enum.Font.GothamBold
+title.TextSize = 17
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.BackgroundTransparency = 1
+title.ZIndex = 42
+title.Parent = settings
+
+local subtitle = Instance.new("TextLabel")
+subtitle.Size = UDim2.new(1,-28,0,24)
+subtitle.Position = UDim2.fromOffset(14,48)
+subtitle.Text = "Independent control layout • saved locally"
+subtitle.TextColor3 = Color3.fromRGB(170,165,180)
+subtitle.Font = Enum.Font.Gotham
+subtitle.TextSize = 11
+subtitle.TextXAlignment = Enum.TextXAlignment.Left
+subtitle.BackgroundTransparency = 1
+subtitle.ZIndex = 42
+subtitle.Parent = settings
+
 local cameraSection = Instance.new("Frame")
-cameraSection.Size = UDim2.new(1,-20,0,160)
-cameraSection.Position = UDim2.fromOffset(10,10)
-cameraSection.BackgroundColor3 = Color3.fromRGB(225,225,225)
+cameraSection.Size = UDim2.new(1,-24,0,125)
+cameraSection.Position = UDim2.fromOffset(12,78)
+cameraSection.BackgroundColor3 = Color3.fromRGB(35,35,45)
+cameraSection.BackgroundTransparency = .12
 cameraSection.BorderSizePixel = 0
 cameraSection.ZIndex = 41
 cameraSection.Parent = settings
@@ -519,28 +553,24 @@ local cameraCorner = Instance.new("UICorner")
 cameraCorner.CornerRadius = UDim.new(0,14)
 cameraCorner.Parent = cameraSection
 
-local cameraStroke = Instance.new("UIStroke")
-cameraStroke.Thickness = 1
-cameraStroke.Transparency = .35
-cameraStroke.Color = Color3.fromRGB(255,255,255)
-cameraStroke.Parent = cameraSection
-
 local cameraTitle = Instance.new("TextLabel")
-cameraTitle.Size = UDim2.new(1,0,0,40)
-cameraTitle.Text = "CAMERA SENSI SETTING"
-cameraTitle.TextColor3 = Color3.fromRGB(20,20,20)
+cameraTitle.Size = UDim2.new(1,-20,0,28)
+cameraTitle.Position = UDim2.fromOffset(10,7)
+cameraTitle.Text = "CAMERA SENSITIVITY"
+cameraTitle.TextColor3 = Color3.fromRGB(245,240,255)
 cameraTitle.Font = Enum.Font.GothamBold
-cameraTitle.TextSize = 18
+cameraTitle.TextSize = 13
+cameraTitle.TextXAlignment = Enum.TextXAlignment.Left
 cameraTitle.BackgroundTransparency = 1
 cameraTitle.ZIndex = 42
 cameraTitle.Parent = cameraSection
 
 local sensLabel = Instance.new("TextLabel")
-sensLabel.Size = UDim2.new(1,0,0,30)
-sensLabel.Position = UDim2.fromOffset(0,40)
-sensLabel.TextColor3 = Color3.fromRGB(60,60,60)
+sensLabel.Size = UDim2.new(1,0,0,22)
+sensLabel.Position = UDim2.fromOffset(0,34)
+sensLabel.TextColor3 = Color3.fromRGB(175,170,185)
 sensLabel.Font = Enum.Font.Gotham
-sensLabel.TextSize = 14
+sensLabel.TextSize = 12
 sensLabel.BackgroundTransparency = 1
 sensLabel.ZIndex = 42
 sensLabel.Parent = cameraSection
@@ -552,9 +582,9 @@ local function applySensitivity()
 	end)
 end
 
-local sensMinus = makeButton(cameraSection,"Minus",UDim2.new(.06,0,0,85),UDim2.fromOffset(76,42),"-",nil,43)
-local sensReset = makeButton(cameraSection,"Reset",UDim2.new(.5,-42,0,85),UDim2.fromOffset(84,42),"RESET",nil,43)
-local sensPlus = makeButton(cameraSection,"Plus",UDim2.new(.94,-76,0,85),UDim2.fromOffset(76,42),"+",nil,43)
+local sensMinus = makeButton(cameraSection,"Minus",UDim2.new(.06,0,0,72),UDim2.fromOffset(70,36),"-",Color3.fromRGB(55,55,68),43)
+local sensReset = makeButton(cameraSection,"Reset",UDim2.new(.5,-42,0,72),UDim2.fromOffset(84,36),"RESET",Color3.fromRGB(55,55,68),43)
+local sensPlus = makeButton(cameraSection,"Plus",UDim2.new(.94,-70,0,72),UDim2.fromOffset(70,36),"+",Color3.fromRGB(55,55,68),43)
 
 connect(sensMinus.Activated,function()
 	config.Sensitivity = math.clamp(config.Sensitivity-.1,.1,10)
@@ -571,78 +601,103 @@ connect(sensReset.Activated,function()
 	applySensitivity()
 end)
 
-applySensitivity()
+local controlSection = Instance.new("Frame")
+controlSection.Size = UDim2.new(1,-24,0,280)
+controlSection.Position = UDim2.fromOffset(12,211)
+controlSection.BackgroundColor3 = Color3.fromRGB(35,35,45)
+controlSection.BackgroundTransparency = .12
+controlSection.BorderSizePixel = 0
+controlSection.ZIndex = 41
+controlSection.Parent = settings
 
-local jumpSection = Instance.new("Frame")
-jumpSection.Size = UDim2.new(1,-20,0,380)
-jumpSection.Position = UDim2.fromOffset(10,180)
-jumpSection.BackgroundColor3 = Color3.fromRGB(225,225,225)
-jumpSection.BorderSizePixel = 0
-jumpSection.ZIndex = 41
-jumpSection.Parent = settings
+local controlCorner = Instance.new("UICorner")
+controlCorner.CornerRadius = UDim.new(0,14)
+controlCorner.Parent = controlSection
 
-local jumpCorner = Instance.new("UICorner")
-jumpCorner.CornerRadius = UDim.new(0,14)
-jumpCorner.Parent = jumpSection
-
-local jumpStroke = Instance.new("UIStroke")
-jumpStroke.Thickness = 1
-jumpStroke.Transparency = .35
-jumpStroke.Color = Color3.fromRGB(255,255,255)
-jumpStroke.Parent = jumpSection
-
-local modeSwitchBtn = makeButton(
-	jumpSection,"ToggleTargetMode",
-	UDim2.new(.05,0,0,10),
-	UDim2.new(.9,0,0,36),
-	"TARGET: JUMP BUTTON",
-	Color3.fromRGB(70,150,255),43
-)
+local modeSwitchBtn = makeButton(controlSection,"Target",UDim2.fromOffset(12,10),UDim2.new(1,-24,0,36),"TARGET: JUMP BUTTON",Color3.fromRGB(70,120,230),43)
 modeSwitchBtn.TextColor3 = Color3.new(1,1,1)
 
+local targetHint = Instance.new("TextLabel")
+targetHint.Size = UDim2.new(1,-24,0,22)
+targetHint.Position = UDim2.fromOffset(12,50)
+targetHint.Text = "POSITION / SIZE ONLY AFFECTS SELECTED CONTROL"
+targetHint.TextColor3 = Color3.fromRGB(155,150,165)
+targetHint.Font = Enum.Font.Gotham
+targetHint.TextSize = 10
+targetHint.BackgroundTransparency = 1
+targetHint.ZIndex = 42
+targetHint.Parent = controlSection
+
+local moveUp = makeButton(controlSection,"MoveUp",UDim2.new(.5,-32,0,75),UDim2.fromOffset(64,38),"↑",Color3.fromRGB(50,50,64),43)
+local moveLeft = makeButton(controlSection,"MoveLeft",UDim2.new(.08,0,0,117),UDim2.fromOffset(64,38),"←",Color3.fromRGB(50,50,64),43)
+local moveRight = makeButton(controlSection,"MoveRight",UDim2.new(.92,-64,0,117),UDim2.fromOffset(64,38),"→",Color3.fromRGB(50,50,64),43)
+local moveDown = makeButton(controlSection,"MoveDown",UDim2.new(.5,-32,0,159),UDim2.fromOffset(64,38),"↓",Color3.fromRGB(50,50,64),43)
+
+local sizePlus = makeButton(controlSection,"SizePlus",UDim2.new(.06,0,0,211),UDim2.fromOffset(82,34),"SIZE +",Color3.fromRGB(50,50,64),43)
+local center = makeButton(controlSection,"Center",UDim2.new(.5,-41,0,211),UDim2.fromOffset(82,34),"RESET",Color3.fromRGB(50,50,64),43)
+local sizeMinus = makeButton(controlSection,"SizeMinus",UDim2.new(.94,-82,0,211),UDim2.fromOffset(82,34),"SIZE -",Color3.fromRGB(50,50,64),43)
+
+local touchSection = Instance.new("Frame")
+touchSection.Size = UDim2.new(1,-24,0,72)
+touchSection.Position = UDim2.fromOffset(12,499)
+touchSection.BackgroundColor3 = Color3.fromRGB(35,35,45)
+touchSection.BackgroundTransparency = .12
+touchSection.BorderSizePixel = 0
+touchSection.ZIndex = 41
+touchSection.Parent = settings
+
+local touchCorner = Instance.new("UICorner")
+touchCorner.CornerRadius = UDim.new(0,14)
+touchCorner.Parent = touchSection
+
+local touchLabel = Instance.new("TextLabel")
+touchLabel.Size = UDim2.new(1,-120,1,0)
+touchLabel.Position = UDim2.fromOffset(12,0)
+touchLabel.TextColor3 = Color3.fromRGB(230,225,240)
+touchLabel.Font = Enum.Font.GothamBold
+touchLabel.TextSize = 12
+touchLabel.TextXAlignment = Enum.TextXAlignment.Left
+touchLabel.BackgroundTransparency = 1
+touchLabel.ZIndex = 42
+touchLabel.Parent = touchSection
+
+local touchButton = makeButton(touchSection,"TouchSupport",UDim2.new(1,-105,.5,-19),UDim2.fromOffset(92,38),"4 FINGER",Color3.fromRGB(70,120,230),43)
+touchButton.TextColor3 = Color3.new(1,1,1)
+
+local function updateTouchLabel()
+	touchLabel.Text = "TOUCH SUPPORT\n2 / 3 / 4 fingers"
+	touchButton.Text = tostring(config.TouchSupport).." FINGER"
+end
+
 local function setTargetMode(mode)
-    targetSettingMode = mode
-    if mode == "JUMP" then
-        modeSwitchBtn.Text = "TARGET: JUMP BUTTON"
-        modeSwitchBtn.BackgroundColor3 = Color3.fromRGB(70,150,255)
-    elseif mode == "SHIFT" then
-        modeSwitchBtn.Text = "TARGET: SHIFT LOCK"
-        modeSwitchBtn.BackgroundColor3 = Color3.fromRGB(170,0,255)
-    else
-        modeSwitchBtn.Text = "TARGET: ANALOG"
-        modeSwitchBtn.BackgroundColor3 = Color3.fromRGB(70,180,140)
-    end
+	targetSettingMode = mode
+	if mode == "JUMP" then
+		modeSwitchBtn.Text = "TARGET: JUMP BUTTON"
+		modeSwitchBtn.BackgroundColor3 = Color3.fromRGB(70,120,230)
+	elseif mode == "SHIFT" then
+		modeSwitchBtn.Text = "TARGET: SHIFT LOCK"
+		modeSwitchBtn.BackgroundColor3 = Color3.fromRGB(150,70,220)
+	else
+		modeSwitchBtn.Text = "TARGET: ANALOG"
+		modeSwitchBtn.BackgroundColor3 = Color3.fromRGB(60,165,125)
+	end
 end
 
 connect(modeSwitchBtn.Activated,function()
-    if targetSettingMode == "JUMP" then
-        setTargetMode("SHIFT")
-    elseif targetSettingMode == "SHIFT" then
-        setTargetMode("ANALOG")
-    else
-        setTargetMode("JUMP")
-    end
+	if targetSettingMode == "JUMP" then
+		setTargetMode("SHIFT")
+	elseif targetSettingMode == "SHIFT" then
+		setTargetMode("ANALOG")
+	else
+		setTargetMode("JUMP")
+	end
 end)
 
-local targetHint = Instance.new("TextLabel")
-targetHint.Size = UDim2.new(1,-20,0,22)
-targetHint.Position = UDim2.fromOffset(10,50)
-targetHint.Text = "POSITION / SIZE — ONLY SELECTED TARGET"
-targetHint.TextColor3 = Color3.fromRGB(90,90,100)
-targetHint.Font = Enum.Font.Gotham
-targetHint.TextSize = 11
-targetHint.BackgroundTransparency = 1
-targetHint.ZIndex = 42
-targetHint.Parent = jumpSection
-
-local moveUp = makeButton(jumpSection,"MoveUp",UDim2.new(.5,-34,0,75),UDim2.fromOffset(68,46),"↑",nil,43)
-local moveLeft = makeButton(jumpSection,"MoveLeft",UDim2.new(.10,0,0,122),UDim2.fromOffset(68,46),"←",nil,43)
-local moveRight = makeButton(jumpSection,"MoveRight",UDim2.new(.90,-68,0,122),UDim2.fromOffset(68,46),"→",nil,43)
-local moveDown = makeButton(jumpSection,"MoveDown",UDim2.new(.5,-34,0,169),UDim2.fromOffset(68,46),"↓",nil,43)
-
-local sizePlus = makeButton(jumpSection,"SizePlus",UDim2.new(.06,0,0,227),UDim2.fromOffset(88,34),"SIZE +",nil,43)
-local sizeMinus = makeButton(jumpSection,"SizeMinus",UDim2.new(.94,-88,0,227),UDim2.fromOffset(88,34),"SIZE -",nil,43)
-local center = makeButton(jumpSection,"Center",UDim2.new(.5,-44,0,227),UDim2.fromOffset(88,34),"RESET",nil,43)
+connect(touchButton.Activated,function()
+	config.TouchSupport += 1
+	if config.TouchSupport > 4 then config.TouchSupport = 2 end
+	updateTouchLabel()
+end)
 
 local jumpButton
 
@@ -650,22 +705,18 @@ local function getJump()
 	if jumpButton and jumpButton.Parent and jumpButton:IsDescendantOf(playerGui) then
 		return jumpButton
 	end
-
 	local touchGui = playerGui:FindFirstChild("TouchGui")
 	if touchGui then
 		jumpButton = touchGui:FindFirstChild("JumpButton",true)
 	end
-
 	return jumpButton
 end
 
 local function updateJump()
 	if destroyed then return end
-
 	local jump = getJump()
 	local camera = workspace.CurrentCamera
 	if not jump or not camera then return end
-
 	local viewport = camera.ViewportSize
 	if viewport.X <= 0 or viewport.Y <= 0 then return end
 
@@ -673,7 +724,7 @@ local function updateJump()
 	config.JumpY = math.clamp(config.JumpY,.05,.95)
 	config.JumpSize = math.clamp(config.JumpSize,.05,.50)
 
-	local size = math.max(40,math.floor(viewport.Y * config.JumpSize))
+	local size = math.max(40,math.floor(viewport.Y*config.JumpSize))
 
 	pcall(function()
 		jump.AnchorPoint = Vector2.new(.5,.5)
@@ -686,45 +737,36 @@ local function updateShift()
 	config.ShiftX = math.clamp(config.ShiftX,.02,.98)
 	config.ShiftY = math.clamp(config.ShiftY,.02,.98)
 	config.ShiftSize = math.clamp(config.ShiftSize,20,100)
-
 	btnShiftLock.Position = UDim2.new(config.ShiftX,0,config.ShiftY,0)
 	btnShiftLock.Size = UDim2.fromOffset(config.ShiftSize,config.ShiftSize)
 end
 
 local function updateAnalog()
-    config.AnalogX = math.clamp(config.AnalogX,.10,.90)
-    config.AnalogY = math.clamp(config.AnalogY,.10,.90)
-    config.AnalogSize = math.clamp(config.AnalogSize,90,220)
-
-    if analogGui and analogGui.Parent then
-        analogGui.Position = UDim2.new(config.AnalogX,0,config.AnalogY,0)
-        analogGui.Size = UDim2.fromOffset(config.AnalogSize,config.AnalogSize)
-        resetAnalogVisual()
-    end
+	config.AnalogX = math.clamp(config.AnalogX,.10,.90)
+	config.AnalogY = math.clamp(config.AnalogY,.10,.90)
+	config.AnalogSize = math.clamp(config.AnalogSize,90,220)
+	analogGui.Position = UDim2.new(config.AnalogX,0,config.AnalogY,0)
+	analogGui.Size = UDim2.fromOffset(config.AnalogSize,config.AnalogSize)
+	resetAnalog()
 end
 
 local function applyMoveStep(dx,dy)
-    if targetSettingMode == "JUMP" then
-        config.JumpX = math.clamp(config.JumpX+dx,.05,.95)
-        config.JumpY = math.clamp(config.JumpY+dy,.05,.95)
-        updateJump()
-    elseif targetSettingMode == "SHIFT" then
-        config.ShiftX = math.clamp(config.ShiftX+dx,.02,.98)
-        config.ShiftY = math.clamp(config.ShiftY+dy,.02,.98)
-        updateShift()
-    else
-        config.AnalogX = math.clamp(config.AnalogX+dx,.10,.90)
-        config.AnalogY = math.clamp(config.AnalogY+dy,.10,.90)
-        updateAnalog()
-    end
+	if targetSettingMode == "JUMP" then
+		config.JumpX = math.clamp(config.JumpX+dx,.05,.95)
+		config.JumpY = math.clamp(config.JumpY+dy,.05,.95)
+		updateJump()
+	elseif targetSettingMode == "SHIFT" then
+		config.ShiftX = math.clamp(config.ShiftX+dx,.02,.98)
+		config.ShiftY = math.clamp(config.ShiftY+dy,.02,.98)
+		updateShift()
+	else
+		config.AnalogX = math.clamp(config.AnalogX+dx,.10,.90)
+		config.AnalogY = math.clamp(config.AnalogY+dy,.10,.90)
+		updateAnalog()
+	end
 end
 
-local holding = {
-	[moveUp]=false,
-	[moveDown]=false,
-	[moveLeft]=false,
-	[moveRight]=false
-}
+local holding = {[moveUp]=false,[moveDown]=false,[moveLeft]=false,[moveRight]=false}
 
 local function bindHold(button,dx,dy)
 	connect(button.InputBegan,function(input)
@@ -733,7 +775,6 @@ local function bindHold(button,dx,dy)
 		holding[button] = true
 		applyMoveStep(dx,dy)
 	end)
-
 	connect(button.InputEnded,function(input)
 		local t = input.UserInputType
 		if t == Enum.UserInputType.Touch or t == Enum.UserInputType.MouseButton1 then
@@ -750,15 +791,12 @@ bindHold(moveRight,step,0)
 connect(UserInputService.InputEnded,function(input)
 	local t = input.UserInputType
 	if t == Enum.UserInputType.Touch or t == Enum.UserInputType.MouseButton1 then
-		for button in pairs(holding) do
-			holding[button] = false
-		end
+		for button in pairs(holding) do holding[button] = false end
 	end
 end)
 
 connect(RunService.RenderStepped,function()
 	if destroyed then return end
-
 	if holding[moveUp] then applyMoveStep(0,-step) end
 	if holding[moveDown] then applyMoveStep(0,step) end
 	if holding[moveLeft] then applyMoveStep(-step,0) end
@@ -766,93 +804,84 @@ connect(RunService.RenderStepped,function()
 end)
 
 connect(sizePlus.Activated,function()
-    if targetSettingMode == "JUMP" then
-        config.JumpSize = math.clamp(config.JumpSize+.05,.05,.50)
-        updateJump()
-    elseif targetSettingMode == "SHIFT" then
-        config.ShiftSize = math.clamp(config.ShiftSize+5,20,100)
-        updateShift()
-    else
-        config.AnalogSize = math.clamp(config.AnalogSize+10,90,220)
-        updateAnalog()
-    end
+	if targetSettingMode == "JUMP" then
+		config.JumpSize = math.clamp(config.JumpSize+.05,.05,.50)
+		updateJump()
+	elseif targetSettingMode == "SHIFT" then
+		config.ShiftSize = math.clamp(config.ShiftSize+5,20,100)
+		updateShift()
+	else
+		config.AnalogSize = math.clamp(config.AnalogSize+10,90,220)
+		updateAnalog()
+	end
 end)
 
 connect(sizeMinus.Activated,function()
-    if targetSettingMode == "JUMP" then
-        config.JumpSize = math.clamp(config.JumpSize-.05,.05,.50)
-        updateJump()
-    elseif targetSettingMode == "SHIFT" then
-        config.ShiftSize = math.clamp(config.ShiftSize-5,20,100)
-        updateShift()
-    else
-        config.AnalogSize = math.clamp(config.AnalogSize-10,90,220)
-        updateAnalog()
-    end
+	if targetSettingMode == "JUMP" then
+		config.JumpSize = math.clamp(config.JumpSize-.05,.05,.50)
+		updateJump()
+	elseif targetSettingMode == "SHIFT" then
+		config.ShiftSize = math.clamp(config.ShiftSize-5,20,100)
+		updateShift()
+	else
+		config.AnalogSize = math.clamp(config.AnalogSize-10,90,220)
+		updateAnalog()
+	end
 end)
 
 connect(center.Activated,function()
-    if targetSettingMode == "JUMP" then
-        config.JumpX = defaultConfig.JumpX
-        config.JumpY = defaultConfig.JumpY
-        config.JumpSize = defaultConfig.JumpSize
-        updateJump()
-    elseif targetSettingMode == "SHIFT" then
-        config.ShiftX = defaultConfig.ShiftX
-        config.ShiftY = defaultConfig.ShiftY
-        config.ShiftSize = defaultConfig.ShiftSize
-        updateShift()
-    else
-        config.AnalogX = defaultConfig.AnalogX
-        config.AnalogY = defaultConfig.AnalogY
-        config.AnalogSize = defaultConfig.AnalogSize
-        updateAnalog()
-    end
+	if targetSettingMode == "JUMP" then
+		config.JumpX = defaultConfig.JumpX
+		config.JumpY = defaultConfig.JumpY
+		config.JumpSize = defaultConfig.JumpSize
+		updateJump()
+	elseif targetSettingMode == "SHIFT" then
+		config.ShiftX = defaultConfig.ShiftX
+		config.ShiftY = defaultConfig.ShiftY
+		config.ShiftSize = defaultConfig.ShiftSize
+		updateShift()
+	else
+		config.AnalogX = defaultConfig.AnalogX
+		config.AnalogY = defaultConfig.AnalogY
+		config.AnalogSize = defaultConfig.AnalogSize
+		updateAnalog()
+	end
 end)
 
-local saveButton = makeButton(
-	settings,"SaveConfig",
-	UDim2.new(.05,0,1,-45),
-	UDim2.fromOffset(130,38),
-	"SAVE",
-	Color3.fromRGB(70,200,100),43
-)
+local saveButton = makeButton(settings,"SaveConfig",UDim2.new(.05,0,1,-48),UDim2.fromOffset(125,38),"SAVE",Color3.fromRGB(60,165,125),43)
 saveButton.TextColor3 = Color3.new(1,1,1)
 
-local closeButton = makeButton(
-	settings,"Close",
-	UDim2.new(.95,-130,1,-45),
-	UDim2.fromOffset(130,38),
-	"CLOSE",
-	Color3.fromRGB(230,90,90),43
-)
+local closeButton = makeButton(settings,"Close",UDim2.new(.95,-125,1,-48),UDim2.fromOffset(125,38),"CLOSE",Color3.fromRGB(180,70,80),43)
 closeButton.TextColor3 = Color3.new(1,1,1)
 
 connect(saveButton.Activated,function()
-    local ok = saveConfig()
-    if ok then
-        loadConfig()
-        config.JumpX = math.clamp(tonumber(config.JumpX) or defaultConfig.JumpX,.05,.95)
-        config.JumpY = math.clamp(tonumber(config.JumpY) or defaultConfig.JumpY,.05,.95)
-        config.JumpSize = math.clamp(tonumber(config.JumpSize) or defaultConfig.JumpSize,.05,.50)
-        config.ShiftX = math.clamp(tonumber(config.ShiftX) or defaultConfig.ShiftX,.02,.98)
-        config.ShiftY = math.clamp(tonumber(config.ShiftY) or defaultConfig.ShiftY,.02,.98)
-        config.ShiftSize = math.clamp(tonumber(config.ShiftSize) or defaultConfig.ShiftSize,20,100)
-        config.AnalogX = math.clamp(tonumber(config.AnalogX) or defaultConfig.AnalogX,.10,.90)
-        config.AnalogY = math.clamp(tonumber(config.AnalogY) or defaultConfig.AnalogY,.10,.90)
-        config.AnalogSize = math.clamp(tonumber(config.AnalogSize) or defaultConfig.AnalogSize,90,220)
-        config.Sensitivity = math.clamp(tonumber(config.Sensitivity) or defaultConfig.Sensitivity,.1,10)
-        updateJump()
-        updateShift()
-        updateAnalog()
-        applySensitivity()
-        saveButton.Text = "SAVED + LOADED"
-    else
-        saveButton.Text = "SAVE ERROR"
-    end
-    task.delay(1.2,function()
-        if saveButton and saveButton.Parent then saveButton.Text = "SAVE" end
-    end)
+	local ok = saveConfig()
+	if ok then
+		loadConfig()
+		config.JumpX = math.clamp(tonumber(config.JumpX) or defaultConfig.JumpX,.05,.95)
+		config.JumpY = math.clamp(tonumber(config.JumpY) or defaultConfig.JumpY,.05,.95)
+		config.JumpSize = math.clamp(tonumber(config.JumpSize) or defaultConfig.JumpSize,.05,.50)
+		config.ShiftX = math.clamp(tonumber(config.ShiftX) or defaultConfig.ShiftX,.02,.98)
+		config.ShiftY = math.clamp(tonumber(config.ShiftY) or defaultConfig.ShiftY,.02,.98)
+		config.ShiftSize = math.clamp(tonumber(config.ShiftSize) or defaultConfig.ShiftSize,20,100)
+		config.Sensitivity = math.clamp(tonumber(config.Sensitivity) or defaultConfig.Sensitivity,.1,10)
+		config.AnalogX = math.clamp(tonumber(config.AnalogX) or defaultConfig.AnalogX,.10,.90)
+		config.AnalogY = math.clamp(tonumber(config.AnalogY) or defaultConfig.AnalogY,.10,.90)
+		config.AnalogSize = math.clamp(tonumber(config.AnalogSize) or defaultConfig.AnalogSize,90,220)
+		config.TouchSupport = math.clamp(math.floor(tonumber(config.TouchSupport) or defaultConfig.TouchSupport),2,4)
+
+		updateJump()
+		updateShift()
+		updateAnalog()
+		applySensitivity()
+		updateTouchLabel()
+		saveButton.Text = "SAVED + LOADED"
+	else
+		saveButton.Text = "SAVE ERROR"
+	end
+	task.delay(1.2,function()
+		if saveButton and saveButton.Parent then saveButton.Text = "SAVE" end
+	end)
 end)
 
 connect(menu.Activated,function()
@@ -865,16 +894,10 @@ end)
 
 local function refresh()
 	task.defer(function()
-		updateJump()
-		updateShift()
-        updateAnalog()
-	end)
-
-	task.delay(.2,function()
 		if not destroyed then
 			updateJump()
 			updateShift()
-            updateAnalog()
+			updateAnalog()
 		end
 	end)
 end
@@ -882,10 +905,10 @@ end
 connect(player.CharacterAdded,function(newCharacter)
 	if destroyed then return end
 
-    clearMovement()
-
 	character = newCharacter
 	humanoid = newCharacter:WaitForChild("Humanoid",10)
+
+	clearMovement()
 
 	if humanoid then
 		humanoid.AutoRotate = not _G.ShiftLocked
@@ -898,12 +921,15 @@ end)
 connect(playerGui.ChildAdded,function(child)
 	if child.Name == "TouchGui" then
 		jumpButton = nil
-		refresh()
+		task.defer(function()
+			if not destroyed then updateJump() end
+		end)
 	end
 end)
 
+applySensitivity()
 updateCameraVectors()
 updateJump()
 updateShift()
 updateAnalog()
-applySensitivity()
+updateTouchLabel()
