@@ -25,7 +25,9 @@ local SHIFT_LOCK_IMAGE="rbxassetid://6031068426"
 local OPEN_MENU_IMAGE="rbxassetid://1234567890"
 
 local config={}
-for k,v in pairs(defaultConfig) do config[k]=v end
+for k,v in pairs(defaultConfig) do
+	config[k]=v
+end
 
 local function saveConfig()
 	pcall(function()
@@ -122,9 +124,9 @@ crosshair.Visible=false
 crosshair.ZIndex=1000000
 crosshair.Parent=screenGui
 
-local crossCorner=Instance.new("UICorner")
-crossCorner.CornerRadius=UDim.new(1,0)
-crossCorner.Parent=crosshair
+local cc=Instance.new("UICorner")
+cc.CornerRadius=UDim.new(1,0)
+cc.Parent=crosshair
 
 local btnShiftLock=Instance.new("ImageButton")
 btnShiftLock.Name="ShiftLockButton"
@@ -142,15 +144,15 @@ btnShiftLock.BorderSizePixel=0
 btnShiftLock.ZIndex=100000
 btnShiftLock.Parent=screenGui
 
-local shiftCorner=Instance.new("UICorner")
-shiftCorner.CornerRadius=UDim.new(1,0)
-shiftCorner.Parent=btnShiftLock
+local sc=Instance.new("UICorner")
+sc.CornerRadius=UDim.new(1,0)
+sc.Parent=btnShiftLock
 
-local shiftStroke=Instance.new("UIStroke")
-shiftStroke.Thickness=2
-shiftStroke.Color=Color3.new(0,0,0)
-shiftStroke.Transparency=.3
-shiftStroke.Parent=btnShiftLock
+local ss=Instance.new("UIStroke")
+ss.Thickness=2
+ss.Color=Color3.new(0,0,0)
+ss.Transparency=.3
+ss.Parent=btnShiftLock
 
 local function toggleShiftLock()
 	if destroyed then return end
@@ -170,6 +172,62 @@ local function toggleShiftLock()
 end
 
 connect(btnShiftLock.Activated,toggleShiftLock)
+
+local function getTouchGui()
+	return playerGui:FindFirstChild("TouchGui")
+end
+
+local function getTouchControlFrame()
+	local touchGui=getTouchGui()
+	if not touchGui then return nil end
+	return touchGui:FindFirstChild("TouchControlFrame",true)
+end
+
+local function getBuiltInAnalog()
+	local frame=getTouchControlFrame()
+	if not frame then return nil end
+
+	local dynamic=frame:FindFirstChild("DynamicThumbstickFrame",true)
+	if dynamic then
+		return dynamic
+	end
+
+	local thumb=frame:FindFirstChild("ThumbstickFrame",true)
+	if thumb then
+		return thumb
+	end
+
+	local thumb2=frame:FindFirstChild("Thumbstick",true)
+	if thumb2 then
+		return thumb2
+	end
+
+	return nil
+end
+
+local function updateBuiltInAnalog()
+	local analog=getBuiltInAnalog()
+	if not analog then return end
+
+	pcall(function()
+		analog.AnchorPoint=Vector2.new(.5,.5)
+		analog.Position=UDim2.new(
+			math.clamp(config.AnalogX,.02,.60),
+			0,
+			math.clamp(config.AnalogY,.45,.98),
+			0
+		)
+
+		if analog:IsA("Frame") or analog:IsA("ImageLabel") or analog:IsA("ImageButton") then
+			analog.Size=UDim2.new(
+				math.clamp(config.AnalogSize,.10,.50),
+				0,
+				math.clamp(config.AnalogSize,.10,.50),
+				0
+			)
+		end
+	end)
+end
 
 local gui=Instance.new("ScreenGui")
 gui.Name="DeltaMobileErgo"
@@ -323,6 +381,7 @@ end)
 applySensitivity()
 
 local targetSettingMode="JUMP"
+local analogTarget=false
 
 local controlSection=Instance.new("Frame")
 controlSection.Size=UDim2.new(1,-20,0,360)
@@ -358,14 +417,12 @@ connect(targetButton.Activated,function()
 	end
 end)
 
-local analogTarget=false
-
 local analogButton=makeButton(
 	controlSection,
 	"AnalogTarget",
 	UDim2.new(.05,0,0,55),
 	UDim2.new(.9,0,0,36),
-	"TARGET: ANALOG",
+	"TARGET: ANALOG BAWAAN",
 	Color3.fromRGB(50,180,130),
 	43
 )
@@ -373,10 +430,10 @@ local analogButton=makeButton(
 connect(analogButton.Activated,function()
 	analogTarget=not analogTarget
 	if analogTarget then
-		analogButton.Text="TARGET: ANALOG POSITION"
+		analogButton.Text="TARGET: ANALOG BAWAAN"
 		analogButton.BackgroundColor3=Color3.fromRGB(170,0,255)
 	else
-		analogButton.Text="TARGET: ANALOG"
+		analogButton.Text="TARGET: ANALOG BAWAAN"
 		analogButton.BackgroundColor3=Color3.fromRGB(50,180,130)
 	end
 end)
@@ -400,123 +457,11 @@ local touchButton=makeButton(
 	43
 )
 
-local jumpButton
-
-local function getTouchGui()
-	return playerGui:FindFirstChild("TouchGui")
-end
-
-local function getTouchControl()
-	local tg=getTouchGui()
-	if not tg then return nil end
-	return tg:FindFirstChild("TouchControlFrame",true)
-end
-
-local function getJump()
-	local tg=getTouchGui()
-	if tg then
-		local b=tg:FindFirstChild("JumpButton",true)
-		if b then
-			jumpButton=b
-			return b
-		end
-	end
-	return jumpButton
-end
-
-local function getAnalog()
-	local frame=getTouchControl()
-	if not frame then return nil end
-
-	local names={
-		"DynamicThumbstickFrame",
-		"ThumbstickFrame",
-		"Thumbstick"
-	}
-
-	for _,name in ipairs(names) do
-		local obj=frame:FindFirstChild(name,true)
-		if obj and obj:IsA("GuiObject") then
-			return obj
-		end
-	end
-
-	for _,obj in ipairs(frame:GetDescendants()) do
-		if obj:IsA("GuiObject") then
-			local n=obj.Name:lower()
-			if n:find("thumbstick") or n:find("dynamic") then
-				return obj
-			end
-		end
-	end
-
-	return nil
-end
-
-local function updateJump()
-	if destroyed then return end
-
-	local jump=getJump()
-	local camera=workspace.CurrentCamera
-
-	if not jump or not camera then return end
-
-	local viewport=camera.ViewportSize
-
-	if viewport.X<=0 or viewport.Y<=0 then return end
-
-	config.JumpX=math.clamp(config.JumpX,.05,.95)
-	config.JumpY=math.clamp(config.JumpY,.05,.95)
-	config.JumpSize=math.clamp(config.JumpSize,.05,.50)
-
-	local size=math.max(40,math.floor(viewport.Y*config.JumpSize))
-
-	pcall(function()
-		jump.AnchorPoint=Vector2.new(.5,.5)
-		jump.Position=UDim2.new(config.JumpX,0,config.JumpY,0)
-		jump.Size=UDim2.fromOffset(size,size)
-	end)
-end
-
-local function updateShift()
-	config.ShiftX=math.clamp(config.ShiftX,.02,.98)
-	config.ShiftY=math.clamp(config.ShiftY,.02,.98)
-	config.ShiftSize=math.clamp(config.ShiftSize,20,100)
-
-	btnShiftLock.Position=UDim2.new(config.ShiftX,0,config.ShiftY,0)
-	btnShiftLock.Size=UDim2.fromOffset(config.ShiftSize,config.ShiftSize)
-end
-
-local function updateAnalog()
-	local analog=getAnalog()
-	if not analog then return end
-
-	config.AnalogX=math.clamp(config.AnalogX,.02,.60)
-	config.AnalogY=math.clamp(config.AnalogY,.45,.98)
-	config.AnalogSize=math.clamp(config.AnalogSize,.10,.50)
-
-	local camera=workspace.CurrentCamera
-	if not camera then return end
-
-	local viewport=camera.ViewportSize
-
-	pcall(function()
-		analog.AnchorPoint=Vector2.new(.5,.5)
-		analog.Position=UDim2.new(config.AnalogX,0,config.AnalogY,0)
-		analog.Size=UDim2.new(
-			config.AnalogSize,
-			0,
-			config.AnalogSize,
-			0
-		)
-	end)
-end
-
 local function applyMoveStep(dx,dy)
 	if analogTarget then
 		config.AnalogX=math.clamp(config.AnalogX+dx,.02,.60)
 		config.AnalogY=math.clamp(config.AnalogY+dy,.45,.98)
-		updateAnalog()
+		updateBuiltInAnalog()
 	elseif targetSettingMode=="JUMP" then
 		config.JumpX=math.clamp(config.JumpX+dx,.05,.95)
 		config.JumpY=math.clamp(config.JumpY+dy,.05,.95)
@@ -547,7 +492,7 @@ end)
 connect(sizePlus.Activated,function()
 	if analogTarget then
 		config.AnalogSize=math.clamp(config.AnalogSize+.025,.10,.50)
-		updateAnalog()
+		updateBuiltInAnalog()
 	elseif targetSettingMode=="JUMP" then
 		config.JumpSize=math.clamp(config.JumpSize+.05,.05,.50)
 		updateJump()
@@ -560,7 +505,7 @@ end)
 connect(sizeMinus.Activated,function()
 	if analogTarget then
 		config.AnalogSize=math.clamp(config.AnalogSize-.025,.10,.50)
-		updateAnalog()
+		updateBuiltInAnalog()
 	elseif targetSettingMode=="JUMP" then
 		config.JumpSize=math.clamp(config.JumpSize-.05,.05,.50)
 		updateJump()
@@ -575,14 +520,16 @@ connect(center.Activated,function()
 		config.AnalogX=defaultConfig.AnalogX
 		config.AnalogY=defaultConfig.AnalogY
 		config.AnalogSize=defaultConfig.AnalogSize
-		updateAnalog()
+		updateBuiltInAnalog()
 	elseif targetSettingMode=="JUMP" then
 		config.JumpX=defaultConfig.JumpX
 		config.JumpY=defaultConfig.JumpY
+		config.JumpSize=defaultConfig.JumpSize
 		updateJump()
 	else
 		config.ShiftX=defaultConfig.ShiftX
 		config.ShiftY=defaultConfig.ShiftY
+		config.ShiftSize=defaultConfig.ShiftSize
 		updateShift()
 	end
 end)
@@ -621,7 +568,7 @@ connect(saveButton.Activated,function()
 	applySensitivity()
 	updateJump()
 	updateShift()
-	updateAnalog()
+	updateBuiltInAnalog()
 
 	saveButton.Text="SAVED!"
 
@@ -654,11 +601,10 @@ end)
 
 connect(playerGui.ChildAdded,function(child)
 	if child.Name=="TouchGui" then
-		jumpButton=nil
-		task.delay(.2,function()
+		task.delay(.25,function()
 			if not destroyed then
 				updateJump()
-				updateAnalog()
+				updateBuiltInAnalog()
 			end
 		end)
 	end
@@ -667,8 +613,8 @@ end)
 connect(RunService.RenderStepped,function()
 	if destroyed then return end
 
-	if _G.ShiftLocked then
-		if humanoid and humanoid.Parent then
+	if humanoid and humanoid.Parent then
+		if _G.ShiftLocked then
 			local camera=workspace.CurrentCamera
 			local root=character and character:FindFirstChild("HumanoidRootPart")
 
@@ -688,8 +634,11 @@ connect(RunService.RenderStepped,function()
 			end
 
 			humanoid.AutoRotate=false
-			humanoid.CameraOffset=Vector3.zero
+		else
+			humanoid.AutoRotate=true
 		end
+
+		humanoid.CameraOffset=Vector3.zero
 	end
 end)
 
@@ -697,18 +646,18 @@ local function refresh()
 	task.defer(function()
 		updateJump()
 		updateShift()
-		updateAnalog()
+		updateBuiltInAnalog()
 	end)
 
 	task.delay(.25,function()
 		if not destroyed then
 			updateJump()
 			updateShift()
-			updateAnalog()
+			updateBuiltInAnalog()
 		end
 	end)
 end
 
 updateJump()
 updateShift()
-updateAnalog()
+updateBuiltInAnalog()
