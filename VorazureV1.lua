@@ -20,6 +20,7 @@ local defaultConfig = {
     AnalogSize = 150
 }
 
+-- costum id foto
 local SHIFT_LOCK_IMAGE = "rbxassetid://6031068426"
 local OPEN_MENU_IMAGE = "rbxassetid://1234567890"
 
@@ -132,60 +133,8 @@ end
 local btnShiftLock
 
 local function clearMovement()
-	moveState.Forward = false
-	moveState.Backward = false
-	moveState.Left = false
-	moveState.Right = false
-
-	for input in pairs(activeInputs) do
-		activeInputs[input] = nil
-	end
-
-	for button, color in pairs(buttonDefaults) do
-		if button and button.Parent then
-			button.BackgroundColor3 = color
-		end
-	end
-
-	end
-
-local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "DeltaMobileControls"
-screenGui.ResetOnSpawn = false
-screenGui.IgnoreGuiInset = true
-screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-screenGui.DisplayOrder = 999999
-screenGui.Parent = playerGui
-
-local crosshair = Instance.new("Frame")
-crosshair.Name = "ShiftLockCrosshair"
-crosshair.Size = UDim2.fromOffset(6,6)
-crosshair.Position = UDim2.new(.5,-3,.5,-3)
-crosshair.BackgroundColor3 = Color3.new(1,1,1)
-crosshair.BorderSizePixel = 0
-crosshair.Visible = false
-crosshair.ZIndex = 1000000
-crosshair.Parent = screenGui
-
-local cc = Instance.new("UICorner")
-cc.CornerRadius = UDim.new(1,0)
-cc.Parent = crosshair
-
-local function toggleShiftLock()
-	if destroyed then return end
-
-	_G.ShiftLocked = not _G.ShiftLocked
-
-	if btnShiftLock and btnShiftLock.Parent then
-		btnShiftLock.BackgroundColor3 = _G.ShiftLocked and SHIFT_ON or SHIFT_OFF
-	end
-
-	crosshair.Visible = _G.ShiftLocked
-
-	if humanoid and humanoid.Parent then
-		humanoid.AutoRotate = not _G.ShiftLocked
-		humanoid.CameraOffset = Vector3.zero
-	end
+    clearAnalog()
+    resetAnalogVisual()
 end
 
 -- SHIFT LOCK BUTTON
@@ -651,16 +600,28 @@ local modeSwitchBtn = makeButton(
 )
 modeSwitchBtn.TextColor3 = Color3.new(1,1,1)
 
+local function setTargetMode(mode)
+    targetSettingMode = mode
+    if mode == "JUMP" then
+        modeSwitchBtn.Text = "TARGET: JUMP BUTTON"
+        modeSwitchBtn.BackgroundColor3 = Color3.fromRGB(70,150,255)
+    elseif mode == "SHIFT" then
+        modeSwitchBtn.Text = "TARGET: SHIFT LOCK"
+        modeSwitchBtn.BackgroundColor3 = Color3.fromRGB(170,0,255)
+    else
+        modeSwitchBtn.Text = "TARGET: ANALOG"
+        modeSwitchBtn.BackgroundColor3 = Color3.fromRGB(70,180,140)
+    end
+end
+
 connect(modeSwitchBtn.Activated,function()
-	if targetSettingMode == "JUMP" then
-		targetSettingMode = "SHIFT"
-		modeSwitchBtn.Text = "TARGET: SHIFT LOCK"
-		modeSwitchBtn.BackgroundColor3 = Color3.fromRGB(170,0,255)
-	else
-		targetSettingMode = "JUMP"
-		modeSwitchBtn.Text = "TARGET: JUMP BUTTON"
-		modeSwitchBtn.BackgroundColor3 = Color3.fromRGB(70,150,255)
-	end
+    if targetSettingMode == "JUMP" then
+        setTargetMode("SHIFT")
+    elseif targetSettingMode == "SHIFT" then
+        setTargetMode("ANALOG")
+    else
+        setTargetMode("JUMP")
+    end
 end)
 
 local targetHint = Instance.new("TextLabel")
@@ -743,15 +704,19 @@ local function updateAnalog()
 end
 
 local function applyMoveStep(dx,dy)
-	if targetSettingMode == "JUMP" then
-		config.JumpX = math.clamp(config.JumpX+dx,.05,.95)
-		config.JumpY = math.clamp(config.JumpY+dy,.05,.95)
-		updateJump()
-	else
-		config.ShiftX = math.clamp(config.ShiftX+dx,.02,.98)
-		config.ShiftY = math.clamp(config.ShiftY+dy,.02,.98)
-		updateShift()
-	end
+    if targetSettingMode == "JUMP" then
+        config.JumpX = math.clamp(config.JumpX+dx,.05,.95)
+        config.JumpY = math.clamp(config.JumpY+dy,.05,.95)
+        updateJump()
+    elseif targetSettingMode == "SHIFT" then
+        config.ShiftX = math.clamp(config.ShiftX+dx,.02,.98)
+        config.ShiftY = math.clamp(config.ShiftY+dy,.02,.98)
+        updateShift()
+    else
+        config.AnalogX = math.clamp(config.AnalogX+dx,.10,.90)
+        config.AnalogY = math.clamp(config.AnalogY+dy,.10,.90)
+        updateAnalog()
+    end
 end
 
 local holding = {
@@ -801,35 +766,48 @@ connect(RunService.RenderStepped,function()
 end)
 
 connect(sizePlus.Activated,function()
-	if targetSettingMode == "JUMP" then
-		config.JumpSize = math.clamp(config.JumpSize+.05,.05,.50)
-		updateJump()
-	else
-		config.ShiftSize = math.clamp(config.ShiftSize+5,20,100)
-		updateShift()
-	end
+    if targetSettingMode == "JUMP" then
+        config.JumpSize = math.clamp(config.JumpSize+.05,.05,.50)
+        updateJump()
+    elseif targetSettingMode == "SHIFT" then
+        config.ShiftSize = math.clamp(config.ShiftSize+5,20,100)
+        updateShift()
+    else
+        config.AnalogSize = math.clamp(config.AnalogSize+10,90,220)
+        updateAnalog()
+    end
 end)
 
 connect(sizeMinus.Activated,function()
-	if targetSettingMode == "JUMP" then
-		config.JumpSize = math.clamp(config.JumpSize-.05,.05,.50)
-		updateJump()
-	else
-		config.ShiftSize = math.clamp(config.ShiftSize-5,20,100)
-		updateShift()
-	end
+    if targetSettingMode == "JUMP" then
+        config.JumpSize = math.clamp(config.JumpSize-.05,.05,.50)
+        updateJump()
+    elseif targetSettingMode == "SHIFT" then
+        config.ShiftSize = math.clamp(config.ShiftSize-5,20,100)
+        updateShift()
+    else
+        config.AnalogSize = math.clamp(config.AnalogSize-10,90,220)
+        updateAnalog()
+    end
 end)
 
 connect(center.Activated,function()
-	if targetSettingMode == "JUMP" then
-		config.JumpX = defaultConfig.JumpX
-		config.JumpY = defaultConfig.JumpY
-		updateJump()
-	else
-		config.ShiftX = defaultConfig.ShiftX
-		config.ShiftY = defaultConfig.ShiftY
-		updateShift()
-	end
+    if targetSettingMode == "JUMP" then
+        config.JumpX = defaultConfig.JumpX
+        config.JumpY = defaultConfig.JumpY
+        config.JumpSize = defaultConfig.JumpSize
+        updateJump()
+    elseif targetSettingMode == "SHIFT" then
+        config.ShiftX = defaultConfig.ShiftX
+        config.ShiftY = defaultConfig.ShiftY
+        config.ShiftSize = defaultConfig.ShiftSize
+        updateShift()
+    else
+        config.AnalogX = defaultConfig.AnalogX
+        config.AnalogY = defaultConfig.AnalogY
+        config.AnalogSize = defaultConfig.AnalogSize
+        updateAnalog()
+    end
 end)
 
 local saveButton = makeButton(
@@ -851,14 +829,30 @@ local closeButton = makeButton(
 closeButton.TextColor3 = Color3.new(1,1,1)
 
 connect(saveButton.Activated,function()
-	saveConfig()
-	local old = saveButton.Text
-	saveButton.Text = "SAVED!"
-	task.delay(1,function()
-		if saveButton and saveButton.Parent then
-			saveButton.Text = old
-		end
-	end)
+    local ok = saveConfig()
+    if ok then
+        loadConfig()
+        config.JumpX = math.clamp(tonumber(config.JumpX) or defaultConfig.JumpX,.05,.95)
+        config.JumpY = math.clamp(tonumber(config.JumpY) or defaultConfig.JumpY,.05,.95)
+        config.JumpSize = math.clamp(tonumber(config.JumpSize) or defaultConfig.JumpSize,.05,.50)
+        config.ShiftX = math.clamp(tonumber(config.ShiftX) or defaultConfig.ShiftX,.02,.98)
+        config.ShiftY = math.clamp(tonumber(config.ShiftY) or defaultConfig.ShiftY,.02,.98)
+        config.ShiftSize = math.clamp(tonumber(config.ShiftSize) or defaultConfig.ShiftSize,20,100)
+        config.AnalogX = math.clamp(tonumber(config.AnalogX) or defaultConfig.AnalogX,.10,.90)
+        config.AnalogY = math.clamp(tonumber(config.AnalogY) or defaultConfig.AnalogY,.10,.90)
+        config.AnalogSize = math.clamp(tonumber(config.AnalogSize) or defaultConfig.AnalogSize,90,220)
+        config.Sensitivity = math.clamp(tonumber(config.Sensitivity) or defaultConfig.Sensitivity,.1,10)
+        updateJump()
+        updateShift()
+        updateAnalog()
+        applySensitivity()
+        saveButton.Text = "SAVED + LOADED"
+    else
+        saveButton.Text = "SAVE ERROR"
+    end
+    task.delay(1.2,function()
+        if saveButton and saveButton.Parent then saveButton.Text = "SAVE" end
+    end)
 end)
 
 connect(menu.Activated,function()
@@ -873,12 +867,14 @@ local function refresh()
 	task.defer(function()
 		updateJump()
 		updateShift()
+        updateAnalog()
 	end)
 
 	task.delay(.2,function()
 		if not destroyed then
 			updateJump()
 			updateShift()
+            updateAnalog()
 		end
 	end)
 end
@@ -886,9 +882,7 @@ end
 connect(player.CharacterAdded,function(newCharacter)
 	if destroyed then return end
 
-	clearMovement()
-	smoothX = 0
-	smoothZ = 0
+    clearMovement()
 
 	character = newCharacter
 	humanoid = newCharacter:WaitForChild("Humanoid",10)
