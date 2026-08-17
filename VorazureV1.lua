@@ -20,9 +20,8 @@ local defaultConfig = {
     AnalogSize = 150
 }
 
--- costum id foto
-local SHIFT_LOCK_IMAGE = "rbxassetid://6031068426" -- Ganti angka ini dengan ID gambar Shift Lock kamu
-local OPEN_MENU_IMAGE = "rbxassetid://1234567890"  -- Ganti angka ini dengan ID gambar Open Menu kamu
+local SHIFT_LOCK_IMAGE = "rbxassetid://6031068426"
+local OPEN_MENU_IMAGE = "rbxassetid://1234567890"
 
 local config = {}
 for k, v in pairs(defaultConfig) do
@@ -53,6 +52,17 @@ local function loadConfig()
 end
 
 loadConfig()
+
+config.JumpX = math.clamp(tonumber(config.JumpX) or defaultConfig.JumpX,.05,.95)
+config.JumpY = math.clamp(tonumber(config.JumpY) or defaultConfig.JumpY,.05,.95)
+config.JumpSize = math.clamp(tonumber(config.JumpSize) or defaultConfig.JumpSize,.05,.50)
+config.ShiftX = math.clamp(tonumber(config.ShiftX) or defaultConfig.ShiftX,.02,.98)
+config.ShiftY = math.clamp(tonumber(config.ShiftY) or defaultConfig.ShiftY,.02,.98)
+config.ShiftSize = math.clamp(tonumber(config.ShiftSize) or defaultConfig.ShiftSize,20,100)
+config.AnalogX = math.clamp(tonumber(config.AnalogX) or defaultConfig.AnalogX,.10,.90)
+config.AnalogY = math.clamp(tonumber(config.AnalogY) or defaultConfig.AnalogY,.10,.90)
+config.AnalogSize = math.clamp(tonumber(config.AnalogSize) or defaultConfig.AnalogSize,90,220)
+config.Sensitivity = math.clamp(tonumber(config.Sensitivity) or defaultConfig.Sensitivity,.1,10)
 
 if _G.DeltaMobileControlsCleanup then
 	pcall(_G.DeltaMobileControlsCleanup)
@@ -530,8 +540,23 @@ settings.ZIndex = 40
 settings.Parent = gui
 
 local settingsCorner = Instance.new("UICorner")
-settingsCorner.CornerRadius = UDim.new(0,16)
+settingsCorner.CornerRadius = UDim.new(0,18)
 settingsCorner.Parent = settings
+
+local settingsStroke = Instance.new("UIStroke")
+settingsStroke.Thickness = 1.5
+settingsStroke.Transparency = .18
+settingsStroke.Color = Color3.fromRGB(255,255,255)
+settingsStroke.Parent = settings
+
+local settingsGradient = Instance.new("UIGradient")
+settingsGradient.Rotation = 35
+settingsGradient.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0,Color3.fromRGB(250,250,255)),
+    ColorSequenceKeypoint.new(.5,Color3.fromRGB(232,235,245)),
+    ColorSequenceKeypoint.new(1,Color3.fromRGB(248,248,252))
+})
+settingsGradient.Parent = settings
 
 local cameraSection = Instance.new("Frame")
 cameraSection.Size = UDim2.new(1,-20,0,160)
@@ -542,8 +567,14 @@ cameraSection.ZIndex = 41
 cameraSection.Parent = settings
 
 local cameraCorner = Instance.new("UICorner")
-cameraCorner.CornerRadius = UDim.new(0,12)
+cameraCorner.CornerRadius = UDim.new(0,14)
 cameraCorner.Parent = cameraSection
+
+local cameraStroke = Instance.new("UIStroke")
+cameraStroke.Thickness = 1
+cameraStroke.Transparency = .35
+cameraStroke.Color = Color3.fromRGB(255,255,255)
+cameraStroke.Parent = cameraSection
 
 local cameraTitle = Instance.new("TextLabel")
 cameraTitle.Size = UDim2.new(1,0,0,40)
@@ -602,8 +633,14 @@ jumpSection.ZIndex = 41
 jumpSection.Parent = settings
 
 local jumpCorner = Instance.new("UICorner")
-jumpCorner.CornerRadius = UDim.new(0,12)
+jumpCorner.CornerRadius = UDim.new(0,14)
 jumpCorner.Parent = jumpSection
+
+local jumpStroke = Instance.new("UIStroke")
+jumpStroke.Thickness = 1
+jumpStroke.Transparency = .35
+jumpStroke.Color = Color3.fromRGB(255,255,255)
+jumpStroke.Parent = jumpSection
 
 local modeSwitchBtn = makeButton(
 	jumpSection,"ToggleTargetMode",
@@ -626,14 +663,25 @@ connect(modeSwitchBtn.Activated,function()
 	end
 end)
 
-local moveUp = makeButton(jumpSection,"MoveUp",UDim2.new(.5,-34,0,55),UDim2.fromOffset(68,46),"↑",nil,43)
-local moveLeft = makeButton(jumpSection,"MoveLeft",UDim2.new(.10,0,0,102),UDim2.fromOffset(68,46),"←",nil,43)
-local moveRight = makeButton(jumpSection,"MoveRight",UDim2.new(.90,-68,0,102),UDim2.fromOffset(68,46),"→",nil,43)
-local moveDown = makeButton(jumpSection,"MoveDown",UDim2.new(.5,-34,0,149),UDim2.fromOffset(68,46),"↓",nil,43)
+local targetHint = Instance.new("TextLabel")
+targetHint.Size = UDim2.new(1,-20,0,22)
+targetHint.Position = UDim2.fromOffset(10,50)
+targetHint.Text = "POSITION / SIZE — ONLY SELECTED TARGET"
+targetHint.TextColor3 = Color3.fromRGB(90,90,100)
+targetHint.Font = Enum.Font.Gotham
+targetHint.TextSize = 11
+targetHint.BackgroundTransparency = 1
+targetHint.ZIndex = 42
+targetHint.Parent = jumpSection
 
-local sizePlus = makeButton(jumpSection,"SizePlus",UDim2.new(.06,0,0,207),UDim2.fromOffset(88,34),"SIZE +",nil,43)
-local sizeMinus = makeButton(jumpSection,"SizeMinus",UDim2.new(.94,-88,0,207),UDim2.fromOffset(88,34),"SIZE -",nil,43)
-local center = makeButton(jumpSection,"Center",UDim2.new(.5,-44,0,207),UDim2.fromOffset(88,34),"RESET",nil,43)
+local moveUp = makeButton(jumpSection,"MoveUp",UDim2.new(.5,-34,0,75),UDim2.fromOffset(68,46),"↑",nil,43)
+local moveLeft = makeButton(jumpSection,"MoveLeft",UDim2.new(.10,0,0,122),UDim2.fromOffset(68,46),"←",nil,43)
+local moveRight = makeButton(jumpSection,"MoveRight",UDim2.new(.90,-68,0,122),UDim2.fromOffset(68,46),"→",nil,43)
+local moveDown = makeButton(jumpSection,"MoveDown",UDim2.new(.5,-34,0,169),UDim2.fromOffset(68,46),"↓",nil,43)
+
+local sizePlus = makeButton(jumpSection,"SizePlus",UDim2.new(.06,0,0,227),UDim2.fromOffset(88,34),"SIZE +",nil,43)
+local sizeMinus = makeButton(jumpSection,"SizeMinus",UDim2.new(.94,-88,0,227),UDim2.fromOffset(88,34),"SIZE -",nil,43)
+local center = makeButton(jumpSection,"Center",UDim2.new(.5,-44,0,227),UDim2.fromOffset(88,34),"RESET",nil,43)
 
 local jumpButton
 
@@ -864,3 +912,4 @@ updateCameraVectors()
 updateJump()
 updateShift()
 updateAnalog()
+applySensitivity()
