@@ -21,8 +21,8 @@ local defaultConfig={
 	TouchSupport=4
 }
 
-local SHIFT_LOCK_IMAGE="rbxassetid://6031068426"
-local OPEN_MENU_IMAGE="rbxassetid://1234567890"
+local SHIFT_LOCK_IMAGE="rbxassetid://117917793889046"
+local OPEN_MENU_IMAGE="rbxassetid://101640388423900"
 
 local config={}
 for k,v in pairs(defaultConfig) do
@@ -182,6 +182,7 @@ local function getJump()
 	if not touchGui then return nil end
 
 	local jump=touchGui:FindFirstChild("JumpButton",true)
+
 	if jump and jump:IsA("GuiObject") then
 		return jump
 	end
@@ -197,11 +198,13 @@ local function getAnalog()
 	if not frame then return nil end
 
 	local analog=frame:FindFirstChild("DynamicThumbstickFrame",true)
+
 	if analog and analog:IsA("GuiObject") then
 		return analog
 	end
 
 	analog=frame:FindFirstChild("ThumbstickFrame",true)
+
 	if analog and analog:IsA("GuiObject") then
 		return analog
 	end
@@ -417,6 +420,7 @@ sensLabel.Parent=cameraSection
 
 local function applySensitivity()
 	sensLabel.Text="Multiplier: "..string.format("%.1f",config.Sensitivity).."x"
+
 	pcall(function()
 		UserSettings().GameSettings.MouseSensitivity=config.Sensitivity
 	end)
@@ -486,6 +490,7 @@ connect(targetButton.Activated,function()
 	else
 		targetMode="JUMP"
 	end
+
 	updateTargetText()
 end)
 
@@ -619,11 +624,6 @@ local closeButton=makeButton(
 
 connect(saveButton.Activated,function()
 	saveConfig()
-	loadConfig()
-	applySensitivity()
-	updateJump()
-	updateShift()
-	updateAnalog()
 
 	saveButton.Text="SAVED!"
 
@@ -644,14 +644,6 @@ end)
 
 connect(closeButton.Activated,function()
 	settings.Visible=false
-end)
-
-connect(UserInputService.TouchStarted,function(input)
-	if destroyed then return end
-end)
-
-connect(UserInputService.TouchEnded,function(input)
-	if destroyed then return end
 end)
 
 connect(player.CharacterAdded,function(newCharacter)
