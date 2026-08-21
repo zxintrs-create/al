@@ -91,22 +91,6 @@ local function getNearestGinseng(characterRoot)
     return nearestPart
 end
 
-local function triggerPromptReliably(prompt)
-    if prompt then
-        pcall(function()
-            fireproximityprompt(prompt)
-        end)
-        -- Metode alternatif paksa jika fungsi standar diabaikan game
-        if prompt.HoldDuration > 0 then
-            task.delay(prompt.HoldDuration, function()
-                if prompt and prompt.Parent then
-                    prompt:InputHoldEnd(player)
-                end
-            end)
-        end
-    end
-end
-
 toggleButton.MouseButton1Click:Connect(function()
     isTeleportActive = not isTeleportActive
     if isTeleportActive then
@@ -131,11 +115,15 @@ task.spawn(function()
 
                 if nearestGinseng then
                     if (humanoidRootPart.Position - nearestGinseng.Position).Magnitude > 5 then
-                        humanoidRootPart.CFrame = nearestGinseng.CFrame + Vector3.new(0, 3, 0)
+                        -- Teleport ke atas Ginseng
+                        local targetPos = nearestGinseng.Position + Vector3.new(0, 3, 0)
+                        
+                        -- Berteleportasi sekaligus memutar sedikit orientasi (rotasi di tempat)
+                        humanoidRootPart.CFrame = CFrame.new(targetPos) * CFrame.Angles(0, math.rad(45), 0)
 
                         local prompt = nearestGinseng:FindFirstChildOfClass("ProximityPrompt")
                         if prompt then
-                            triggerPromptReliably(prompt)
+                            fireproximityprompt(prompt)
                         end
                     end
                 end
