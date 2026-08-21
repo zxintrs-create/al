@@ -71,7 +71,6 @@ local function createPlatform()
     weld.Parent = platform
 end
 
--- Fungsi mencari Ginseng terdekat di dalam folder Workspace > Herbs
 local function getNearestGinseng(characterRoot)
     local nearestPart = nil
     local shortestDistance = math.huge
@@ -90,6 +89,22 @@ local function getNearestGinseng(characterRoot)
     end
 
     return nearestPart
+end
+
+local function triggerPromptReliably(prompt)
+    if prompt then
+        pcall(function()
+            fireproximityprompt(prompt)
+        end)
+        -- Metode alternatif paksa jika fungsi standar diabaikan game
+        if prompt.HoldDuration > 0 then
+            task.delay(prompt.HoldDuration, function()
+                if prompt and prompt.Parent then
+                    prompt:InputHoldEnd(player)
+                end
+            end)
+        end
+    end
 end
 
 toggleButton.MouseButton1Click:Connect(function()
@@ -120,7 +135,7 @@ task.spawn(function()
 
                         local prompt = nearestGinseng:FindFirstChildOfClass("ProximityPrompt")
                         if prompt then
-                            fireproximityprompt(prompt)
+                            triggerPromptReliably(prompt)
                         end
                     end
                 end
