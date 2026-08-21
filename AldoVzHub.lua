@@ -37,13 +37,27 @@ openButton.MouseButton1Click:Connect(function()
 end)
 
 local isTeleportActive = false
-local currentPlatform = nil
 
--- Fungsi untuk membuat part pengaman
+-- Fungsi untuk membersihkan semua part pengaman yang mungkin tertinggal
+local function removePlatform()
+    local character = player.Character
+    if character then
+        for _, obj in ipairs(character:GetChildren()) do
+            if obj.Name == "SafetyPlatform" then
+                obj:Destroy()
+            end
+        end
+    end
+end
+
+-- Fungsi untuk memastikan hanya ada 1 part pengaman baru
 local function createPlatform()
     local character = player.Character
     local rootPart = character and character:FindFirstChild("HumanoidRootPart")
-    if not rootPart or currentPlatform then return end
+    if not rootPart then return end
+
+    -- Bersihkan dulu yang lama sebelum membuat yang baru
+    removePlatform()
 
     local platform = Instance.new("Part")
     platform.Name = "SafetyPlatform"
@@ -57,16 +71,6 @@ local function createPlatform()
     weld.Part0 = rootPart
     weld.Part1 = platform
     weld.Parent = platform
-
-    currentPlatform = platform
-end
-
--- Fungsi untuk menghapus part pengaman
-local function removePlatform()
-    if currentPlatform then
-        currentPlatform:Destroy()
-        currentPlatform = nil
-    end
 end
 
 toggleButton.MouseButton1Click:Connect(function()
@@ -74,11 +78,11 @@ toggleButton.MouseButton1Click:Connect(function()
     if isTeleportActive then
         toggleButton.Text = "Teleport: ON"
         toggleButton.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
-        createPlatform() -- Muncul saat ON
+        createPlatform()
     else
         toggleButton.Text = "Teleport: OFF"
         toggleButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-        removePlatform() -- Hilang saat OFF
+        removePlatform()
     end
 end)
 
