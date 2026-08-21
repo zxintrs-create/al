@@ -71,26 +71,6 @@ local function createPlatform()
     weld.Parent = platform
 end
 
-local function getNearestGinseng(characterRoot)
-    local nearestPart = nil
-    local shortestDistance = math.huge
-
-    local herbsFolder = workspace:FindFirstChild("Herbs")
-    if herbsFolder then
-        for _, obj in ipairs(herbsFolder:GetChildren()) do
-            if obj.Name == "Ginseng" and obj:IsA("BasePart") then
-                local distance = (obj.Position - characterRoot.Position).Magnitude
-                if distance < shortestDistance then
-                    shortestDistance = distance
-                    nearestPart = obj
-                end
-            end
-        end
-    end
-
-    return nearestPart
-end
-
 toggleButton.MouseButton1Click:Connect(function()
     isTeleportActive = not isTeleportActive
     if isTeleportActive then
@@ -104,6 +84,7 @@ toggleButton.MouseButton1Click:Connect(function()
     end
 end)
 
+-- Loop utama untuk merotasi dan membersihkan semua Ginseng di dalam folder Herbs tanpa tertinggal
 task.spawn(function()
     while true do
         if isTeleportActive then
@@ -111,24 +92,31 @@ task.spawn(function()
             if character and character:FindFirstChild("HumanoidRootPart") then
                 local humanoidRootPart = character.HumanoidRootPart
                 
-                local nearestGinseng = getNearestGinseng(humanoidRootPart)
-
-                if nearestGinseng then
-                    if (humanoidRootPart.Position - nearestGinseng.Position).Magnitude > 5 then
-                        -- Teleport ke atas Ginseng
-                        local targetPos = nearestGinseng.Position + Vector3.new(0, 3, 0)
+                local herbsFolder = workspace:FindFirstChild("Herbs")
+                if herbsFolder then
+                    -- Mengambil dan melintasi semua Ginseng satu per satu secara berurutan
+                    for _, ginseng in ipairs(herbsFolder:GetChildren()) do
+                        if not isTeleportActive then break end -- Berhenti jika tombol dimatikan
                         
-                        -- Berteleportasi sekaligus memutar sedikit orientasi (rotasi di tempat)
-                        humanoidRootPart.CFrame = CFrame.new(targetPos) * CFrame.Angles(0, math.rad(45), 0)
-
-                        local prompt = nearestGinseng:FindFirstChildOfClass("ProximityPrompt")
-                        if prompt then
-                            fireproximityprompt(prompt)
+                        if ginseng.Name == "Ginseng" and ginseng:IsA("BasePart") then
+                            local targetPos = ginseng.Position + Vector3.new(0, 3, 0)
+                            
+                            -- Teleport ke posisi Ginseng tersebut dan paksa rotasi menghadap objeknya
+                            humanoidRootPart.CFrame = CFrame.lookAt(targetPos, ginseng.Position)
+                            
+                            -- Picu ProximityPrompt secara otomatis
+                            local prompt = ginseng:FindFirstChildOfClass("ProximityPrompt")
+                            if prompt then
+                                fireproximityprompt(prompt)
+                            end
+                            
+                            -- Jeda singkat agar setiap Ginseng sempat tereksekusi dengan sempurna
+                            task.wait(0.15)
                         end
                     end
                 end
             end
         end
-        task.wait(0.2)
+        task.wait(0.5)
     end
 end)
