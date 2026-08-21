@@ -84,7 +84,24 @@ toggleButton.MouseButton1Click:Connect(function()
     end
 end)
 
--- Loop utama teleport, rotasi, dan interaksi prompt untuk Ginseng & Spirit Grass
+-- Fungsi bantu untuk mendapatkan posisi akurat (baik Part tunggal maupun Model)
+local function getHerbPosition(herb)
+    if herb:IsA("BasePart") then
+        return herb.Position
+    elseif herb:IsA("Model") then
+        if herb.PrimaryPart then
+            return herb.PrimaryPart.Position
+        else
+            local part = herb:FindFirstChildWhichIsA("BasePart")
+            if part then
+                return part.Position
+            end
+        end
+    end
+    return nil
+end
+
+-- Loop utama teleportasi akurat untuk Ginseng & Spirit Grass
 task.spawn(function()
     while true do
         if isTeleportActive then
@@ -98,23 +115,26 @@ task.spawn(function()
                     for _, herb in ipairs(herbsFolder:GetChildren()) do
                         if not isTeleportActive then break end
                         
-                        if (herb.Name == "Ginseng" or herb.Name == "Spirit Grass") and herb:IsA("BasePart") then
-                            local targetPos = herb.Position + Vector3.new(0, 3, 0)
+                        if herb.Name == "Ginseng" or herb.Name == "Spirit Grass" then
+                            local herbPos = getHerbPosition(herb)
                             
-                            -- Mengatur posisi sekaligus mengunci rotasi menghadap tanaman menggunakan CFrame.lookAt
-                            humanoidRootPart.CFrame = CFrame.lookAt(targetPos, Vector3.new(herb.Position.X, targetPos.Y, herb.Position.Z))
-                            
-                            -- Mematikan sementara arah pandang otomatis kamera/humanoid agar rotasi terkunci
-                            humanoid.AutoRotate = false
-                            task.wait(0.05)
-                            
-                            local prompt = herb:FindFirstChildOfClass("ProximityPrompt")
-                            if prompt then
-                                fireproximityprompt(prompt)
+                            if herbPos then
+                                -- Posisi tujuan tepat di atas tanaman (tinggi disesuaikan +2.5 agar pas)
+                                local targetPos = herbPos + Vector3.new(0, 2.5, 0)
+                                
+                                humanoidRootPart.CFrame = CFrame.lookAt(targetPos, Vector3.new(herbPos.X, targetPos.Y, herbPos.Z))
+                                
+                                humanoid.AutoRotate = false
+                                task.wait(0.05)
+                                
+                                local prompt = herb:FindFirstChildOfClass("ProximityPrompt") or herb:FindFirstChild("ProximityPrompt", true)
+                                if prompt then
+                                    fireproximityprompt(prompt)
+                                end
+                                
+                                task.wait(0.15)
+                                humanoid.AutoRotate = true
                             end
-                            
-                            task.wait(0.15)
-                            humanoid.AutoRotate = true -- Mengaktifkan kembali kontrol rotasi normal
                         end
                     end
                 end
