@@ -3,7 +3,7 @@ local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "GinsengTeleportGui"
+screenGui.Name = "HerbsTeleportGui"
 screenGui.Parent = playerGui
 
 local openButton = Instance.new("TextButton")
@@ -84,34 +84,37 @@ toggleButton.MouseButton1Click:Connect(function()
     end
 end)
 
--- Loop utama untuk merotasi dan membersihkan semua Ginseng di dalam folder Herbs tanpa tertinggal
+-- Loop utama teleport, rotasi, dan interaksi prompt untuk Ginseng & Spirit Grass
 task.spawn(function()
     while true do
         if isTeleportActive then
             local character = player.Character
-            if character and character:FindFirstChild("HumanoidRootPart") then
+            if character and character:FindFirstChild("HumanoidRootPart") and character:FindFirstChildOfClass("Humanoid") then
                 local humanoidRootPart = character.HumanoidRootPart
+                local humanoid = character:FindFirstChildOfClass("Humanoid")
                 
                 local herbsFolder = workspace:FindFirstChild("Herbs")
                 if herbsFolder then
-                    -- Mengambil dan melintasi semua Ginseng satu per satu secara berurutan
-                    for _, ginseng in ipairs(herbsFolder:GetChildren()) do
-                        if not isTeleportActive then break end -- Berhenti jika tombol dimatikan
+                    for _, herb in ipairs(herbsFolder:GetChildren()) do
+                        if not isTeleportActive then break end
                         
-                        if ginseng.Name == "Ginseng" and ginseng:IsA("BasePart") then
-                            local targetPos = ginseng.Position + Vector3.new(0, 3, 0)
+                        if (herb.Name == "Ginseng" or herb.Name == "Spirit Grass") and herb:IsA("BasePart") then
+                            local targetPos = herb.Position + Vector3.new(0, 3, 0)
                             
-                            -- Teleport ke posisi Ginseng tersebut dan paksa rotasi menghadap objeknya
-                            humanoidRootPart.CFrame = CFrame.lookAt(targetPos, ginseng.Position)
+                            -- Mengatur posisi sekaligus mengunci rotasi menghadap tanaman menggunakan CFrame.lookAt
+                            humanoidRootPart.CFrame = CFrame.lookAt(targetPos, Vector3.new(herb.Position.X, targetPos.Y, herb.Position.Z))
                             
-                            -- Picu ProximityPrompt secara otomatis
-                            local prompt = ginseng:FindFirstChildOfClass("ProximityPrompt")
+                            -- Mematikan sementara arah pandang otomatis kamera/humanoid agar rotasi terkunci
+                            humanoid.AutoRotate = false
+                            task.wait(0.05)
+                            
+                            local prompt = herb:FindFirstChildOfClass("ProximityPrompt")
                             if prompt then
                                 fireproximityprompt(prompt)
                             end
                             
-                            -- Jeda singkat agar setiap Ginseng sempat tereksekusi dengan sempurna
                             task.wait(0.15)
+                            humanoid.AutoRotate = true -- Mengaktifkan kembali kontrol rotasi normal
                         end
                     end
                 end
