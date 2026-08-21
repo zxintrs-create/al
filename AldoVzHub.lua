@@ -38,7 +38,6 @@ end)
 
 local isTeleportActive = false
 
--- Fungsi untuk membersihkan semua part pengaman yang mungkin tertinggal
 local function removePlatform()
     local character = player.Character
     if character then
@@ -50,19 +49,18 @@ local function removePlatform()
     end
 end
 
--- Fungsi untuk memastikan hanya ada 1 part pengaman baru
 local function createPlatform()
     local character = player.Character
     local rootPart = character and character:FindFirstChild("HumanoidRootPart")
     if not rootPart then return end
 
-    -- Bersihkan dulu yang lama sebelum membuat yang baru
     removePlatform()
 
     local platform = Instance.new("Part")
     platform.Name = "SafetyPlatform"
     platform.Size = Vector3.new(5, 1, 5)
     platform.Transparency = 0.5
+    platform.CanCollide = false
     platform.BrickColor = BrickColor.new("Really red")
     platform.CFrame = rootPart.CFrame - Vector3.new(0, 4, 0)
     platform.Parent = character
@@ -71,6 +69,27 @@ local function createPlatform()
     weld.Part0 = rootPart
     weld.Part1 = platform
     weld.Parent = platform
+end
+
+-- Fungsi mencari Ginseng terdekat di dalam folder Workspace > Herbs
+local function getNearestGinseng(characterRoot)
+    local nearestPart = nil
+    local shortestDistance = math.huge
+
+    local herbsFolder = workspace:FindFirstChild("Herbs")
+    if herbsFolder then
+        for _, obj in ipairs(herbsFolder:GetChildren()) do
+            if obj.Name == "Ginseng" and obj:IsA("BasePart") then
+                local distance = (obj.Position - characterRoot.Position).Magnitude
+                if distance < shortestDistance then
+                    shortestDistance = distance
+                    nearestPart = obj
+                end
+            end
+        end
+    end
+
+    return nearestPart
 end
 
 toggleButton.MouseButton1Click:Connect(function()
@@ -86,20 +105,20 @@ toggleButton.MouseButton1Click:Connect(function()
     end
 end)
 
--- Loop utama teleport
 task.spawn(function()
     while true do
         if isTeleportActive then
             local character = player.Character
             if character and character:FindFirstChild("HumanoidRootPart") then
                 local humanoidRootPart = character.HumanoidRootPart
-                local ginseng = workspace:FindFirstChild("Ginseng")
+                
+                local nearestGinseng = getNearestGinseng(humanoidRootPart)
 
-                if ginseng and ginseng:IsA("BasePart") then
-                    if (humanoidRootPart.Position - ginseng.Position).Magnitude > 5 then
-                        humanoidRootPart.CFrame = ginseng.CFrame + Vector3.new(0, 3, 0)
+                if nearestGinseng then
+                    if (humanoidRootPart.Position - nearestGinseng.Position).Magnitude > 5 then
+                        humanoidRootPart.CFrame = nearestGinseng.CFrame + Vector3.new(0, 3, 0)
 
-                        local prompt = ginseng:FindFirstChildOfClass("ProximityPrompt")
+                        local prompt = nearestGinseng:FindFirstChildOfClass("ProximityPrompt")
                         if prompt then
                             fireproximityprompt(prompt)
                         end
