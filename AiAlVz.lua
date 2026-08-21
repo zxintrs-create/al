@@ -589,6 +589,28 @@ connect(openMusic.Activated,function()
 if destroyed then return end
 musicGui.Visible=not musicGui.Visible
 end)
+
+-- BAGIAN YANG SAYA PERBAIKI:
+connect(RunService.RenderStepped,function()
+if destroyed or not character or not character.Parent or not humanoid or humanoid.Health<=0 then return end
+humanoid.CameraOffset=Vector3.zero
+if _G.ShiftLocked then
+    local cam=workspace.CurrentCamera
+    local root=character:FindFirstChild("HumanoidRootPart")
+    if cam and root then
+        -- Cek apakah karakter TIDAK melompat/jatuh (mematikan Air Control, tapi menjaga Shift Lock)
+        if humanoid:GetState() ~= Enum.HumanoidStateType.Freefall and humanoid:GetState() ~= Enum.HumanoidStateType.Jumping then
+            local look=Vector3.new(cam.CFrame.LookVector.X,0,cam.CFrame.LookVector.Z)
+            if look.Magnitude>.001 then root.CFrame=CFrame.lookAt(root.Position,root.Position+look.Unit)end
+        end
+    end
+    humanoid.AutoRotate=false
+else
+    humanoid.AutoRotate=true
+end
+end)
+-- AKHIR BAGIAN YANG DIPERBAIKI
+
 connect(RunService.RenderStepped,function()
 if destroyed then return end
 for g in pairs(gradientObjects)do
