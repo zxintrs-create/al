@@ -49,13 +49,14 @@ toggleButton.MouseButton1Click:Connect(function()
     end
 end)
 
--- Loop utama dengan sistem paksa berlapis untuk Ginseng dan Spirit Grass
+-- Loop utama dengan posisi di samping tanaman dan penguncian rotasi natural
 task.spawn(function()
     while true do
         if isTeleportActive then
             local character = player.Character
-            if character and character:FindFirstChild("HumanoidRootPart") then
+            if character and character:FindFirstChild("HumanoidRootPart") and character:FindFirstChildOfClass("Humanoid") then
                 local humanoidRootPart = character.HumanoidRootPart
+                local humanoid = character:FindFirstChildOfClass("Humanoid")
                 
                 local herbsFolder = workspace:FindFirstChild("Herbs")
                 if herbsFolder then
@@ -63,24 +64,30 @@ task.spawn(function()
                         if not isTeleportActive then break end
                         
                         if (herb.Name == "Ginseng" or herb.Name == "Spirit Grass") and herb:IsA("BasePart") then
-                            -- Pastikan tanaman masih ada/belum hancur/belum diambil
                             if herb.Parent then
-                                local targetPos = herb.Position + Vector3.new(0, 2.5, 0)
+                                -- Posisi di samping tanaman agar tidak melayang di atasnya
+                                local sideOffset = Vector3.new(2, 0, 2)
+                                local targetPos = herb.Position + sideOffset
                                 
-                                -- 1. Kunci posisi dan rotasi pas menghadap tanaman agar valid di server
+                                -- Matikan auto rotate sebentar agar kontrol game tidak melawan script
+                                humanoid.AutoRotate = false
+                                
+                                -- Posisikan karakter dan langsung hadapkan ke arah tanaman secara akurat
                                 humanoidRootPart.CFrame = CFrame.lookAt(targetPos, herb.Position)
                                 
-                                -- 2. Sistem Paksa Klik (Mencoba beberapa kali secara instan sampai prompt merespons)
+                                task.wait(0.05)
+                                
+                                -- Picu interaksi ProximityPrompt
                                 local prompt = herb:FindFirstChildOfClass("ProximityPrompt")
                                 if prompt then
-                                    for i = 1, 3 do -- Mencoba hingga 3 kali tembakan per tanaman
+                                    for i = 1, 2 do
                                         if not herb.Parent then break end
                                         fireproximityprompt(prompt)
                                         task.wait(0.05)
                                     end
                                 end
                                 
-                                -- Jeda kecil agar server sempat menghapus tanaman yang sudah dipanen
+                                humanoid.AutoRotate = true
                                 task.wait(0.1)
                             end
                         end
