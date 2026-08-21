@@ -1,5 +1,4 @@
 local Players = game:GetService("Players")
-local TweenService = game:GetService("TweenService")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
@@ -50,28 +49,7 @@ toggleButton.MouseButton1Click:Connect(function()
     end
 end)
 
--- Fungsi mencari tanaman terdekat (Ginseng atau Spirit Grass) di dalam Workspace > Herbs
-local function getNearestHerb(characterRoot)
-    local nearestPart = nil
-    local shortestDistance = math.huge
-
-    local herbsFolder = workspace:FindFirstChild("Herbs")
-    if herbsFolder then
-        for _, obj in ipairs(herbsFolder:GetChildren()) do
-            if (obj.Name == "Ginseng" or obj.Name == "Spirit Grass") and obj:IsA("BasePart") then
-                local distance = (obj.Position - characterRoot.Position).Magnitude
-                if distance < shortestDistance then
-                    shortestDistance = distance
-                    nearestPart = obj
-                end
-            end
-        end
-    end
-
-    return nearestPart
-end
-
--- Loop utama: Teleport instan ke 40 derajat, lalu Tween pelan dan mulus ke 90 derajat
+-- Loop utama dengan sistem paksa berlapis untuk Ginseng dan Spirit Grass
 task.spawn(function()
     while true do
         if isTeleportActive then
@@ -79,30 +57,37 @@ task.spawn(function()
             if character and character:FindFirstChild("HumanoidRootPart") then
                 local humanoidRootPart = character.HumanoidRootPart
                 
-                local nearestHerb = getNearestHerb(humanoidRootPart)
-
-                if nearestHerb then
-                    if (humanoidRootPart.Position - nearestHerb.Position).Magnitude > 5 then
-                        local targetPos = nearestHerb.Position + Vector3.new(0, 3, 0)
+                local herbsFolder = workspace:FindFirstChild("Herbs")
+                if herbsFolder then
+                    for _, herb in ipairs(herbsFolder:GetChildren()) do
+                        if not isTeleportActive then break end
                         
-                        -- 1. TELEPORT MURNI ke posisi tanaman dengan set awal rotasi 40 derajat
-                        humanoidRootPart.CFrame = CFrame.new(targetPos) * CFrame.Angles(0, math.rad(40), 0)
-                        
-                        -- Picu prompt interaksi
-                        local prompt = nearestHerb:FindFirstChildOfClass("ProximityPrompt")
-                        if prompt then
-                            fireproximityprompt(prompt)
+                        if (herb.Name == "Ginseng" or herb.Name == "Spirit Grass") and herb:IsA("BasePart") then
+                            -- Pastikan tanaman masih ada/belum hancur/belum diambil
+                            if herb.Parent then
+                                local targetPos = herb.Position + Vector3.new(0, 2.5, 0)
+                                
+                                -- 1. Kunci posisi dan rotasi pas menghadap tanaman agar valid di server
+                                humanoidRootPart.CFrame = CFrame.lookAt(targetPos, herb.Position)
+                                
+                                -- 2. Sistem Paksa Klik (Mencoba beberapa kali secara instan sampai prompt merespons)
+                                local prompt = herb:FindFirstChildOfClass("ProximityPrompt")
+                                if prompt then
+                                    for i = 1, 3 do -- Mencoba hingga 3 kali tembakan per tanaman
+                                        if not herb.Parent then break end
+                                        fireproximityprompt(prompt)
+                                        task.wait(0.05)
+                                    end
+                                end
+                                
+                                -- Jeda kecil agar server sempat menghapus tanaman yang sudah dipanen
+                                task.wait(0.1)
+                            end
                         end
-                        local targetCFrame = CFrame.new(targetPos) * CFrame.Angles(0, math.rad(180), 0)
-                        local tweenInfo = TweenInfo.new(1.6, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
-                        local tween = TweenService:Create(humanoidRootPart, tweenInfo, {CFrame = targetCFrame})
-                        
-                        tween:Play()
-                        tween.Completed:Wait()
                     end
                 end
             end
         end
-        task.wait(0.2)
+        task.wait(0.3)
     end
 end)
