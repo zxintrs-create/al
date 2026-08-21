@@ -71,7 +71,7 @@ local function getNearestHerb(characterRoot)
     return nearestPart
 end
 
--- Loop utama: Teleport instan, lalu gunakan Tween untuk rotasi mulus dari 40 ke 90 derajat
+-- Loop utama: Teleport instan ke 40 derajat, lalu Tween pelan dan mulus ke 90 derajat
 task.spawn(function()
     while true do
         if isTeleportActive then
@@ -93,8 +93,8 @@ task.spawn(function()
                         if prompt then
                             fireproximityprompt(prompt)
                         end
-                        local targetCFrame = CFrame.new(targetPos) * CFrame.Angles(0, math.rad(90), 0)
-                        local tweenInfo = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+                        local targetCFrame = CFrame.new(targetPos) * CFrame.Angles(0, math.rad(180), 0)
+                        local tweenInfo = TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
                         local tween = TweenService:Create(humanoidRootPart, tweenInfo, {CFrame = targetCFrame})
                         
                         tween:Play()
