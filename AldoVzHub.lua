@@ -37,38 +37,52 @@ openButton.MouseButton1Click:Connect(function()
 end)
 
 local isTeleportActive = false
+local currentPlatform = nil
+
+-- Fungsi untuk membuat part pengaman
+local function createPlatform()
+    local character = player.Character
+    local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+    if not rootPart or currentPlatform then return end
+
+    local platform = Instance.new("Part")
+    platform.Name = "SafetyPlatform"
+    platform.Size = Vector3.new(5, 1, 5)
+    platform.Transparency = 0.5
+    platform.BrickColor = BrickColor.new("Really red")
+    platform.CFrame = rootPart.CFrame - Vector3.new(0, 4, 0)
+    platform.Parent = character
+
+    local weld = Instance.new("WeldConstraint")
+    weld.Part0 = rootPart
+    weld.Part1 = platform
+    weld.Parent = platform
+
+    currentPlatform = platform
+end
+
+-- Fungsi untuk menghapus part pengaman
+local function removePlatform()
+    if currentPlatform then
+        currentPlatform:Destroy()
+        currentPlatform = nil
+    end
+end
 
 toggleButton.MouseButton1Click:Connect(function()
     isTeleportActive = not isTeleportActive
     if isTeleportActive then
         toggleButton.Text = "Teleport: ON"
         toggleButton.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
+        createPlatform() -- Muncul saat ON
     else
         toggleButton.Text = "Teleport: OFF"
         toggleButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+        removePlatform() -- Hilang saat OFF
     end
 end)
 
-local function createSafetyPlatform(character)
-    local rootPart = character:FindFirstChild("HumanoidRootPart")
-    if not rootPart then return end
-
-    local platform = Instance.new("Part")
-    platform.Name = "SafetyPlatform"
-    platform.Size = Vector3.new(5, 1, 5)
-    platform.Anchored = true
-    platform.Transparency = 0.5
-    platform.BrickColor = BrickColor.new("Really red")
-    platform.CFrame = rootPart.CFrame - Vector3.new(0, 4, 0)
-    platform.Parent = workspace
-
-    task.delay(1, function()
-        if platform then
-            platform:Destroy()
-        end
-    end)
-end
-
+-- Loop utama teleport
 task.spawn(function()
     while true do
         if isTeleportActive then
@@ -78,16 +92,17 @@ task.spawn(function()
                 local ginseng = workspace:FindFirstChild("Ginseng")
 
                 if ginseng and ginseng:IsA("BasePart") then
-                    createSafetyPlatform(character)
-                    humanoidRootPart.CFrame = ginseng.CFrame + Vector3.new(0, 3, 0)
+                    if (humanoidRootPart.Position - ginseng.Position).Magnitude > 5 then
+                        humanoidRootPart.CFrame = ginseng.CFrame + Vector3.new(0, 3, 0)
 
-                    local prompt = ginseng:FindFirstChildOfClass("ProximityPrompt")
-                    if prompt then
-                        fireproximityprompt(prompt)
+                        local prompt = ginseng:FindFirstChildOfClass("ProximityPrompt")
+                        if prompt then
+                            fireproximityprompt(prompt)
+                        end
                     end
                 end
             end
         end
-        task.wait()
+        task.wait(0.2)
     end
 end)
