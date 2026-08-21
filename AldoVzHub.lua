@@ -38,108 +38,60 @@ end)
 
 local isTeleportActive = false
 
-local function removePlatform()
-    local character = player.Character
-    if character then
-        for _, obj in ipairs(character:GetChildren()) do
-            if obj.Name == "SafetyPlatform" then
-                obj:Destroy()
-            end
-        end
-    end
-end
-
-local function createPlatform()
-    local character = player.Character
-    local rootPart = character and character:FindFirstChild("HumanoidRootPart")
-    if not rootPart then return end
-
-    removePlatform()
-
-    local platform = Instance.new("Part")
-    platform.Name = "SafetyPlatform"
-    platform.Size = Vector3.new(5, 1, 5)
-    platform.Transparency = 0.5
-    platform.CanCollide = false
-    platform.BrickColor = BrickColor.new("Really red")
-    platform.CFrame = rootPart.CFrame - Vector3.new(0, 4, 0)
-    platform.Parent = character
-
-    local weld = Instance.new("WeldConstraint")
-    weld.Part0 = rootPart
-    weld.Part1 = platform
-    weld.Parent = platform
-end
-
 toggleButton.MouseButton1Click:Connect(function()
     isTeleportActive = not isTeleportActive
     if isTeleportActive then
         toggleButton.Text = "Teleport: ON"
         toggleButton.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
-        createPlatform()
     else
         toggleButton.Text = "Teleport: OFF"
         toggleButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-        removePlatform()
     end
 end)
 
--- Fungsi bantu untuk mendapatkan posisi akurat (baik Part tunggal maupun Model)
-local function getHerbPosition(herb)
-    if herb:IsA("BasePart") then
-        return herb.Position
-    elseif herb:IsA("Model") then
-        if herb.PrimaryPart then
-            return herb.PrimaryPart.Position
-        else
-            local part = herb:FindFirstChildWhichIsA("BasePart")
-            if part then
-                return part.Position
+-- Fungsi mencari tanaman terdekat (Ginseng atau Spirit Grass) di dalam Workspace > Herbs
+local function getNearestHerb(characterRoot)
+    local nearestPart = nil
+    local shortestDistance = math.huge
+
+    local herbsFolder = workspace:FindFirstChild("Herbs")
+    if herbsFolder then
+        for _, obj in ipairs(herbsFolder:GetChildren()) do
+            if (obj.Name == "Ginseng" or obj.Name == "Spirit Grass") and obj:IsA("BasePart") then
+                local distance = (obj.Position - characterRoot.Position).Magnitude
+                if distance < shortestDistance then
+                    shortestDistance = distance
+                    nearestPart = obj
+                end
             end
         end
     end
-    return nil
+
+    return nearestPart
 end
 
--- Loop utama teleportasi akurat untuk Ginseng & Spirit Grass
+-- Loop utama yang stabil seperti script awal
 task.spawn(function()
     while true do
         if isTeleportActive then
             local character = player.Character
-            if character and character:FindFirstChild("HumanoidRootPart") and character:FindFirstChildOfClass("Humanoid") then
+            if character and character:FindFirstChild("HumanoidRootPart") then
                 local humanoidRootPart = character.HumanoidRootPart
-                local humanoid = character:FindFirstChildOfClass("Humanoid")
                 
-                local herbsFolder = workspace:FindFirstChild("Herbs")
-                if herbsFolder then
-                    for _, herb in ipairs(herbsFolder:GetChildren()) do
-                        if not isTeleportActive then break end
-                        
-                        if herb.Name == "Ginseng" or herb.Name == "Spirit Grass" then
-                            local herbPos = getHerbPosition(herb)
-                            
-                            if herbPos then
-                                -- Posisi tujuan tepat di atas tanaman (tinggi disesuaikan +2.5 agar pas)
-                                local targetPos = herbPos + Vector3.new(0, 2.5, 0)
-                                
-                                humanoidRootPart.CFrame = CFrame.lookAt(targetPos, Vector3.new(herbPos.X, targetPos.Y, herbPos.Z))
-                                
-                                humanoid.AutoRotate = false
-                                task.wait(0.05)
-                                
-                                local prompt = herb:FindFirstChildOfClass("ProximityPrompt") or herb:FindFirstChild("ProximityPrompt", true)
-                                if prompt then
-                                    fireproximityprompt(prompt)
-                                end
-                                
-                                task.wait(0.15)
-                                humanoid.AutoRotate = true
-                            end
+                local nearestHerb = getNearestHerb(humanoidRootPart)
+
+                if nearestHerb then
+                    if (humanoidRootPart.Position - nearestHerb.Position).Magnitude > 5 then
+                        humanoidRootPart.CFrame = nearestHerb.CFrame + Vector3.new(0, 3, 0)
+
+                        local prompt = nearestHerb:FindFirstChildOfClass("ProximityPrompt")
+                        if prompt then
+                            fireproximityprompt(prompt)
                         end
                     end
                 end
             end
         end
-        task.wait(0.5)
+        task.wait(0.2)
     end
 end)
