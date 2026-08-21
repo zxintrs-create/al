@@ -1,4 +1,5 @@
 local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
@@ -70,7 +71,7 @@ local function getNearestHerb(characterRoot)
     return nearestPart
 end
 
--- Loop utama: Teleport dulu, baru jalankan rotasi sumbu Y 40 dan ke 90
+-- Loop utama: Teleport instan, lalu gunakan Tween untuk rotasi mulus dari 40 ke 90 derajat
 task.spawn(function()
     while true do
         if isTeleportActive then
@@ -84,25 +85,20 @@ task.spawn(function()
                     if (humanoidRootPart.Position - nearestHerb.Position).Magnitude > 5 then
                         local targetPos = nearestHerb.Position + Vector3.new(0, 3, 0)
                         
-                        -- 1. TELEPORT MURNI TERLEBIH DAHULU ke posisi tanaman
-                        humanoidRootPart.CFrame = CFrame.new(targetPos)
+                        -- 1. TELEPORT MURNI ke posisi tanaman dengan set awal rotasi 40 derajat
+                        humanoidRootPart.CFrame = CFrame.new(targetPos) * CFrame.Angles(0, math.rad(40), 0)
                         
                         -- Picu prompt interaksi
                         local prompt = nearestHerb:FindFirstChildOfClass("ProximityPrompt")
                         if prompt then
                             fireproximityprompt(prompt)
                         end
+                        local targetCFrame = CFrame.new(targetPos) * CFrame.Angles(0, math.rad(90), 0)
+                        local tweenInfo = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+                        local tween = TweenService:Create(humanoidRootPart, tweenInfo, {CFrame = targetCFrame})
                         
-                        -- Jeda singkat agar game memproses posisi baru
-                        task.wait(0.05)
-                        
-                        -- 2. SETELAH TELEPORT, BARU ROTASI sumbu Y 40 derajat
-                        humanoidRootPart.CFrame = CFrame.new(targetPos) * CFrame.Angles(0, math.rad(40), 0)
-                        
-                        task.wait(0.05)
-                        
-                        -- 3. LANGSUNG ROTASI KE sumbu Y 90 derajat
-                        humanoidRootPart.CFrame = CFrame.new(targetPos) * CFrame.Angles(0, math.rad(90), 0)
+                        tween:Play()
+                        tween.Completed:Wait()
                     end
                 end
             end
