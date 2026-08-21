@@ -94,7 +94,7 @@ task.spawn(function()
                             fireproximityprompt(prompt)
                         end
                         local targetCFrame = CFrame.new(targetPos) * CFrame.Angles(0, math.rad(180), 0)
-                        local tweenInfo = TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
+                        local tweenInfo = TweenInfo.new(1.6, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
                         local tween = TweenService:Create(humanoidRootPart, tweenInfo, {CFrame = targetCFrame})
                         
                         tween:Play()
