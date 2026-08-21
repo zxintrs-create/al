@@ -70,7 +70,7 @@ local function getNearestHerb(characterRoot)
     return nearestPart
 end
 
--- Loop utama yang stabil seperti script awal
+-- Loop utama dengan penerapan rotasi sumbu Y 40 lalu ke 90 derajat
 task.spawn(function()
     while true do
         if isTeleportActive then
@@ -82,12 +82,21 @@ task.spawn(function()
 
                 if nearestHerb then
                     if (humanoidRootPart.Position - nearestHerb.Position).Magnitude > 5 then
-                        humanoidRootPart.CFrame = nearestHerb.CFrame + Vector3.new(0, 3, 0)
-
+                        local targetPos = nearestHerb.Position + Vector3.new(0, 3, 0)
+                        
+                        -- 1. Teleport awal dengan rotasi sumbu Y 40 derajat
+                        humanoidRootPart.CFrame = CFrame.new(targetPos) * CFrame.Angles(0, math.rad(40), 0)
+                        
                         local prompt = nearestHerb:FindFirstChildOfClass("ProximityPrompt")
                         if prompt then
                             fireproximityprompt(prompt)
                         end
+                        
+                        -- Jeda sangat singkat untuk transisi rotasi
+                        task.wait(0.05)
+                        
+                        -- 2. Langsung ubah rotasi ke sumbu Y 90 derajat di posisi yang sama
+                        humanoidRootPart.CFrame = CFrame.new(targetPos) * CFrame.Angles(0, math.rad(90), 0)
                     end
                 end
             end
