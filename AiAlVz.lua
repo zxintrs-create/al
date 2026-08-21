@@ -414,7 +414,18 @@ task.delay(.2,updateJump)
 task.delay(.5,updateJump)
 end
 end)
-local MUSIC_LIST={{"DJ BE AS ONE","83435514857435"},{"DJ MISSING YOU","119116468910055"},{"DJ LET YOU GO WITH A SMILE","87543116048841"},{"DJ DRAMA MALAM MINGGU","139226256901949"},{"YOU HOLD MY HEART","106106801939821"},{"DJ STAY THE SAME BREAKBEAT","74088514222709"},{"DJ ALL OF ME IS YOURS BREAKBEAT","104593616947405"}}
+
+local MUSIC_LIST={
+{"DJ BE AS ONE","83435514857435"},
+{"DJ MISSING YOU","119116468910055"},
+{"DJ LET YOU GO WITH A SMILE","87543116048841"},
+{"DJ DRAMA MALAM MINGGU","139226256901949"},
+{"YOU HOLD MY HEART","106106801939821"},
+{"DJ STAY THE SAME BREAKBEAT","74088514222709"},
+{"DJ ALL OF ME IS YOURS BREAKBEAT","104593616947405"},
+{"DJ NO EXPIRATION DATE BREAKBEAT","88762074202384"}
+}
+
 local musicGui=Instance.new("Frame")
 musicGui.Name="MusicNodeList"
 musicGui.Position=UDim2.fromOffset(12,72)
@@ -590,7 +601,6 @@ if destroyed then return end
 musicGui.Visible=not musicGui.Visible
 end)
 
--- Shift Lock aktif penuh di darat maupun di udara:
 connect(RunService.RenderStepped,function()
 if destroyed or not character or not character.Parent or not humanoid or humanoid.Health<=0 then return end
 humanoid.CameraOffset=Vector3.zero
