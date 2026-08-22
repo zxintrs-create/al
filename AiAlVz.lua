@@ -5,8 +5,7 @@ local HttpService=game:GetService("HttpService")
 local player=Players.LocalPlayer
 local playerGui=player:WaitForChild("PlayerGui")
 local CONFIG_FILE="DeltaMobileConfig.json"
-local defaultConfig={JumpX=.85,JumpY=.75,JumpSize=.30,ShiftX=.75,ShiftY=.65,ShiftSize=35,Sensitivity=1}
-local SHIFT_LOCK_IMAGE="rbxassetid://103531792987903"
+local defaultConfig={JumpX=.85,JumpY=.75,JumpSize=.30,Sensitivity=1}
 local OPEN_MENU_IMAGE="rbxassetid://114480118578175"
 local config={}
 for k,v in pairs(defaultConfig)do config[k]=v end
@@ -19,7 +18,7 @@ local destroyed=false
 local function connect(s,f)local c;pcall(function()c=s:Connect(f)end);if c then table.insert(connections,c)end;return c end
 local function disconnectAll()for i=#connections,1,-1 do pcall(function()connections[i]:Disconnect()end)end;table.clear(connections)end
 local function destroyGui(n)local g=playerGui:FindFirstChild(n);if g then pcall(function()g:Destroy()end)end end
-_G.DeltaMobileControlsCleanup=function()if destroyed then return end;destroyed=true;disconnectAll();destroyGui("DeltaMobileControls");destroyGui("DeltaMobileErgo")end
+_G.DeltaMobileControlsCleanup=function()if destroyed then return end;destroyed=true;disconnectAll();destroyGui("DeltaMobileErgo")end
 destroyGui("DeltaMobileControls")
 destroyGui("DeltaMobileErgo")
 local gradientObjects={}
@@ -81,60 +80,7 @@ overlay.Visible=j.Visible
 overlay.ZIndex=j.ZIndex+2
 end
 end
-local character=player.Character or player.CharacterAdded:Wait()
-local humanoid=character:WaitForChild("Humanoid")
-_G.ShiftLocked=false
-local screenGui=Instance.new("ScreenGui")
-screenGui.Name="DeltaMobileControls"
-screenGui.ResetOnSpawn=false
-screenGui.IgnoreGuiInset=true
-screenGui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
-screenGui.DisplayOrder=999999
-screenGui.Parent=playerGui
-local crosshair=Instance.new("Frame")
-crosshair.Name="ShiftLockCrosshair"
-crosshair.Size=UDim2.fromOffset(6,6)
-crosshair.Position=UDim2.new(.5,-3,.5,-3)
-crosshair.BackgroundColor3=Color3.new(1,1,1)
-crosshair.BorderSizePixel=0
-crosshair.Visible=false
-crosshair.ZIndex=1000000
-crosshair.Parent=screenGui
-local cc=Instance.new("UICorner")
-cc.CornerRadius=UDim.new(1,0)
-cc.Parent=crosshair
-local btnShiftLock=Instance.new("ImageButton")
-btnShiftLock.Name="ShiftLockButton"
-btnShiftLock.AnchorPoint=Vector2.new(.5,.5)
-btnShiftLock.Position=UDim2.new(config.ShiftX,0,config.ShiftY,0)
-btnShiftLock.Size=UDim2.fromOffset(config.ShiftSize,config.ShiftSize)
-btnShiftLock.Image=SHIFT_LOCK_IMAGE
-btnShiftLock.ImageColor3=Color3.new(1,1,1)
-btnShiftLock.BackgroundColor3=Color3.new(1,1,1)
-btnShiftLock.BackgroundTransparency=1
-btnShiftLock.AutoButtonColor=false
-btnShiftLock.Active=true
-btnShiftLock.Selectable=false
-btnShiftLock.BorderSizePixel=0
-btnShiftLock.ZIndex=100000
-btnShiftLock.Visible=false -- Default off
-btnShiftLock.Parent=screenGui
-local sc=Instance.new("UICorner")
-sc.CornerRadius=UDim.new(1,0)
-sc.Parent=btnShiftLock
-premium(btnShiftLock,2.5)
-local function toggleShiftLock()
-if destroyed then return end
-_G.ShiftLocked=not _G.ShiftLocked
-btnShiftLock.BackgroundTransparency=1
-btnShiftLock.ImageColor3=_G.ShiftLocked and Color3.fromRGB(255,120,0)or Color3.new(1,1,1)
-crosshair.Visible=_G.ShiftLocked
-if humanoid and humanoid.Parent then
-humanoid.AutoRotate=not _G.ShiftLocked
-humanoid.CameraOffset=Vector3.zero
-end
-end
-connect(btnShiftLock.Activated,toggleShiftLock)
+
 local touchGui
 local jumpButton
 local function getJump()
@@ -166,14 +112,7 @@ j.Size=UDim2.fromOffset(size,size)
 applyJumpPremium(j)
 end)
 end
-local function updateShift()
-if destroyed or not btnShiftLock.Parent then return end
-config.ShiftX=math.clamp(config.ShiftX,.02,.98)
-config.ShiftY=math.clamp(config.ShiftY,.02,.98)
-config.ShiftSize=math.clamp(config.ShiftSize,20,100)
-btnShiftLock.Position=UDim2.new(config.ShiftX,0,config.ShiftY,0)
-btnShiftLock.Size=UDim2.fromOffset(config.ShiftSize,config.ShiftSize)
-end
+
 local gui=Instance.new("ScreenGui")
 gui.Name="DeltaMobileErgo"
 gui.ResetOnSpawn=false
@@ -223,8 +162,8 @@ menuCorner.Parent=menu
 premium(menu,2.5)
 local settings=Instance.new("Frame")
 settings.Name="SettingsFrame"
-settings.Size=UDim2.fromOffset(300,610)
-settings.Position=UDim2.new(.5,-150,.5,-305)
+settings.Size=UDim2.fromOffset(300,560)
+settings.Position=UDim2.new(.5,-150,.5,-280)
 settings.BackgroundColor3=Color3.fromRGB(18,18,22)
 settings.BackgroundTransparency=.03
 settings.BorderSizePixel=0
@@ -237,42 +176,9 @@ settingsCorner.CornerRadius=UDim.new(0,16)
 settingsCorner.Parent=settings
 premium(settings,2.5)
 
--- TOMBOL TOGGLE SHIFT LOCK ON/OFF DI SETTING
-local shiftToggleSection=Instance.new("Frame")
-shiftToggleSection.Size=UDim2.new(1,-20,0,50)
-shiftToggleSection.Position=UDim2.fromOffset(10,10)
-shiftToggleSection.BackgroundColor3=Color3.fromRGB(30,30,35)
-shiftToggleSection.BorderSizePixel=0
-shiftToggleSection.Active=false
-shiftToggleSection.ZIndex=41
-shiftToggleSection.Parent=settings
-local stCorner=Instance.new("UICorner")
-stCorner.CornerRadius=UDim.new(0,12)
-stCorner.Parent=shiftToggleSection
-premium(shiftToggleSection,1.5)
-
-local shiftToggleBtn=makeButton(shiftToggleSection,"ShiftToggleBtn",UDim2.new(.05,0,0,7),UDim2.new(.9,0,0,36),"SHIFT LOCK: OFF",Color3.fromRGB(70,35,35),43)
-shiftToggleBtn.TextColor3=Color3.new(1,1,1)
-shiftToggleBtn.TextSize=14
-local shiftLockVisible=false
-connect(shiftToggleBtn.Activated,function()
-shiftLockVisible=not shiftLockVisible
-btnShiftLock.Visible=shiftLockVisible
-if shiftLockVisible then
-shiftToggleBtn.Text="SHIFT LOCK: ON"
-shiftToggleBtn.BackgroundColor3=Color3.fromRGB(35,70,35)
-else
-shiftToggleBtn.Text="SHIFT LOCK: OFF"
-shiftToggleBtn.BackgroundColor3=Color3.fromRGB(70,35,35)
-if _G.ShiftLocked then
-toggleShiftLock()
-end
-end
-end)
-
 local cameraSection=Instance.new("Frame")
 cameraSection.Size=UDim2.new(1,-20,0,160)
-cameraSection.Position=UDim2.fromOffset(10,70)
+cameraSection.Position=UDim2.fromOffset(10,10)
 cameraSection.BackgroundColor3=Color3.fromRGB(30,30,35)
 cameraSection.BorderSizePixel=0
 cameraSection.Active=false
@@ -311,9 +217,10 @@ connect(sensMinus.Activated,function()config.Sensitivity=math.clamp(config.Sensi
 connect(sensPlus.Activated,function()config.Sensitivity=math.clamp(config.Sensitivity+.1,.1,10);applySensitivity()end)
 connect(sensReset.Activated,function()config.Sensitivity=1;applySensitivity()end)
 applySensitivity()
+
 local jumpSection=Instance.new("Frame")
 jumpSection.Size=UDim2.new(1,-20,0,320)
-jumpSection.Position=UDim2.fromOffset(10,240)
+jumpSection.Position=UDim2.fromOffset(10,180)
 jumpSection.BackgroundColor3=Color3.fromRGB(30,30,35)
 jumpSection.BorderSizePixel=0
 jumpSection.Active=false
@@ -323,20 +230,17 @@ local jumpCorner=Instance.new("UICorner")
 jumpCorner.CornerRadius=UDim.new(0,12)
 jumpCorner.Parent=jumpSection
 premium(jumpSection,1.5)
-local modeSwitchBtn=makeButton(jumpSection,"ToggleTargetMode",UDim2.new(.05,0,0,10),UDim2.new(.9,0,0,36),"TARGET: JUMP BUTTON",Color3.fromRGB(70,35,35),43)
-modeSwitchBtn.TextColor3=Color3.new(1,1,1)
-local targetSettingMode="JUMP"
-connect(modeSwitchBtn.Activated,function()
-if targetSettingMode=="JUMP"then
-targetSettingMode="SHIFT"
-modeSwitchBtn.Text="TARGET: SHIFT LOCK"
-modeSwitchBtn.BackgroundColor3=Color3.fromRGB(70,25,25)
-else
-targetSettingMode="JUMP"
-modeSwitchBtn.Text="TARGET: JUMP BUTTON"
-modeSwitchBtn.BackgroundColor3=Color3.fromRGB(70,35,35)
-end
-end)
+
+local jumpTitle=Instance.new("TextLabel")
+jumpTitle.Size=UDim2.new(1,0,0,40)
+jumpTitle.Text="JUMP BUTTON SETTING"
+jumpTitle.TextColor3=Color3.new(1,1,1)
+jumpTitle.Font=Enum.Font.GothamBold
+jumpTitle.TextSize=16
+jumpTitle.BackgroundTransparency=1
+jumpTitle.ZIndex=42
+jumpTitle.Parent=jumpSection
+
 local moveUp=makeButton(jumpSection,"MoveUp",UDim2.new(.5,-34,0,55),UDim2.fromOffset(68,46),"↑",nil,43)
 local moveLeft=makeButton(jumpSection,"MoveLeft",UDim2.new(.10,0,0,102),UDim2.fromOffset(68,46),"←",nil,43)
 local moveRight=makeButton(jumpSection,"MoveRight",UDim2.new(.90,-68,0,102),UDim2.fromOffset(68,46),"→",nil,43)
@@ -347,15 +251,9 @@ local center=makeButton(jumpSection,"Center",UDim2.new(.5,-44,0,207),UDim2.fromO
 local step=.018
 local holding={[moveUp]=false,[moveDown]=false,[moveLeft]=false,[moveRight]=false}
 local function applyMoveStep(dx,dy)
-if targetSettingMode=="JUMP"then
 config.JumpX=math.clamp(config.JumpX+dx,.05,.95)
 config.JumpY=math.clamp(config.JumpY+dy,.05,.95)
 updateJump()
-else
-config.ShiftX=math.clamp(config.ShiftX+dx,.02,.98)
-config.ShiftY=math.clamp(config.ShiftY+dy,.02,.98)
-updateShift()
-end
 end
 local function bindHold(b,dx,dy)
 connect(b.InputBegan,function(i)
@@ -387,36 +285,20 @@ if holding[moveLeft]then applyMoveStep(-step,0)end
 if holding[moveRight]then applyMoveStep(step,0)end
 end)
 connect(sizePlus.Activated,function()
-if targetSettingMode=="JUMP"then
 config.JumpSize=math.clamp(config.JumpSize+.05,.05,.50)
 updateJump()
-else
-config.ShiftSize=math.clamp(config.ShiftSize+5,20,100)
-updateShift()
-end
 end)
 connect(sizeMinus.Activated,function()
-if targetSettingMode=="JUMP"then
 config.JumpSize=math.clamp(config.JumpSize-.05,.05,.50)
 updateJump()
-else
-config.ShiftSize=math.clamp(config.ShiftSize-5,20,100)
-updateShift()
-end
 end)
 connect(center.Activated,function()
-if targetSettingMode=="JUMP"then
 config.JumpX=defaultConfig.JumpX
 config.JumpY=defaultConfig.JumpY
 config.JumpSize=defaultConfig.JumpSize
 updateJump()
-else
-config.ShiftX=defaultConfig.ShiftX
-config.ShiftY=defaultConfig.ShiftY
-config.ShiftSize=defaultConfig.ShiftSize
-updateShift()
-end
 end)
+
 local saveButton=makeButton(settings,"SaveConfig",UDim2.new(.05,0,1,-45),UDim2.fromOffset(130,38),"SAVE",Color3.fromRGB(45,100,55),43)
 saveButton.TextColor3=Color3.new(1,1,1)
 local closeButton=makeButton(settings,"Close",UDim2.new(.95,-130,1,-45),UDim2.fromOffset(130,38),"CLOSE",Color3.fromRGB(100,40,40),43)
@@ -429,18 +311,7 @@ task.delay(1,function()if saveButton and saveButton.Parent then saveButton.Text=
 end)
 connect(menu.Activated,function()settings.Visible=not settings.Visible end)
 connect(closeButton.Activated,function()settings.Visible=false end)
-connect(player.CharacterAdded,function(n)
-if destroyed then return end
-for b in pairs(holding)do holding[b]=false end
-character=n
-humanoid=n:WaitForChild("Humanoid",10)
-if humanoid then
-humanoid.AutoRotate=not _G.ShiftLocked
-humanoid.CameraOffset=Vector3.zero
-end
-task.defer(updateJump)
-task.delay(.2,updateJump)
-end)
+
 connect(playerGui.ChildAdded,function(c)
 if c.Name=="TouchGui"then
 jumpButton=nil
@@ -777,22 +648,6 @@ musicGui.Visible=not musicGui.Visible
 end)
 
 connect(RunService.RenderStepped,function()
-if destroyed or not character or not character.Parent or not humanoid or humanoid.Health<=0 then return end
-humanoid.CameraOffset=Vector3.zero
-if _G.ShiftLocked then
-    local cam=workspace.CurrentCamera
-    local root=character:FindFirstChild("HumanoidRootPart")
-    if cam and root then
-        local look=Vector3.new(cam.CFrame.LookVector.X,0,cam.CFrame.LookVector.Z)
-        if look.Magnitude>.001 then root.CFrame=CFrame.lookAt(root.Position,root.Position+look.Unit)end
-    end
-    humanoid.AutoRotate=false
-else
-    humanoid.AutoRotate=true
-end
-end)
-
-connect(RunService.RenderStepped,function()
 if destroyed then return end
 for g in pairs(gradientObjects)do
 if g and g.Parent then
@@ -802,6 +657,7 @@ gradientObjects[g]=nil
 end
 end
 end)
+
 connect(RunService.RenderStepped,function()
 if destroyed then return end
 local tg=playerGui:FindFirstChild("TouchGui")
@@ -812,15 +668,11 @@ applyJumpPremium(j)
 end
 end
 end)
+
 local function refresh()
-task.defer(function()updateJump();updateShift()end)
-task.delay(.2,function()
-if not destroyed then updateJump();updateShift()end
-end)
-task.delay(.5,function()
-if not destroyed then updateJump();updateShift()end
-end)
+task.defer(updateJump)
+task.delay(.2,function()if not destroyed then updateJump()end end)
+task.delay(.5,function()if not destroyed then updateJump()end end)
 end
 updateJump()
-updateShift()
 refresh()
