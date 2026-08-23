@@ -24,7 +24,6 @@ destroyGui("DeltaMobileErgo")
 local gradientObjects={}
 local function registerGradient(g)if g and g:IsA("UIGradient")then gradientObjects[g]=true end end
 local function premiumStroke(obj,thickness)
-if not obj or not obj:IsA("GuiObject")then return end
 local old=obj:FindFirstChild("PremiumStroke")
 if old then old:Destroy()end
 local stroke=Instance.new("UIStroke")
@@ -44,7 +43,6 @@ return stroke,gradient
 end
 local function premium(obj,thickness)return premiumStroke(obj,thickness)end
 local function applyJumpPremium(j)
-if not j or not j:IsA("GuiObject")then return end
 local overlay=j:FindFirstChild("PremiumJumpStroke")
 if not overlay then
 overlay=Instance.new("Frame")
@@ -80,7 +78,6 @@ overlay.Visible=j.Visible
 overlay.ZIndex=j.ZIndex+2
 end
 end
-
 local touchGui
 local jumpButton
 local function getJump()
@@ -112,7 +109,6 @@ j.Size=UDim2.fromOffset(size,size)
 applyJumpPremium(j)
 end)
 end
-
 local gui=Instance.new("ScreenGui")
 gui.Name="DeltaMobileErgo"
 gui.ResetOnSpawn=false
@@ -175,7 +171,6 @@ local settingsCorner=Instance.new("UICorner")
 settingsCorner.CornerRadius=UDim.new(0,16)
 settingsCorner.Parent=settings
 premium(settings,2.5)
-
 local cameraSection=Instance.new("Frame")
 cameraSection.Size=UDim2.new(1,-20,0,160)
 cameraSection.Position=UDim2.fromOffset(10,10)
@@ -217,7 +212,6 @@ connect(sensMinus.Activated,function()config.Sensitivity=math.clamp(config.Sensi
 connect(sensPlus.Activated,function()config.Sensitivity=math.clamp(config.Sensitivity+.1,.1,10);applySensitivity()end)
 connect(sensReset.Activated,function()config.Sensitivity=1;applySensitivity()end)
 applySensitivity()
-
 local jumpSection=Instance.new("Frame")
 jumpSection.Size=UDim2.new(1,-20,0,320)
 jumpSection.Position=UDim2.fromOffset(10,180)
@@ -230,7 +224,6 @@ local jumpCorner=Instance.new("UICorner")
 jumpCorner.CornerRadius=UDim.new(0,12)
 jumpCorner.Parent=jumpSection
 premium(jumpSection,1.5)
-
 local jumpTitle=Instance.new("TextLabel")
 jumpTitle.Size=UDim2.new(1,0,0,40)
 jumpTitle.Text="JUMP BUTTON SETTING"
@@ -240,7 +233,6 @@ jumpTitle.TextSize=16
 jumpTitle.BackgroundTransparency=1
 jumpTitle.ZIndex=42
 jumpTitle.Parent=jumpSection
-
 local moveUp=makeButton(jumpSection,"MoveUp",UDim2.new(.5,-34,0,55),UDim2.fromOffset(68,46),"↑",nil,43)
 local moveLeft=makeButton(jumpSection,"MoveLeft",UDim2.new(.10,0,0,102),UDim2.fromOffset(68,46),"←",nil,43)
 local moveRight=makeButton(jumpSection,"MoveRight",UDim2.new(.90,-68,0,102),UDim2.fromOffset(68,46),"→",nil,43)
@@ -298,7 +290,6 @@ config.JumpY=defaultConfig.JumpY
 config.JumpSize=defaultConfig.JumpSize
 updateJump()
 end)
-
 local saveButton=makeButton(settings,"SaveConfig",UDim2.new(.05,0,1,-45),UDim2.fromOffset(130,38),"SAVE",Color3.fromRGB(45,100,55),43)
 saveButton.TextColor3=Color3.new(1,1,1)
 local closeButton=makeButton(settings,"Close",UDim2.new(.95,-130,1,-45),UDim2.fromOffset(130,38),"CLOSE",Color3.fromRGB(100,40,40),43)
@@ -311,7 +302,6 @@ task.delay(1,function()if saveButton and saveButton.Parent then saveButton.Text=
 end)
 connect(menu.Activated,function()settings.Visible=not settings.Visible end)
 connect(closeButton.Activated,function()settings.Visible=false end)
-
 connect(playerGui.ChildAdded,function(c)
 if c.Name=="TouchGui"then
 jumpButton=nil
@@ -320,7 +310,6 @@ task.delay(.2,updateJump)
 task.delay(.5,updateJump)
 end
 end)
-
 local MUSIC_LIST={
 {"DJ BE AS ONE","83435514857435"},
 {"DJ MISSING YOU","119116468910055"},
@@ -471,11 +460,10 @@ local MUSIC_LIST={
 {"Sayang-ThailandSTyle","129584820404810"},
 {"JarangPulang","132015604915336"}
 }
-
 local musicGui=Instance.new("Frame")
 musicGui.Name="MusicNodeList"
 musicGui.Position=UDim2.fromOffset(12,72)
-musicGui.Size=UDim2.fromOffset(315,360)
+musicGui.Size=UDim2.fromOffset(315,410)
 musicGui.BackgroundColor3=Color3.fromRGB(15,15,24)
 musicGui.BackgroundTransparency=.03
 musicGui.BorderSizePixel=0
@@ -489,7 +477,7 @@ musicCorner.Parent=musicGui
 premium(musicGui,2.5)
 local musicTitle=Instance.new("TextLabel")
 musicTitle.Position=UDim2.fromOffset(14,8)
-musicTitle.Size=UDim2.new(1,-28,0,30)
+musicTitle.Size=UDim2.new(1,-28,0,26)
 musicTitle.BackgroundTransparency=1
 musicTitle.Text="MUSIC NODE LIST"
 musicTitle.TextColor3=Color3.new(1,1,1)
@@ -498,21 +486,29 @@ musicTitle.TextSize=18
 musicTitle.TextXAlignment=Enum.TextXAlignment.Left
 musicTitle.ZIndex=201
 musicTitle.Parent=musicGui
-local musicSub=Instance.new("TextLabel")
-musicSub.Position=UDim2.fromOffset(14,36)
-musicSub.Size=UDim2.new(1,-28,0,22)
-musicSub.BackgroundTransparency=1
-musicSub.Text="ID MUSIC • COPY"
-musicSub.TextColor3=Color3.fromRGB(165,165,185)
-musicSub.Font=Enum.Font.Gotham
-musicSub.TextSize=11
-musicSub.TextXAlignment=Enum.TextXAlignment.Left
-musicSub.ZIndex=201
-musicSub.Parent=musicGui
+local searchBox=Instance.new("TextBox")
+searchBox.Name="SearchBox"
+searchBox.Position=UDim2.fromOffset(14,38)
+searchBox.Size=UDim2.new(1,-28,0,32)
+searchBox.BackgroundColor3=Color3.fromRGB(25,25,35)
+searchBox.BorderSizePixel=0
+searchBox.PlaceholderText="Cari judul musik..."
+searchBox.PlaceholderColor3=Color3.fromRGB(130,130,150)
+searchBox.Text=""
+searchBox.TextColor3=Color3.new(1,1,1)
+searchBox.Font=Enum.Font.Gotham
+searchBox.TextSize=13
+searchBox.ClearTextOnFocus=false
+searchBox.ZIndex=201
+searchBox.Parent=musicGui
+local sbCorner=Instance.new("UICorner")
+sbCorner.CornerRadius=UDim.new(0,8)
+sbCorner.Parent=searchBox
+premium(searchBox,1.2)
 local musicList=Instance.new("ScrollingFrame")
 musicList.Name="MusicList"
-musicList.Position=UDim2.fromOffset(8,64)
-musicList.Size=UDim2.new(1,-16,1,-72)
+musicList.Position=UDim2.fromOffset(8,76)
+musicList.Size=UDim2.new(1,-16,1,-84)
 musicList.BackgroundTransparency=1
 musicList.BorderSizePixel=0
 musicList.ScrollBarThickness=3
@@ -542,10 +538,9 @@ end
 end)
 return ok
 end
+local musicItemInstances={}
 local function createMusicItem(index,name,id)
 if destroyed then return end
-local old=musicList:FindFirstChild("Music_"..index)
-if old then return old end
 local item=Instance.new("Frame")
 item.Name="Music_"..index
 item.Size=UDim2.new(1,-4,0,70)
@@ -560,6 +555,7 @@ c.CornerRadius=UDim.new(0,11)
 c.Parent=item
 premium(item,1.3)
 local nl=Instance.new("TextLabel")
+nl.Name="NameLabel"
 nl.Position=UDim2.fromOffset(10,7)
 nl.Size=UDim2.new(1,-105,0,24)
 nl.BackgroundTransparency=1
@@ -618,9 +614,20 @@ copy.BackgroundColor3=Color3.fromRGB(100,40,170)
 end
 end)
 end)
+table.insert(musicItemInstances,{Frame=item,Name=name:lower(),Id=id})
 return item
 end
 for i,d in ipairs(MUSIC_LIST)do createMusicItem(i,d[1],d[2])end
+connect(searchBox:GetPropertyChangedSignal("Text"),function()
+local query=searchBox.Text:lower()
+for _,v in ipairs(musicItemInstances)do
+if query=="" or v.Name:find(query) or v.Id:find(query) then
+v.Frame.Visible=true
+else
+v.Frame.Visible=false
+end
+end
+end)
 local openMusic=Instance.new("TextButton")
 openMusic.Name="OpenMusic"
 openMusic.AnchorPoint=Vector2.new(1,0)
@@ -646,7 +653,6 @@ connect(openMusic.Activated,function()
 if destroyed then return end
 musicGui.Visible=not musicGui.Visible
 end)
-
 connect(RunService.RenderStepped,function()
 if destroyed then return end
 for g in pairs(gradientObjects)do
@@ -657,7 +663,6 @@ gradientObjects[g]=nil
 end
 end
 end)
-
 connect(RunService.RenderStepped,function()
 if destroyed then return end
 local tg=playerGui:FindFirstChild("TouchGui")
@@ -668,7 +673,6 @@ applyJumpPremium(j)
 end
 end
 end)
-
 local function refresh()
 task.defer(updateJump)
 task.delay(.2,function()if not destroyed then updateJump()end end)
