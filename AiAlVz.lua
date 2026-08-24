@@ -78,11 +78,25 @@ overlay.Visible=j.Visible
 overlay.ZIndex=j.ZIndex+2
 end
 end
+
+local function fixTouchScreen()
+local touchGui=playerGui:FindFirstChild("TouchGui")
+if touchGui then
+touchGui.IgnoreGuiInset=true
+local touchControl=touchGui:FindFirstChild("TouchControlFrame",true)
+if touchControl then
+touchControl.Size=UDim2.new(1,0,1,0)
+touchControl.Position=UDim2.new(0,0,0,0)
+end
+end
+end
+
 local touchGui
 local jumpButton
 local function getJump()
 touchGui=playerGui:FindFirstChild("TouchGui")
 if not touchGui then jumpButton=nil return nil end
+fixTouchScreen()
 jumpButton=touchGui:FindFirstChild("JumpButton",true)
 if jumpButton and jumpButton:IsA("GuiObject")then
 applyJumpPremium(jumpButton)
@@ -141,7 +155,7 @@ return b
 end
 local menu=Instance.new("ImageButton")
 menu.Name="OpenMenu"
-menu.Position=UDim2.new(1,-72,1,-72)
+menu.Position=UDim2.new(1,-85,1,-85)
 menu.Size=UDim2.fromOffset(60,60)
 menu.Image=OPEN_MENU_IMAGE
 menu.BackgroundColor3=Color3.fromRGB(25,25,25)
@@ -158,8 +172,8 @@ menuCorner.Parent=menu
 premium(menu,2.5)
 local settings=Instance.new("Frame")
 settings.Name="SettingsFrame"
-settings.Size=UDim2.fromOffset(300,560)
-settings.Position=UDim2.new(.5,-150,.5,-280)
+settings.Size=UDim2.fromOffset(300,380)
+settings.Position=UDim2.new(.5,-150,.5,-190)
 settings.BackgroundColor3=Color3.fromRGB(18,18,22)
 settings.BackgroundTransparency=.03
 settings.BorderSizePixel=0
@@ -212,70 +226,30 @@ connect(sensMinus.Activated,function()config.Sensitivity=math.clamp(config.Sensi
 connect(sensPlus.Activated,function()config.Sensitivity=math.clamp(config.Sensitivity+.1,.1,10);applySensitivity()end)
 connect(sensReset.Activated,function()config.Sensitivity=1;applySensitivity()end)
 applySensitivity()
-local jumpSection=Instance.new("Frame")
-jumpSection.Size=UDim2.new(1,-20,0,320)
-jumpSection.Position=UDim2.fromOffset(10,180)
-jumpSection.BackgroundColor3=Color3.fromRGB(30,30,35)
-jumpSection.BorderSizePixel=0
-jumpSection.Active=false
-jumpSection.ZIndex=41
-jumpSection.Parent=settings
-local jumpCorner=Instance.new("UICorner")
-jumpCorner.CornerRadius=UDim.new(0,12)
-jumpCorner.Parent=jumpSection
-premium(jumpSection,1.5)
-local jumpTitle=Instance.new("TextLabel")
-jumpTitle.Size=UDim2.new(1,0,0,40)
-jumpTitle.Text="JUMP BUTTON SETTING"
-jumpTitle.TextColor3=Color3.new(1,1,1)
-jumpTitle.Font=Enum.Font.GothamBold
-jumpTitle.TextSize=16
-jumpTitle.BackgroundTransparency=1
-jumpTitle.ZIndex=42
-jumpTitle.Parent=jumpSection
-local moveUp=makeButton(jumpSection,"MoveUp",UDim2.new(.5,-34,0,55),UDim2.fromOffset(68,46),"↑",nil,43)
-local moveLeft=makeButton(jumpSection,"MoveLeft",UDim2.new(.10,0,0,102),UDim2.fromOffset(68,46),"←",nil,43)
-local moveRight=makeButton(jumpSection,"MoveRight",UDim2.new(.90,-68,0,102),UDim2.fromOffset(68,46),"→",nil,43)
-local moveDown=makeButton(jumpSection,"MoveDown",UDim2.new(.5,-34,0,149),UDim2.fromOffset(68,46),"↓",nil,43)
-local sizePlus=makeButton(jumpSection,"SizePlus",UDim2.new(.06,0,0,207),UDim2.fromOffset(88,34),"SIZE +",nil,43)
-local sizeMinus=makeButton(jumpSection,"SizeMinus",UDim2.new(.94,-88,0,207),UDim2.fromOffset(88,34),"SIZE -",nil,43)
-local center=makeButton(jumpSection,"Center",UDim2.new(.5,-44,0,207),UDim2.fromOffset(88,34),"RESET",nil,43)
-local step=.018
-local holding={[moveUp]=false,[moveDown]=false,[moveLeft]=false,[moveRight]=false}
-local function applyMoveStep(dx,dy)
-config.JumpX=math.clamp(config.JumpX+dx,.05,.95)
-config.JumpY=math.clamp(config.JumpY+dy,.05,.95)
-updateJump()
-end
-local function bindHold(b,dx,dy)
-connect(b.InputBegan,function(i)
-local t=i.UserInputType
-if t~=Enum.UserInputType.Touch and t~=Enum.UserInputType.MouseButton1 then return end
-holding[b]=true
-applyMoveStep(dx,dy)
-end)
-connect(b.InputEnded,function(i)
-local t=i.UserInputType
-if t==Enum.UserInputType.Touch or t==Enum.UserInputType.MouseButton1 then holding[b]=false end
-end)
-end
-bindHold(moveUp,0,-step)
-bindHold(moveDown,0,step)
-bindHold(moveLeft,-step,0)
-bindHold(moveRight,step,0)
-connect(UserInputService.InputEnded,function(i)
-local t=i.UserInputType
-if t==Enum.UserInputType.Touch or t==Enum.UserInputType.MouseButton1 then
-for b in pairs(holding)do holding[b]=false end
-end
-end)
-connect(RunService.RenderStepped,function()
-if destroyed then return end
-if holding[moveUp]then applyMoveStep(0,-step)end
-if holding[moveDown]then applyMoveStep(0,step)end
-if holding[moveLeft]then applyMoveStep(-step,0)end
-if holding[moveRight]then applyMoveStep(step,0)end
-end)
+local jumpPosSection=Instance.new("Frame")
+jumpPosSection.Size=UDim2.new(1,-20,0,130)
+jumpPosSection.Position=UDim2.fromOffset(10,180)
+jumpPosSection.BackgroundColor3=Color3.fromRGB(30,30,35)
+jumpPosSection.BorderSizePixel=0
+jumpPosSection.Active=false
+jumpPosSection.ZIndex=41
+jumpPosSection.Parent=settings
+local jumpPosCorner=Instance.new("UICorner")
+jumpPosCorner.CornerRadius=UDim.new(0,12)
+jumpPosCorner.Parent=jumpPosSection
+premium(jumpPosSection,1.5)
+local jumpPosTitle=Instance.new("TextLabel")
+jumpPosTitle.Size=UDim2.new(1,0,0,35)
+jumpPosTitle.Text="JUMP BUTTON SIZE"
+jumpPosTitle.TextColor3=Color3.new(1,1,1)
+jumpPosTitle.Font=Enum.Font.GothamBold
+jumpPosTitle.TextSize=16
+jumpPosTitle.BackgroundTransparency=1
+jumpPosTitle.ZIndex=42
+jumpPosTitle.Parent=jumpPosSection
+local sizePlus=makeButton(jumpPosSection,"SizePlus",UDim2.new(.06,0,0,50),UDim2.fromOffset(88,38),"SIZE +",nil,43)
+local sizeMinus=makeButton(jumpPosSection,"SizeMinus",UDim2.new(.94,-88,0,50),UDim2.fromOffset(88,38),"SIZE -",nil,43)
+local center=makeButton(jumpPosSection,"Center",UDim2.new(.5,-44,0,50),UDim2.fromOffset(88,38),"RESET",nil,43)
 connect(sizePlus.Activated,function()
 config.JumpSize=math.clamp(config.JumpSize+.05,.05,.50)
 updateJump()
@@ -631,7 +605,7 @@ end)
 local openMusic=Instance.new("TextButton")
 openMusic.Name="OpenMusic"
 openMusic.AnchorPoint=Vector2.new(1,0)
-openMusic.Position=UDim2.new(1,-80,0,82)
+openMusic.Position=UDim2.new(1,-85,0,82)
 openMusic.Size=UDim2.fromOffset(58,58)
 openMusic.BackgroundColor3=Color3.fromRGB(25,25,35)
 openMusic.BackgroundTransparency=.05
@@ -665,6 +639,7 @@ end
 end)
 connect(RunService.RenderStepped,function()
 if destroyed then return end
+fixTouchScreen()
 local tg=playerGui:FindFirstChild("TouchGui")
 if tg then
 local j=tg:FindFirstChild("JumpButton",true)
