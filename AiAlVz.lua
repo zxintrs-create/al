@@ -328,14 +328,7 @@ local perfToggle = makeButton(perfSection, "PerfToggle", UDim2.new(.5, -80, 0, 3
 perfToggle.TextColor3 = Color3.new(1, 1, 1)
 perfToggle.TextSize = 12
 
-local function isCharacterPart(obj)
-    local char = player.Character
-    if char and (obj:IsDescendantOf(char)) then
-        return true
-    end
-    return false
-end
-
+-- Mode Performa Aman (Hanya mematikan Bayangan & Efek Lighting, TANPA menyentuh Karakter/Part)
 local function applyLowPerf(state)
     config.LowPerformance = state
     if state then
@@ -348,32 +341,13 @@ local function applyLowPerf(state)
                 if v:IsA("PostEffect") then v.Enabled = false end
             end
         end)
-        local function optimizeInstance(obj)
-            if isCharacterPart(obj) then return end
-            if obj:IsA("MeshPart") then
-                obj.Transparency = 1
-                obj.CanCollide = true
-                obj.CastShadow = false
-            elseif obj:IsA("SpecialMesh") then
-                obj.Transparency = 1
-            elseif obj:IsA("BasePart") then
-                obj.Material = Enum.Material.SmoothPlastic
-                obj.Reflectance = 0
-                obj.CastShadow = false
-            end
-        end
-        for _, descendant in ipairs(workspace:GetDescendants()) do
-            optimizeInstance(descendant)
-        end
     else
         perfToggle.Text = "STATUS: OFF"
         perfToggle.BackgroundColor3 = Color3.fromRGB(150, 40, 40)
         pcall(function()
             Lighting.GlobalShadows = true
-            for _, descendant in ipairs(workspace:GetDescendants()) do
-                if not isCharacterPart(descendant) and descendant:IsA("BasePart") then
-                    descendant.CastShadow = true
-                end
+            for _, v in ipairs(Lighting:GetChildren()) do
+                if v:IsA("PostEffect") then v.Enabled = true end
             end
         end)
     end
@@ -381,21 +355,6 @@ end
 
 connect(perfToggle.Activated, function()
     applyLowPerf(not config.LowPerformance)
-end)
-
-connect(workspace.DescendantAdded, function(descendant)
-    if config.LowPerformance and not isCharacterPart(descendant) then
-        if descendant:IsA("MeshPart") then
-            descendant.Transparency = 1
-            descendant.CastShadow = false
-        elseif descendant:IsA("SpecialMesh") then
-            descendant.Transparency = 1
-        elseif descendant:IsA("BasePart") then
-            descendant.Material = Enum.Material.SmoothPlastic
-            descendant.Reflectance = 0
-            descendant.CastShadow = false
-        end
-    end
 end)
 
 if config.LowPerformance then
