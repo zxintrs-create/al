@@ -1,15 +1,16 @@
-local Players=game:GetService("Players")
+Local Players=game:GetService("Players")
 local RunService=game:GetService("RunService")
 local UserInputService=game:GetService("UserInputService")
 local HttpService=game:GetService("HttpService")
+local Lighting = game:GetService("Lighting")
 local player=Players.LocalPlayer
 local playerGui=player:WaitForChild("PlayerGui")
 local CONFIG_FILE="DeltaMobileConfig.json"
-local defaultConfig={JumpX=.85,JumpY=.75,JumpSize=.30,Sensitivity=1}
+local defaultConfig={JumpX=.85,JumpY=.75,JumpSize=.30,Sensitivity=1,LowPerformance=false}
 local OPEN_MENU_IMAGE="rbxassetid://114480118578175"
 local config={}
 for k,v in pairs(defaultConfig)do config[k]=v end
-local function saveConfig()pcall(function()if writefile then writefile(CONFIG_FILE,HttpService:JSONEncode(config))end end)end
+local function saveConfig()pcall(function()if writefile then writefile(CONFIG_FILE,HttpService:JSONDecode(config))end end)end
 local function loadConfig()pcall(function()if readfile and isfile and isfile(CONFIG_FILE)then local d=HttpService:JSONDecode(readfile(CONFIG_FILE));if type(d)=="table"then for k,v in pairs(d)do if defaultConfig[k]~=nil and type(v)==type(defaultConfig[k])then config[k]=v end end end end end)end
 loadConfig()
 if _G.DeltaMobileControlsCleanup then pcall(_G.DeltaMobileControlsCleanup)end
@@ -156,10 +157,11 @@ local menuCorner=Instance.new("UICorner")
 menuCorner.CornerRadius=UDim.new(1,0)
 menuCorner.Parent=menu
 premium(menu,2.5)
+
 local settings=Instance.new("Frame")
 settings.Name="SettingsFrame"
-settings.Size=UDim2.fromOffset(300,380)
-settings.Position=UDim2.new(.5,-150,.5,-190)
+settings.Size=UDim2.fromOffset(300,450)
+settings.Position=UDim2.new(.5,-150,.5,-225)
 settings.BackgroundColor3=Color3.fromRGB(18,18,22)
 settings.BackgroundTransparency=.03
 settings.BorderSizePixel=0
@@ -171,8 +173,9 @@ local settingsCorner=Instance.new("UICorner")
 settingsCorner.CornerRadius=UDim.new(0,16)
 settingsCorner.Parent=settings
 premium(settings,2.5)
+
 local cameraSection=Instance.new("Frame")
-cameraSection.Size=UDim2.new(1,-20,0,160)
+cameraSection.Size=UDim2.new(1,-20,0,130)
 cameraSection.Position=UDim2.fromOffset(10,10)
 cameraSection.BackgroundColor3=Color3.fromRGB(30,30,35)
 cameraSection.BorderSizePixel=0
@@ -184,20 +187,20 @@ cameraCorner.CornerRadius=UDim.new(0,12)
 cameraCorner.Parent=cameraSection
 premium(cameraSection,1.5)
 local cameraTitle=Instance.new("TextLabel")
-cameraTitle.Size=UDim2.new(1,0,0,40)
+cameraTitle.Size=UDim2.new(1,0,0,35)
 cameraTitle.Text="CAMERA SENSI SETTING"
 cameraTitle.TextColor3=Color3.new(1,1,1)
 cameraTitle.Font=Enum.Font.GothamBold
-cameraTitle.TextSize=18
+cameraTitle.TextSize=16
 cameraTitle.BackgroundTransparency=1
 cameraTitle.ZIndex=42
 cameraTitle.Parent=cameraSection
 local sensLabel=Instance.new("TextLabel")
-sensLabel.Size=UDim2.new(1,0,0,30)
-sensLabel.Position=UDim2.fromOffset(0,40)
+sensLabel.Size=UDim2.new(1,0,0,25)
+sensLabel.Position=UDim2.fromOffset(0,35)
 sensLabel.TextColor3=Color3.fromRGB(220,220,220)
 sensLabel.Font=Enum.Font.Gotham
-sensLabel.TextSize=14
+sensLabel.TextSize=13
 sensLabel.BackgroundTransparency=1
 sensLabel.ZIndex=42
 sensLabel.Parent=cameraSection
@@ -205,16 +208,17 @@ local function applySensitivity()
 sensLabel.Text="Multiplier: "..string.format("%.1f",config.Sensitivity).."x"
 pcall(function()UserSettings().GameSettings.MouseSensitivity=config.Sensitivity end)
 end
-local sensMinus=makeButton(cameraSection,"Minus",UDim2.new(.06,0,0,85),UDim2.fromOffset(76,42),"-",nil,43)
-local sensReset=makeButton(cameraSection,"Reset",UDim2.new(.5,-42,0,85),UDim2.fromOffset(84,42),"RESET",nil,43)
-local sensPlus=makeButton(cameraSection,"Plus",UDim2.new(.94,-76,0,85),UDim2.fromOffset(76,42),"+",nil,43)
+local sensMinus=makeButton(cameraSection,"Minus",UDim2.new(.06,0,0,70),UDim2.fromOffset(76,38),"-",nil,43)
+local sensReset=makeButton(cameraSection,"Reset",UDim2.new(.5,-42,0,70),UDim2.fromOffset(84,38),"RESET",nil,43)
+local sensPlus=makeButton(cameraSection,"Plus",UDim2.new(.94,-76,0,70),UDim2.fromOffset(76,38),"+",nil,43)
 connect(sensMinus.Activated,function()config.Sensitivity=math.clamp(config.Sensitivity-.1,.1,10);applySensitivity()end)
 connect(sensPlus.Activated,function()config.Sensitivity=math.clamp(config.Sensitivity+.1,.1,10);applySensitivity()end)
 connect(sensReset.Activated,function()config.Sensitivity=1;applySensitivity()end)
 applySensitivity()
+
 local jumpPosSection=Instance.new("Frame")
-jumpPosSection.Size=UDim2.new(1,-20,0,130)
-jumpPosSection.Position=UDim2.fromOffset(10,180)
+jumpPosSection.Size=UDim2.new(1,-20,0,115)
+jumpPosSection.Position=UDim2.fromOffset(10,150)
 jumpPosSection.BackgroundColor3=Color3.fromRGB(30,30,35)
 jumpPosSection.BorderSizePixel=0
 jumpPosSection.Active=false
@@ -225,17 +229,17 @@ jumpPosCorner.CornerRadius=UDim.new(0,12)
 jumpPosCorner.Parent=jumpPosSection
 premium(jumpPosSection,1.5)
 local jumpPosTitle=Instance.new("TextLabel")
-jumpPosTitle.Size=UDim2.new(1,0,0,35)
+jumpPosTitle.Size=UDim2.new(1,0,0,32)
 jumpPosTitle.Text="JUMP BUTTON SIZE"
 jumpPosTitle.TextColor3=Color3.new(1,1,1)
 jumpPosTitle.Font=Enum.Font.GothamBold
-jumpPosTitle.TextSize=16
+jumpPosTitle.TextSize=15
 jumpPosTitle.BackgroundTransparency=1
 jumpPosTitle.ZIndex=42
 jumpPosTitle.Parent=jumpPosSection
-local sizePlus=makeButton(jumpPosSection,"SizePlus",UDim2.new(.06,0,0,50),UDim2.fromOffset(88,38),"SIZE +",nil,43)
-local sizeMinus=makeButton(jumpPosSection,"SizeMinus",UDim2.new(.94,-88,0,50),UDim2.fromOffset(88,38),"SIZE -",nil,43)
-local center=makeButton(jumpPosSection,"Center",UDim2.new(.5,-44,0,50),UDim2.fromOffset(88,38),"RESET",nil,43)
+local sizePlus=makeButton(jumpPosSection,"SizePlus",UDim2.new(.06,0,0,45),UDim2.fromOffset(88,35),"SIZE +",nil,43)
+local sizeMinus=makeButton(jumpPosSection,"SizeMinus",UDim2.new(.94,-88,0,45),UDim2.fromOffset(88,38),"SIZE -",nil,43)
+local center=makeButton(jumpPosSection,"Center",UDim2.new(.5,-44,0,45),UDim2.fromOffset(88,38),"RESET",nil,43)
 connect(sizePlus.Activated,function()
 config.JumpSize=math.clamp(config.JumpSize+.05,.05,.50)
 updateJump()
@@ -250,10 +254,105 @@ config.JumpY=defaultConfig.JumpY
 config.JumpSize=defaultConfig.JumpSize
 updateJump()
 end)
-local saveButton=makeButton(settings,"SaveConfig",UDim2.new(.05,0,1,-45),UDim2.fromOffset(130,38),"SAVE",Color3.fromRGB(45,100,55),43)
+
+local perfSection=Instance.new("Frame")
+perfSection.Size=UDim2.new(1,-20,0,85)
+perfSection.Position=UDim2.fromOffset(10,275)
+perfSection.BackgroundColor3=Color3.fromRGB(30,30,35)
+perfSection.BorderSizePixel=0
+perfSection.Active=false
+perfSection.ZIndex=41
+perfSection.Parent=settings
+local perfCorner=Instance.new("UICorner")
+perfCorner.CornerRadius=UDim.new(0,12)
+perfCorner.Parent=perfSection
+premium(perfSection,1.5)
+
+local perfTitle=Instance.new("TextLabel")
+perfTitle.Size=UDim2.new(1,0,0,30)
+perfTitle.Text="LOW PERFORMANCE MODE"
+perfTitle.TextColor3=Color3.new(1,1,1)
+perfTitle.Font=Enum.Font.GothamBold
+perfTitle.TextSize=15
+perfTitle.BackgroundTransparency=1
+perfTitle.ZIndex=42
+perfTitle.Parent=perfSection
+
+local perfToggle=makeButton(perfSection,"PerfToggle",UDim2.new(.5,-80,0,35),UDim2.fromOffset(160,38),"STATUS: OFF",Color3.fromRGB(150,40,40),43)
+perfToggle.TextColor3=Color3.new(1,1,1)
+perfToggle.TextSize=13
+
+local function applyLowPerf(state)
+	config.LowPerformance = state
+	if state then
+		perfToggle.Text = "STATUS: ON"
+		perfToggle.BackgroundColor3 = Color3.fromRGB(40,150,60)
+		
+		pcall(function()
+			Lighting.GlobalShadows = false
+			Lighting.FogEnd = 9e9
+			for _, v in ipairs(Lighting:GetChildren()) do
+				if v:IsA("PostEffect") then v.Enabled = false end
+			end
+		end)
+		
+		local function optimizeInstance(obj)
+			if obj:IsA("MeshPart") then
+				obj.Transparency = 1
+				obj.CanCollide = true
+				obj.CastShadow = false
+			elseif obj:IsA("SpecialMesh") then
+				obj.Transparency = 1
+			elseif obj:IsA("BasePart") then
+				obj.Material = Enum.Material.SmoothPlastic
+				obj.Reflectance = 0
+				obj.CastShadow = false
+			end
+		end
+		
+		for _, descendant in ipairs(workspace:GetDescendants()) do
+			optimizeInstance(descendant)
+		end
+	else
+		perfToggle.Text = "STATUS: OFF"
+		perfToggle.BackgroundColor3 = Color3.fromRGB(150,40,40)
+		pcall(function()
+			Lighting.GlobalShadows = true
+			for _, descendant in ipairs(workspace:GetDescendants()) do
+				if descendant:IsA("BasePart") then
+					descendant.CastShadow = true
+				end
+			end
+		end)
+	end
+end
+
+connect(perfToggle.Activated, function()
+	applyLowPerf(not config.LowPerformance)
+end)
+
+connect(workspace.DescendantAdded, function(descendant)
+	if config.LowPerformance then
+		if descendant:IsA("MeshPart") then
+			descendant.Transparency = 1
+			descendant.CastShadow = false
+		elseif descendant:IsA("SpecialMesh") then
+			descendant.Transparency = 1
+		elseif descendant:IsA("BasePart") then
+			descendant.Material = Enum.Material.SmoothPlastic
+			descendant.Reflectance = 0
+			descendant.CastShadow = false
+		end
+	end
+end)
+
+local saveButton=makeButton(settings,"SaveConfig",UDim2.new(.05,0,1,-48),UDim2.fromOffset(130,36),"SAVE",Color3.fromRGB(45,100,55),43)
 saveButton.TextColor3=Color3.new(1,1,1)
-local closeButton=makeButton(settings,"Close",UDim2.new(.95,-130,1,-45),UDim2.fromOffset(130,38),"CLOSE",Color3.fromRGB(100,40,40),43)
+saveButton.TextSize=14
+local closeButton=makeButton(settings,"Close",UDim2.new(.95,-130,1,-48),UDim2.fromOffset(130,36),"CLOSE",Color3.fromRGB(100,40,40),43)
 closeButton.TextColor3=Color3.new(1,1,1)
+closeButton.TextSize=14
+
 connect(saveButton.Activated,function()
 saveConfig()
 local old=saveButton.Text
@@ -270,6 +369,7 @@ task.delay(.2,updateJump)
 task.delay(.5,updateJump)
 end
 end)
+
 local MUSIC_LIST={
 {"DJ BE AS ONE","83435514857435"},
 {"DJ MISSING YOU","119116468910055"},
