@@ -43,24 +43,33 @@ edgeGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 edgeGui.DisplayOrder = 999999
 edgeGui.Parent = playerGui
 
-local edgeFrame = Instance.new("Frame")
-edgeFrame.Name = "EdgeTouchFrame"
-edgeFrame.Size = UDim2.new(1, 0, 1, 0)
-edgeFrame.Position = UDim2.new(0, 0, 0, 0)
-edgeFrame.BackgroundTransparency = 1
-edgeFrame.Active = true
-edgeFrame.Selectable = false
-edgeFrame.BorderSizePixel = 0
-edgeFrame.Parent = edgeGui
+local thickness = 50
+local function createEdgeFrame(name, size, pos)
+    local f = Instance.new("Frame")
+    f.Name = name
+    f.Size = size
+    f.Position = pos
+    f.BackgroundTransparency = 1
+    f.Active = true
+    f.Selectable = false
+    f.BorderSizePixel = 0
+    f.Parent = edgeGui
+    return f
+end
+
+createEdgeFrame("LeftEdge", UDim2.new(0, thickness, 1, 0), UDim2.new(0, -thickness, 0, 0))
+createEdgeFrame("RightEdge", UDim2.new(0, thickness, 1, 0), UDim2.new(1, 0, 0, 0))
+createEdgeFrame("TopEdge", UDim2.new(1, 0, 0, thickness), UDim2.new(0, 0, 0, -thickness))
+createEdgeFrame("BottomEdge", UDim2.new(1, 0, 0, thickness), UDim2.new(0, 0, 1, 0))
 
 local gradientObjects = {}
 local function registerGradient(g) if g and g:IsA("UIGradient") then gradientObjects[g] = true end end
-local function premiumStroke(obj, thickness)
+local function premiumStroke(obj, thicknessVal)
     local old = obj:FindFirstChild("PremiumStroke")
     if old then old:Destroy() end
     local stroke = Instance.new("UIStroke")
     stroke.Name = "PremiumStroke"
-    stroke.Thickness = thickness or 2
+    stroke.Thickness = thicknessVal or 2
     stroke.Color = Color3.new(1, 1, 1)
     stroke.Transparency = 0
     stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
@@ -73,7 +82,7 @@ local function premiumStroke(obj, thickness)
     registerGradient(gradient)
     return stroke, gradient
 end
-local function premium(obj, thickness) return premiumStroke(obj, thickness) end
+local function premium(obj, thicknessVal) return premiumStroke(obj, thicknessVal) end
 local function applyJumpPremium(j)
     local overlay = j:FindFirstChild("PremiumJumpStroke")
     if not overlay then
