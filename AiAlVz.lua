@@ -1,4 +1,4 @@
-Local Players=game:GetService("Players")
+local Players=game:GetService("Players")
 local RunService=game:GetService("RunService")
 local UserInputService=game:GetService("UserInputService")
 local HttpService=game:GetService("HttpService")
@@ -10,9 +10,31 @@ local defaultConfig={JumpX=.85,JumpY=.75,JumpSize=.30,Sensitivity=1,LowPerforman
 local OPEN_MENU_IMAGE="rbxassetid://114480118578175"
 local config={}
 for k,v in pairs(defaultConfig)do config[k]=v end
-local function saveConfig()pcall(function()if writefile then writefile(CONFIG_FILE,HttpService:JSONDecode(config))end end)end
-local function loadConfig()pcall(function()if readfile and isfile and isfile(CONFIG_FILE)then local d=HttpService:JSONDecode(readfile(CONFIG_FILE));if type(d)=="table"then for k,v in pairs(d)do if defaultConfig[k]~=nil and type(v)==type(defaultConfig[k])then config[k]=v end end end end end)end
+
+local function saveConfig()
+    pcall(function()
+        if writefile then 
+            writefile(CONFIG_FILE, HttpService:JSONEncode(config)) 
+        end 
+    end)
+end
+
+local function loadConfig()
+    pcall(function()
+        if readfile and isfile and isfile(CONFIG_FILE) then 
+            local d=HttpService:JSONDecode(readfile(CONFIG_FILE))
+            if type(d)=="table" then 
+                for k,v in pairs(d) do 
+                    if defaultConfig[k]~=nil and type(v)==type(defaultConfig[k]) then 
+                        config[k]=v 
+                    end 
+                end 
+            end 
+        end 
+    end)
+end
 loadConfig()
+
 if _G.DeltaMobileControlsCleanup then pcall(_G.DeltaMobileControlsCleanup)end
 local connections={}
 local destroyed=false
@@ -345,6 +367,11 @@ connect(workspace.DescendantAdded, function(descendant)
 		end
 	end
 end)
+
+-- Sinkronisasi status awal LowPerformance berdasarkan config yang di-load
+if config.LowPerformance then
+	applyLowPerf(true)
+end
 
 local saveButton=makeButton(settings,"SaveConfig",UDim2.new(.05,0,1,-48),UDim2.fromOffset(130,36),"SAVE",Color3.fromRGB(45,100,55),43)
 saveButton.TextColor3=Color3.new(1,1,1)
@@ -709,10 +736,6 @@ local omc=Instance.new("UICorner")
 omc.CornerRadius=UDim.new(1,0)
 omc.Parent=openMusic
 premium(openMusic,2.5)
-connect(openMusic.Activated,function()
-if destroyed then return end
-musicGui.Visible=not musicGui.Visible
-end)
 connect(RunService.RenderStepped,function()
 if destroyed then return end
 for g in pairs(gradientObjects)do
