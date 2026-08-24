@@ -158,7 +158,7 @@ local function makeButton(p, n, pos, size, text, bg, z)
     b.BackgroundTransparency = .05
     b.TextColor3 = Color3.fromRGB(20, 20, 20)
     b.Font = Enum.Font.GothamBold
-    b.TextSize = 22
+    b.TextSize = 20
     b.AutoButtonColor = false
     b.Active = true
     b.Selectable = false
@@ -192,8 +192,8 @@ premium(menu, 2.5)
 
 local settings = Instance.new("Frame")
 settings.Name = "SettingsFrame"
-settings.Size = UDim2.fromOffset(300, 450)
-settings.Position = UDim2.new(.5, -150, .5, -225)
+settings.Size = UDim2.fromOffset(300, 460)
+settings.Position = UDim2.new(.5, -150, .5, -230)
 settings.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
 settings.BackgroundTransparency = .03
 settings.BorderSizePixel = 0
@@ -224,7 +224,7 @@ cameraTitle.Size = UDim2.new(1, 0, 0, 35)
 cameraTitle.Text = "CAMERA SENSI SETTING"
 cameraTitle.TextColor3 = Color3.new(1, 1, 1)
 cameraTitle.Font = Enum.Font.GothamBold
-cameraTitle.TextSize = 16
+cameraTitle.TextSize = 15
 cameraTitle.BackgroundTransparency = 1
 cameraTitle.ZIndex = 42
 cameraTitle.Parent = cameraSection
@@ -244,9 +244,12 @@ local function applySensitivity()
     pcall(function() UserSettings().GameSettings.MouseSensitivity = config.Sensitivity end)
 end
 
-local sensMinus = makeButton(cameraSection, "Minus", UDim2.new(.06, 0, 0, 70), UDim2.fromOffset(76, 38), "-", nil, 43)
+local sensMinus = makeButton(cameraSection, "Minus", UDim2.new(.06, 0, 0, 70), UDim2.fromOffset(74, 38), "-", nil, 43)
 local sensReset = makeButton(cameraSection, "Reset", UDim2.new(.5, -42, 0, 70), UDim2.fromOffset(84, 38), "RESET", nil, 43)
-local sensPlus = makeButton(cameraSection, "Plus", UDim2.new(.94, -76, 0, 70), UDim2.fromOffset(76, 38), "+", nil, 43)
+local sensPlus = makeButton(cameraSection, "Plus", UDim2.new(.94, -74, 0, 70), UDim2.fromOffset(74, 38), "+", nil, 43)
+sensMinus.TextSize = 22
+sensPlus.TextSize = 22
+sensReset.TextSize = 13
 
 connect(sensMinus.Activated, function() config.Sensitivity = math.clamp(config.Sensitivity - .1, .1, 10); applySensitivity() end)
 connect(sensPlus.Activated, function() config.Sensitivity = math.clamp(config.Sensitivity + .1, .1, 10); applySensitivity() end)
@@ -276,9 +279,12 @@ jumpPosTitle.BackgroundTransparency = 1
 jumpPosTitle.ZIndex = 42
 jumpPosTitle.Parent = jumpPosSection
 
-local sizePlus = makeButton(jumpPosSection, "SizePlus", UDim2.new(.06, 0, 0, 45), UDim2.fromOffset(88, 35), "SIZE +", nil, 43)
-local sizeMinus = makeButton(jumpPosSection, "SizeMinus", UDim2.new(.94, -88, 0, 45), UDim2.fromOffset(88, 38), "SIZE -", nil, 43)
-local center = makeButton(jumpPosSection, "Center", UDim2.new(.5, -44, 0, 45), UDim2.fromOffset(88, 38), "RESET", nil, 43)
+local sizePlus = makeButton(jumpPosSection, "SizePlus", UDim2.new(.06, 0, 0, 45), UDim2.fromOffset(86, 35), "SIZE +", nil, 43)
+local sizeMinus = makeButton(jumpPosSection, "SizeMinus", UDim2.new(.94, -86, 0, 45), UDim2.fromOffset(86, 35), "SIZE -", nil, 43)
+local center = makeButton(jumpPosSection, "Center", UDim2.new(.5, -43, 0, 45), UDim2.fromOffset(86, 35), "RESET", nil, 43)
+sizePlus.TextSize = 12
+sizeMinus.TextSize = 12
+center.TextSize = 12
 
 connect(sizePlus.Activated, function()
     config.JumpSize = math.clamp(config.JumpSize + .05, .05, .50)
@@ -318,9 +324,17 @@ perfTitle.BackgroundTransparency = 1
 perfTitle.ZIndex = 42
 perfTitle.Parent = perfSection
 
-local perfToggle = makeButton(perfSection, "PerfToggle", UDim2.new(.5, -80, 0, 35), UDim2.fromOffset(160, 38), "STATUS: OFF", Color3.fromRGB(150, 40, 40), 43)
+local perfToggle = makeButton(perfSection, "PerfToggle", UDim2.new(.5, -80, 0, 38), UDim2.fromOffset(160, 35), "STATUS: OFF", Color3.fromRGB(150, 40, 40), 43)
 perfToggle.TextColor3 = Color3.new(1, 1, 1)
-perfToggle.TextSize = 13
+perfToggle.TextSize = 12
+
+local function isCharacterPart(obj)
+    local char = player.Character
+    if char and (obj:IsDescendantOf(char)) then
+        return true
+    end
+    return false
+end
 
 local function applyLowPerf(state)
     config.LowPerformance = state
@@ -335,6 +349,7 @@ local function applyLowPerf(state)
             end
         end)
         local function optimizeInstance(obj)
+            if isCharacterPart(obj) then return end
             if obj:IsA("MeshPart") then
                 obj.Transparency = 1
                 obj.CanCollide = true
@@ -356,7 +371,7 @@ local function applyLowPerf(state)
         pcall(function()
             Lighting.GlobalShadows = true
             for _, descendant in ipairs(workspace:GetDescendants()) do
-                if descendant:IsA("BasePart") then
+                if not isCharacterPart(descendant) and descendant:IsA("BasePart") then
                     descendant.CastShadow = true
                 end
             end
@@ -369,7 +384,7 @@ connect(perfToggle.Activated, function()
 end)
 
 connect(workspace.DescendantAdded, function(descendant)
-    if config.LowPerformance then
+    if config.LowPerformance and not isCharacterPart(descendant) then
         if descendant:IsA("MeshPart") then
             descendant.Transparency = 1
             descendant.CastShadow = false
@@ -389,10 +404,10 @@ end
 
 local saveButton = makeButton(settings, "SaveConfig", UDim2.new(.05, 0, 1, -48), UDim2.fromOffset(130, 36), "SAVE", Color3.fromRGB(45, 100, 55), 43)
 saveButton.TextColor3 = Color3.new(1, 1, 1)
-saveButton.TextSize = 14
+saveButton.TextSize = 13
 local closeButton = makeButton(settings, "Close", UDim2.new(.95, -130, 1, -48), UDim2.fromOffset(130, 36), "CLOSE", Color3.fromRGB(100, 40, 40), 43)
 closeButton.TextColor3 = Color3.new(1, 1, 1)
-closeButton.TextSize = 14
+closeButton.TextSize = 13
 
 connect(saveButton.Activated, function()
     saveConfig()
