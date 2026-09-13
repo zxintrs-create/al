@@ -1,5 +1,6 @@
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
+
 local Player = Players.LocalPlayer
 local PlayerGui = Player:WaitForChild("PlayerGui")
 local CLICK_INTERVAL = 0.04
@@ -22,9 +23,9 @@ local function Stroke(parent)
 
 	local g = Instance.new("UIGradient")
 	g.Color = ColorSequence.new({
-		ColorSequenceKeypoint.new(0, Color3.fromRGB(255,0,0)),
-		ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255,255,0)),
-		ColorSequenceKeypoint.new(1, Color3.fromRGB(255,0,0))
+		ColorSequenceKeypoint.new(0,Color3.fromRGB(255,0,0)),
+		ColorSequenceKeypoint.new(0.5,Color3.fromRGB(255,255,0)),
+		ColorSequenceKeypoint.new(1,Color3.fromRGB(255,0,0))
 	})
 	g.Parent = s
 
@@ -38,13 +39,13 @@ local function Stroke(parent)
 	return s
 end
 
-local function Round(parent, radius)
+local function Round(parent,radius)
 	local c = Instance.new("UICorner")
-	c.CornerRadius = UDim.new(0, radius)
+	c.CornerRadius = UDim.new(0,radius)
 	c.Parent = parent
 end
 
-local function Button(parent, text, position)
+local function Button(parent,text,position)
 	local b = Instance.new("TextButton")
 	b.Size = UDim2.new(0,150,0,42)
 	b.Position = position
@@ -93,8 +94,8 @@ Title.TextSize = 16
 Title.Font = Enum.Font.GothamBold
 Title.Parent = MainFrameMenuClick
 
-local ToggleClick = Button(MainFrameMenuClick, "OFF", UDim2.new(0,15,0,42))
-local MarkerToggle = Button(MainFrameMenuClick, "MARKER: AKTIF", UDim2.new(0,15,0,92))
+local ToggleClick = Button(MainFrameMenuClick,"OFF",UDim2.new(0,15,0,42))
+local MarkerToggle = Button(MainFrameMenuClick,"MARKER: AKTIF",UDim2.new(0,15,0,92))
 
 local ClickMarker = Instance.new("TextButton")
 ClickMarker.Name = "ClickMarker"
@@ -116,6 +117,7 @@ local MarkerActive = true
 local dragging = false
 local dragStart
 local startPosition
+local clickGeneration = 0
 
 ClickMarker.InputBegan:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -136,61 +138,79 @@ UserInputService.InputChanged:Connect(function(input)
 
 	if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement then
 		local delta = input.Position - dragStart
-		ClickMarker.Position = UDim2.new(startPosition.X.Scale, startPosition.X.Offset + delta.X, startPosition.Y.Scale, startPosition.Y.Offset + delta.Y)
+		ClickMarker.Position = UDim2.new(
+			startPosition.X.Scale,
+			startPosition.X.Offset + delta.X,
+			startPosition.Y.Scale,
+			startPosition.Y.Offset + delta.Y
+		)
 	end
 end)
 
 local function GetMarkerPosition()
 	local pos = ClickMarker.AbsolutePosition
 	local size = ClickMarker.AbsoluteSize
-	return math.floor(pos.X + size.X / 2), math.floor(pos.Y + size.Y / 2)
+	return math.floor(pos.X + size.X / 2),math.floor(pos.Y + size.Y / 2)
 end
 
-local function ReleaseClick()
-	if typeof(mouse1release) == "function" then
-		pcall(mouse1release)
-	end
-end
+local function DoClick(generation)
+	if not AutoClick or generation ~= clickGeneration then return end
+	if typeof(mousemoveabs) ~= "function" or typeof(mouse1click) ~= "function" then return end
 
-local function DoClick()
-	if not AutoClick or typeof(mousemoveabs) ~= "function" or typeof(mouse1click) ~= "function" then return end
+	local x,y = GetMarkerPosition()
 
-	local x, y = GetMarkerPosition()
+	if not AutoClick or generation ~= clickGeneration then return end
+
 	pcall(function()
-		mousemoveabs(x, y)
+		mousemoveabs(x,y)
+	end)
+
+	if not AutoClick or generation ~= clickGeneration then return end
+
+	pcall(function()
 		mouse1click()
 	end)
 end
 
-task.spawn(function()
-	while ScreenGui.Parent do
-		if AutoClick then
-			DoClick()
+local function StartAutoClick()
+	clickGeneration += 1
+	local generation = clickGeneration
+
+	task.spawn(function()
+		while AutoClick and generation == clickGeneration and ScreenGui.Parent do
+			DoClick(generation)
+			if not AutoClick or generation ~= clickGeneration then break end
 			task.wait(CLICK_INTERVAL)
-		else
-			task.wait(0.1)
 		end
-	end
-end)
+	end)
+end
+
+local function StopAutoClick()
+	AutoClick = false
+	clickGeneration += 1
+	dragging = false
+end
 
 ToggleClick.Activated:Connect(function()
-	AutoClick = not AutoClick
-
 	if AutoClick then
-		ToggleClick.Text = "ON"
-		ClickMarker.Visible = false
-	else
-		AutoClick = false
-		ReleaseClick()
+		StopAutoClick()
 		ToggleClick.Text = "OFF"
 		ClickMarker.Visible = MarkerActive
+	else
+		AutoClick = true
+		ToggleClick.Text = "ON"
+		ClickMarker.Visible = false
+		StartAutoClick()
 	end
 end)
 
 MarkerToggle.Activated:Connect(function()
 	MarkerActive = not MarkerActive
 	MarkerToggle.Text = MarkerActive and "MARKER: AKTIF" or "MARKER: MATIKAN"
-	if not AutoClick then ClickMarker.Visible = MarkerActive end
+
+	if not AutoClick then
+		ClickMarker.Visible = MarkerActive
+	end
 end)
 
 OpenMenuClick.Activated:Connect(function()
