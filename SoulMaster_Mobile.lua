@@ -1,218 +1,661 @@
-local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
+local Players=game:GetService("Players")
+local RunService=game:GetService("RunService")
+local UserInputService=game:GetService("UserInputService")
+local HttpService=game:GetService("HttpService")
 
-local Player = Players.LocalPlayer
-local PlayerGui = Player:WaitForChild("PlayerGui")
-local CLICK_INTERVAL = 0.04
+local player=Players.LocalPlayer
+local playerGui=player:WaitForChild("PlayerGui")
+local CONFIG_FILE="DeltaMobileConfig.json"
+local CLICK_INTERVAL=0.04
 
-local old = PlayerGui:FindFirstChild("DeltaAutoClicker")
-if old then old:Destroy() end
+local defaultConfig={JumpX=.85,JumpY=.75,JumpSize=.30,Sensitivity=1}
+local config={}
+for k,v in pairs(defaultConfig)do config[k]=v end
 
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "DeltaAutoClicker"
-ScreenGui.ResetOnSpawn = false
-ScreenGui.IgnoreGuiInset = true
-ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-ScreenGui.Parent = PlayerGui
+pcall(function()
+	if readfile and isfile and isfile(CONFIG_FILE)then
+		local data=HttpService:JSONDecode(readfile(CONFIG_FILE))
+		if type(data)=="table"then
+			for k,v in pairs(data)do
+				if defaultConfig[k]~=nil and type(v)==type(defaultConfig[k])then config[k]=v end
+			end
+		end
+	end
+end)
 
-local function Stroke(parent)
-	local s = Instance.new("UIStroke")
-	s.Thickness = 2
-	s.Color = Color3.fromRGB(255,255,255)
-	s.Parent = parent
+local function saveConfig()
+	pcall(function()
+		if writefile then writefile(CONFIG_FILE,HttpService:JSONEncode(config))end
+	end)
+end
 
-	local g = Instance.new("UIGradient")
-	g.Color = ColorSequence.new({
-		ColorSequenceKeypoint.new(0,Color3.fromRGB(255,0,0)),
-		ColorSequenceKeypoint.new(0.5,Color3.fromRGB(255,255,0)),
-		ColorSequenceKeypoint.new(1,Color3.fromRGB(255,0,0))
-	})
-	g.Parent = s
+if _G.DeltaMobileControlsCleanup then pcall(_G.DeltaMobileControlsCleanup)end
 
-	task.spawn(function()
-		while s.Parent do
-			g.Rotation = (g.Rotation + 2) % 360
-			task.wait()
+local connections={}
+local gradientObjects={}
+local destroyed=false
+
+local function connect(signal,callback)
+	local c
+	pcall(function()c=signal:Connect(callback)end)
+	if c then table.insert(connections,c)end
+	return c
+end
+
+local function disconnectAll()
+	for i=#connections,1,-1 do pcall(function()connections[i]:Disconnect()end)end
+	table.clear(connections)
+end
+
+local function destroyGui(name)
+	local gui=playerGui:FindFirstChild(name)
+	if gui then pcall(function()gui:Destroy()end)end
+end
+
+_G.DeltaMobileControlsCleanup=function()
+	if destroyed then return end
+	destroyed=true
+	disconnectAll()
+	destroyGui("DeltaMobileControls")
+	destroyGui("DeltaMobileErgo")
+	destroyGui("DeltaAutoClicker")
+end
+
+destroyGui("DeltaMobileControls")
+destroyGui("DeltaMobileErgo")
+destroyGui("DeltaAutoClicker")
+
+local PREMIUM_COLORS=ColorSequence.new({
+	ColorSequenceKeypoint.new(0,Color3.fromRGB(255,0,0)),
+	ColorSequenceKeypoint.new(.25,Color3.fromRGB(255,80,0)),
+	ColorSequenceKeypoint.new(.5,Color3.fromRGB(255,220,0)),
+	ColorSequenceKeypoint.new(.75,Color3.fromRGB(255,80,0)),
+	ColorSequenceKeypoint.new(1,Color3.fromRGB(255,0,0))
+})
+
+local function addPremiumStroke(obj,thickness)
+	if not obj or not obj:IsA("GuiObject")then return end
+	local oldStroke=obj:FindFirstChild("PremiumStroke")
+	if oldStroke then oldStroke:Destroy()end
+
+	local stroke=Instance.new("UIStroke")
+	stroke.Name="PremiumStroke"
+	stroke.Thickness=thickness or 2
+	stroke.Color=Color3.new(1,1,1)
+	stroke.Parent=obj
+
+	local gradient=Instance.new("UIGradient")
+	gradient.Name="PremiumGradient"
+	gradient.Color=PREMIUM_COLORS
+	gradient.Rotation=0
+	gradient.Parent=stroke
+	gradientObjects[gradient]=true
+	return stroke
+end
+
+local function round(parent,radius)
+	local c=Instance.new("UICorner")
+	c.CornerRadius=UDim.new(0,radius)
+	c.Parent=parent
+end
+
+local function makeButton(parent,name,pos,size,text,bg,z)
+	local button=Instance.new("TextButton")
+	button.Name=name
+	button.Position=pos
+	button.Size=size
+	button.Text=text
+	button.BackgroundColor3=bg or Color3.fromRGB(35,35,40)
+	button.BackgroundTransparency=.02
+	button.TextColor3=Color3.new(1,1,1)
+	button.Font=Enum.Font.GothamBold
+	button.TextSize=28
+	button.AutoButtonColor=false
+	button.Active=true
+	button.Selectable=false
+	button.BorderSizePixel=0
+	button.ZIndex=z or 43
+	button.Parent=parent
+	round(button,16)
+	addPremiumStroke(button,2)
+	return button
+end
+
+local ergo=Instance.new("ScreenGui")
+ergo.Name="DeltaMobileErgo"
+ergo.ResetOnSpawn=false
+ergo.IgnoreGuiInset=true
+ergo.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
+ergo.DisplayOrder=1000000
+ergo.Parent=playerGui
+
+local menu=Instance.new("ImageButton")
+menu.Name="OpenMenu"
+menu.AnchorPoint=Vector2.new(1,1)
+menu.Position=UDim2.new(1,-22,1,-22)
+menu.Size=UDim2.fromOffset(68,68)
+menu.Image="rbxassetid://114480118578175"
+menu.BackgroundColor3=Color3.fromRGB(25,25,30)
+menu.BackgroundTransparency=.03
+menu.AutoButtonColor=false
+menu.Active=true
+menu.Selectable=false
+menu.ZIndex=100
+menu.Parent=ergo
+round(menu,100)
+addPremiumStroke(menu,2.5)
+
+local settings=Instance.new("ScrollingFrame")
+settings.Name="SettingsFrame"
+settings.AnchorPoint=Vector2.new(.5,.5)
+settings.Position=UDim2.new(.5,0,.5,0)
+settings.Size=UDim2.new(0,320,0,math.min(650,(workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize.Y or 650)-30))
+settings.BackgroundColor3=Color3.fromRGB(18,18,22)
+settings.BackgroundTransparency=.02
+settings.BorderSizePixel=0
+settings.ScrollBarThickness=4
+settings.Visible=false
+settings.ZIndex=40
+settings.CanvasSize=UDim2.fromOffset(0,720)
+settings.Parent=ergo
+round(settings,16)
+addPremiumStroke(settings,2.5)
+
+local cameraSection=Instance.new("Frame")
+cameraSection.Name="CameraSensitivity"
+cameraSection.Size=UDim2.new(1,-20,0,150)
+cameraSection.Position=UDim2.fromOffset(10,10)
+cameraSection.BackgroundColor3=Color3.fromRGB(30,30,35)
+cameraSection.BorderSizePixel=0
+cameraSection.ZIndex=41
+cameraSection.Parent=settings
+round(cameraSection,12)
+addPremiumStroke(cameraSection,1.5)
+
+local cameraTitle=Instance.new("TextLabel")
+cameraTitle.Size=UDim2.new(1,0,0,36)
+cameraTitle.Text="CAMERA SENSITIVITY"
+cameraTitle.TextColor3=Color3.new(1,1,1)
+cameraTitle.Font=Enum.Font.GothamBold
+cameraTitle.TextSize=17
+cameraTitle.BackgroundTransparency=1
+cameraTitle.ZIndex=42
+cameraTitle.Parent=cameraSection
+
+local sensitivityLabel=Instance.new("TextLabel")
+sensitivityLabel.Size=UDim2.new(1,0,0,30)
+sensitivityLabel.Position=UDim2.fromOffset(0,36)
+sensitivityLabel.TextColor3=Color3.fromRGB(220,220,220)
+sensitivityLabel.Font=Enum.Font.Gotham
+sensitivityLabel.TextSize=14
+sensitivityLabel.BackgroundTransparency=1
+sensitivityLabel.ZIndex=42
+sensitivityLabel.Parent=cameraSection
+
+local sensitivityMinus=makeButton(cameraSection,"SensitivityMinus",UDim2.fromOffset(12,82),UDim2.fromOffset(80,46),"-",nil,43)
+local sensitivityReset=makeButton(cameraSection,"SensitivityReset",UDim2.new(.5,-43,0,82),UDim2.fromOffset(86,46),"RESET",nil,43)
+local sensitivityPlus=makeButton(cameraSection,"SensitivityPlus",UDim2.new(1,-92,0,82),UDim2.fromOffset(80,46),"+",nil,43)
+
+local function applySensitivity()
+	config.Sensitivity=math.clamp(config.Sensitivity,.1,10)
+	sensitivityLabel.Text="Multiplier: "..string.format("%.1f",config.Sensitivity).."x"
+	pcall(function()UserSettings().GameSettings.MouseSensitivity=config.Sensitivity end)
+end
+
+connect(sensitivityMinus.Activated,function()
+	config.Sensitivity=math.clamp(config.Sensitivity-.1,.1,10)
+	applySensitivity()
+end)
+
+connect(sensitivityPlus.Activated,function()
+	config.Sensitivity=math.clamp(config.Sensitivity+.1,.1,10)
+	applySensitivity()
+end)
+
+connect(sensitivityReset.Activated,function()
+	config.Sensitivity=defaultConfig.Sensitivity
+	applySensitivity()
+end)
+
+applySensitivity()
+
+local jumpSection=Instance.new("Frame")
+jumpSection.Name="JumpSetting"
+jumpSection.Size=UDim2.new(1,-20,0,430)
+jumpSection.Position=UDim2.fromOffset(10,170)
+jumpSection.BackgroundColor3=Color3.fromRGB(30,30,35)
+jumpSection.BorderSizePixel=0
+jumpSection.ZIndex=41
+jumpSection.Parent=settings
+round(jumpSection,12)
+addPremiumStroke(jumpSection,1.5)
+
+local jumpTitle=Instance.new("TextLabel")
+jumpTitle.Size=UDim2.new(1,0,0,36)
+jumpTitle.Text="JUMP BUTTON POSITION"
+jumpTitle.TextColor3=Color3.new(1,1,1)
+jumpTitle.Font=Enum.Font.GothamBold
+jumpTitle.TextSize=17
+jumpTitle.BackgroundTransparency=1
+jumpTitle.ZIndex=42
+jumpTitle.Parent=jumpSection
+
+local targetLabel=Instance.new("TextLabel")
+targetLabel.Position=UDim2.fromOffset(10,36)
+targetLabel.Size=UDim2.new(1,-20,0,30)
+targetLabel.Text="TARGET: JUMP BUTTON BAWAAN ROBLOX"
+targetLabel.TextColor3=Color3.fromRGB(190,190,210)
+targetLabel.Font=Enum.Font.Gotham
+targetLabel.TextSize=12
+targetLabel.BackgroundTransparency=1
+targetLabel.ZIndex=42
+targetLabel.Parent=jumpSection
+
+local moveUp=makeButton(jumpSection,"MoveUp",UDim2.new(.5,-38,0,75),UDim2.fromOffset(76,50),"↑",nil,43)
+local moveLeft=makeButton(jumpSection,"MoveLeft",UDim2.fromOffset(28,128),UDim2.fromOffset(76,50),"←",nil,43)
+local moveRight=makeButton(jumpSection,"MoveRight",UDim2.new(1,-104,0,128),UDim2.fromOffset(76,50),"→",nil,43)
+local moveDown=makeButton(jumpSection,"MoveDown",UDim2.new(.5,-38,0,181),UDim2.fromOffset(76,50),"↓",nil,43)
+local sizePlus=makeButton(jumpSection,"SizePlus",UDim2.fromOffset(20,250),UDim2.fromOffset(85,42),"SIZE +",nil,43)
+local resetJump=makeButton(jumpSection,"ResetJump",UDim2.new(.5,-43,0,250),UDim2.fromOffset(86,42),"RESET",nil,43)
+local sizeMinus=makeButton(jumpSection,"SizeMinus",UDim2.new(1,-105,0,250),UDim2.fromOffset(85,42),"SIZE -",nil,43)
+
+local positionLabel=Instance.new("TextLabel")
+positionLabel.Position=UDim2.fromOffset(10,315)
+positionLabel.Size=UDim2.new(1,-20,0,28)
+positionLabel.TextColor3=Color3.fromRGB(210,210,220)
+positionLabel.Font=Enum.Font.Gotham
+positionLabel.TextSize=13
+positionLabel.BackgroundTransparency=1
+positionLabel.ZIndex=42
+positionLabel.Parent=jumpSection
+
+local sizeLabel=Instance.new("TextLabel")
+sizeLabel.Position=UDim2.fromOffset(10,343)
+sizeLabel.Size=UDim2.new(1,-20,0,28)
+sizeLabel.TextColor3=Color3.fromRGB(210,210,220)
+sizeLabel.Font=Enum.Font.Gotham
+sizeLabel.TextSize=13
+sizeLabel.BackgroundTransparency=1
+sizeLabel.ZIndex=42
+sizeLabel.Parent=jumpSection
+
+local jumpButton
+
+local function getJumpButton()
+	local touchGui=playerGui:FindFirstChild("TouchGui")
+	if not touchGui then
+		jumpButton=nil
+		return nil
+	end
+
+	local button=touchGui:FindFirstChild("JumpButton",true)
+
+	if button and button:IsA("GuiObject")then
+		jumpButton=button
+		return button
+	end
+
+	jumpButton=nil
+	return nil
+end
+
+local function updateLabels()
+	positionLabel.Text="X: "..string.format("%.3f",config.JumpX).."    Y: "..string.format("%.3f",config.JumpY)
+	sizeLabel.Text="SIZE: "..string.format("%.2f",config.JumpSize)
+end
+
+local function applyJumpStroke(button)
+	local old=button:FindFirstChild("PremiumJumpStroke")
+	if old then old:Destroy()end
+
+	local overlay=Instance.new("Frame")
+	overlay.Name="PremiumJumpStroke"
+	overlay.Size=UDim2.fromScale(1,1)
+	overlay.BackgroundTransparency=1
+	overlay.BorderSizePixel=0
+	overlay.ZIndex=button.ZIndex+2
+	overlay.Parent=button
+
+	round(overlay,100)
+
+	local stroke=Instance.new("UIStroke")
+	stroke.Name="PremiumStroke"
+	stroke.Thickness=2.5
+	stroke.Color=Color3.new(1,1,1)
+	stroke.Parent=overlay
+
+	local gradient=Instance.new("UIGradient")
+	gradient.Name="PremiumGradient"
+	gradient.Color=PREMIUM_COLORS
+	gradient.Rotation=0
+	gradient.Parent=stroke
+	gradientObjects[gradient]=true
+end
+
+local function updateJump()
+	if destroyed then return end
+
+	local button=getJumpButton()
+	local camera=workspace.CurrentCamera
+
+	if not button or not camera then return end
+
+	local viewport=camera.ViewportSize
+	if viewport.X<=0 or viewport.Y<=0 then return end
+
+	config.JumpX=math.clamp(config.JumpX,.04,.96)
+	config.JumpY=math.clamp(config.JumpY,.04,.96)
+	config.JumpSize=math.clamp(config.JumpSize,.08,.50)
+
+	local size=math.max(52,math.floor(viewport.Y*config.JumpSize))
+
+	pcall(function()
+		button.AnchorPoint=Vector2.new(.5,.5)
+		button.Position=UDim2.new(config.JumpX,0,config.JumpY,0)
+		button.Size=UDim2.fromOffset(size,size)
+		applyJumpStroke(button)
+	end)
+
+	updateLabels()
+end
+
+local step=.015
+local holding={}
+
+local function bindPositionButton(button,dx,dy)
+	connect(button.InputBegan,function(input)
+		local t=input.UserInputType
+		if t==Enum.UserInputType.Touch or t==Enum.UserInputType.MouseButton1 then
+			holding[button]=true
+			button.BackgroundColor3=Color3.fromRGB(65,65,75)
 		end
 	end)
 
+	connect(button.InputEnded,function(input)
+		local t=input.UserInputType
+		if t==Enum.UserInputType.Touch or t==Enum.UserInputType.MouseButton1 then
+			holding[button]=false
+			button.BackgroundColor3=Color3.fromRGB(35,35,40)
+		end
+	end)
+
+	connect(button.Activated,function()
+		if holding[button] then return end
+		config.JumpX=math.clamp(config.JumpX+dx,.04,.96)
+		config.JumpY=math.clamp(config.JumpY+dy,.04,.96)
+		updateJump()
+	end)
+
+	button:SetAttribute("DX",dx)
+	button:SetAttribute("DY",dy)
+end
+
+bindPositionButton(moveUp,0,-step)
+bindPositionButton(moveLeft,-step,0)
+bindPositionButton(moveRight,step,0)
+bindPositionButton(moveDown,0,step)
+
+connect(UserInputService.InputEnded,function(input)
+	local t=input.UserInputType
+	if t==Enum.UserInputType.Touch or t==Enum.UserInputType.MouseButton1 then
+		for button in pairs(holding)do
+			holding[button]=false
+			button.BackgroundColor3=Color3.fromRGB(35,35,40)
+		end
+	end
+end)
+
+connect(RunService.RenderStepped,function()
+	if destroyed then return end
+
+	for button,state in pairs(holding)do
+		if state then
+			local dx=button:GetAttribute("DX") or 0
+			local dy=button:GetAttribute("DY") or 0
+			config.JumpX=math.clamp(config.JumpX+dx,.04,.96)
+			config.JumpY=math.clamp(config.JumpY+dy,.04,.96)
+			updateJump()
+		end
+	end
+
+	for gradient in pairs(gradientObjects)do
+		if gradient and gradient.Parent then
+			gradient.Rotation=(gradient.Rotation+1.5)%360
+		else
+			gradientObjects[gradient]=nil
+		end
+	end
+end)
+
+connect(sizePlus.Activated,function()
+	config.JumpSize=math.clamp(config.JumpSize+.03,.08,.50)
+	updateJump()
+end)
+
+connect(sizeMinus.Activated,function()
+	config.JumpSize=math.clamp(config.JumpSize-.03,.08,.50)
+	updateJump()
+end)
+
+connect(resetJump.Activated,function()
+	config.JumpX=defaultConfig.JumpX
+	config.JumpY=defaultConfig.JumpY
+	config.JumpSize=defaultConfig.JumpSize
+	updateJump()
+end)
+
+local saveButton=makeButton(settings,"SaveConfig",UDim2.fromOffset(20,620),UDim2.fromOffset(130,42),"SAVE",Color3.fromRGB(45,100,55),43)
+local closeButton=makeButton(settings,"Close",UDim2.new(1,-150,0,620),UDim2.fromOffset(130,42),"CLOSE",Color3.fromRGB(100,40,40),43)
+
+connect(saveButton.Activated,function()
+	saveConfig()
+	saveButton.Text="SAVED!"
+	task.delay(1,function()
+		if saveButton and saveButton.Parent then saveButton.Text="SAVE" end
+	end)
+end)
+
+connect(closeButton.Activated,function()
+	settings.Visible=false
+end)
+
+connect(menu.Activated,function()
+	settings.Visible=not settings.Visible
+end)
+
+connect(playerGui.ChildAdded,function(child)
+	if child.Name=="TouchGui" then
+		jumpButton=nil
+		task.defer(updateJump)
+		task.delay(.25,updateJump)
+		task.delay(.7,updateJump)
+		task.delay(1,updateJump)
+	end
+end)
+
+local autoGui=Instance.new("ScreenGui")
+autoGui.Name="DeltaAutoClicker"
+autoGui.ResetOnSpawn=false
+autoGui.IgnoreGuiInset=true
+autoGui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
+autoGui.DisplayOrder=999999
+autoGui.Parent=playerGui
+
+local function autoStroke(parent)
+	local s=Instance.new("UIStroke")
+	s.Thickness=2
+	s.Color=Color3.new(1,1,1)
+	s.Parent=parent
+
+	local g=Instance.new("UIGradient")
+	g.Color=PREMIUM_COLORS
+	g.Parent=s
+	gradientObjects[g]=true
 	return s
 end
 
-local function Round(parent,radius)
-	local c = Instance.new("UICorner")
-	c.CornerRadius = UDim.new(0,radius)
-	c.Parent = parent
-end
+local autoOpen=Instance.new("TextButton")
+autoOpen.Name="OpenMenuClick"
+autoOpen.Size=UDim2.fromOffset(48,48)
+autoOpen.Position=UDim2.new(0,15,.5,-24)
+autoOpen.BackgroundColor3=Color3.fromRGB(20,20,20)
+autoOpen.Text="⌁"
+autoOpen.TextColor3=Color3.new(1,1,1)
+autoOpen.TextSize=28
+autoOpen.Font=Enum.Font.GothamBold
+autoOpen.AutoButtonColor=false
+autoOpen.ZIndex=100
+autoOpen.Parent=autoGui
+round(autoOpen,12)
+autoStroke(autoOpen)
 
-local function Button(parent,text,position)
-	local b = Instance.new("TextButton")
-	b.Size = UDim2.new(0,150,0,42)
-	b.Position = position
-	b.BackgroundColor3 = Color3.fromRGB(25,25,25)
-	b.TextColor3 = Color3.fromRGB(255,255,255)
-	b.TextSize = 15
-	b.Font = Enum.Font.GothamBold
-	b.Text = text
-	b.AutoButtonColor = false
-	b.Parent = parent
-	Round(b,10)
-	Stroke(b)
-	return b
-end
+local autoFrame=Instance.new("Frame")
+autoFrame.Name="MainFrameMenuClick"
+autoFrame.Size=UDim2.fromOffset(180,145)
+autoFrame.Position=UDim2.new(0,70,.5,-72)
+autoFrame.BackgroundColor3=Color3.fromRGB(15,15,15)
+autoFrame.Visible=false
+autoFrame.ZIndex=90
+autoFrame.Parent=autoGui
+round(autoFrame,12)
+autoStroke(autoFrame)
 
-local OpenMenuClick = Instance.new("TextButton")
-OpenMenuClick.Name = "OpenMenuClick"
-OpenMenuClick.Size = UDim2.new(0,48,0,48)
-OpenMenuClick.Position = UDim2.new(0,15,0.5,-24)
-OpenMenuClick.BackgroundColor3 = Color3.fromRGB(20,20,20)
-OpenMenuClick.Text = "⌁"
-OpenMenuClick.TextColor3 = Color3.fromRGB(255,255,255)
-OpenMenuClick.TextSize = 28
-OpenMenuClick.Font = Enum.Font.GothamBold
-OpenMenuClick.AutoButtonColor = false
-OpenMenuClick.Parent = ScreenGui
-Round(OpenMenuClick,12)
-Stroke(OpenMenuClick)
+local autoTitle=Instance.new("TextLabel")
+autoTitle.Size=UDim2.new(1,0,0,35)
+autoTitle.BackgroundTransparency=1
+autoTitle.Text="AUTO CLICKER"
+autoTitle.TextColor3=Color3.new(1,1,1)
+autoTitle.TextSize=16
+autoTitle.Font=Enum.Font.GothamBold
+autoTitle.ZIndex=91
+autoTitle.Parent=autoFrame
 
-local MainFrameMenuClick = Instance.new("Frame")
-MainFrameMenuClick.Name = "MainFrameMenuClick"
-MainFrameMenuClick.Size = UDim2.new(0,180,0,145)
-MainFrameMenuClick.Position = UDim2.new(0,70,0.5,-72)
-MainFrameMenuClick.BackgroundColor3 = Color3.fromRGB(15,15,15)
-MainFrameMenuClick.Visible = false
-MainFrameMenuClick.Parent = ScreenGui
-Round(MainFrameMenuClick,12)
-Stroke(MainFrameMenuClick)
+local toggleClick=makeButton(autoFrame,"ToggleClick",UDim2.fromOffset(15,42),UDim2.fromOffset(150,42),"OFF",nil,92)
+local markerToggle=makeButton(autoFrame,"MarkerToggle",UDim2.fromOffset(15,92),UDim2.fromOffset(150,42),"MARKER: AKTIF",nil,92)
 
-local Title = Instance.new("TextLabel")
-Title.Size = UDim2.new(1,0,0,35)
-Title.BackgroundTransparency = 1
-Title.Text = "AUTO CLICKER"
-Title.TextColor3 = Color3.fromRGB(255,255,255)
-Title.TextSize = 16
-Title.Font = Enum.Font.GothamBold
-Title.Parent = MainFrameMenuClick
+local clickMarker=Instance.new("TextButton")
+clickMarker.Name="ClickMarker"
+clickMarker.Size=UDim2.fromOffset(55,55)
+clickMarker.Position=UDim2.new(.5,-27,.5,-27)
+clickMarker.BackgroundColor3=Color3.new(1,1,1)
+clickMarker.BackgroundTransparency=.25
+clickMarker.Text="●"
+clickMarker.TextColor3=Color3.fromRGB(255,0,0)
+clickMarker.TextSize=28
+clickMarker.Font=Enum.Font.GothamBold
+clickMarker.AutoButtonColor=false
+clickMarker.ZIndex=110
+clickMarker.Parent=autoGui
+round(clickMarker,100)
+autoStroke(clickMarker)
 
-local ToggleClick = Button(MainFrameMenuClick,"OFF",UDim2.new(0,15,0,42))
-local MarkerToggle = Button(MainFrameMenuClick,"MARKER: AKTIF",UDim2.new(0,15,0,92))
+local autoClick=false
+local markerActive=true
+local clickGeneration=0
+local markerDragging=false
+local markerDragStart
+local markerStartPosition
 
-local ClickMarker = Instance.new("TextButton")
-ClickMarker.Name = "ClickMarker"
-ClickMarker.Size = UDim2.new(0,55,0,55)
-ClickMarker.Position = UDim2.new(0.5,-27,0.5,-27)
-ClickMarker.BackgroundColor3 = Color3.fromRGB(255,255,255)
-ClickMarker.BackgroundTransparency = 0.25
-ClickMarker.Text = "●"
-ClickMarker.TextColor3 = Color3.fromRGB(255,0,0)
-ClickMarker.TextSize = 28
-ClickMarker.Font = Enum.Font.GothamBold
-ClickMarker.AutoButtonColor = false
-ClickMarker.Parent = ScreenGui
-Round(ClickMarker,100)
-Stroke(ClickMarker)
-
-local AutoClick = false
-local MarkerActive = true
-local dragging = false
-local dragStart
-local startPosition
-local clickGeneration = 0
-
-ClickMarker.InputBegan:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-		dragging = true
-		dragStart = input.Position
-		startPosition = ClickMarker.Position
+connect(clickMarker.InputBegan,function(input)
+	local t=input.UserInputType
+	if t==Enum.UserInputType.Touch or t==Enum.UserInputType.MouseButton1 then
+		markerDragging=true
+		markerDragStart=input.Position
+		markerStartPosition=clickMarker.Position
 
 		input.Changed:Connect(function()
-			if input.UserInputState == Enum.UserInputState.End then
-				dragging = false
+			if input.UserInputState==Enum.UserInputState.End then
+				markerDragging=false
 			end
 		end)
 	end
 end)
 
-UserInputService.InputChanged:Connect(function(input)
-	if not dragging then return end
+connect(UserInputService.InputChanged,function(input)
+	if not markerDragging then return end
 
-	if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement then
-		local delta = input.Position - dragStart
-		ClickMarker.Position = UDim2.new(
-			startPosition.X.Scale,
-			startPosition.X.Offset + delta.X,
-			startPosition.Y.Scale,
-			startPosition.Y.Offset + delta.Y
+	local t=input.UserInputType
+	if t==Enum.UserInputType.Touch or t==Enum.UserInputType.MouseMovement then
+		local delta=input.Position-markerDragStart
+		clickMarker.Position=UDim2.new(
+			markerStartPosition.X.Scale,
+			markerStartPosition.X.Offset+delta.X,
+			markerStartPosition.Y.Scale,
+			markerStartPosition.Y.Offset+delta.Y
 		)
 	end
 end)
 
-local function GetMarkerPosition()
-	local pos = ClickMarker.AbsolutePosition
-	local size = ClickMarker.AbsoluteSize
-	return math.floor(pos.X + size.X / 2),math.floor(pos.Y + size.Y / 2)
+local function getClickPosition()
+	local p=clickMarker.AbsolutePosition
+	local s=clickMarker.AbsoluteSize
+	return math.floor(p.X+s.X/2),math.floor(p.Y+s.Y/2)
 end
 
-local function DoClick(generation)
-	if not AutoClick or generation ~= clickGeneration then return end
-	if typeof(mousemoveabs) ~= "function" or typeof(mouse1click) ~= "function" then return end
+local function doAutoClick(generation)
+	if not autoClick or generation~=clickGeneration then return end
+	if typeof(mousemoveabs)~="function" or typeof(mouse1click)~="function" then return end
 
-	local x,y = GetMarkerPosition()
+	local x,y=getClickPosition()
 
-	if not AutoClick or generation ~= clickGeneration then return end
+	if not autoClick or generation~=clickGeneration then return end
 
 	pcall(function()
 		mousemoveabs(x,y)
 	end)
 
-	if not AutoClick or generation ~= clickGeneration then return end
+	if not autoClick or generation~=clickGeneration then return end
 
 	pcall(function()
 		mouse1click()
 	end)
 end
 
-local function StartAutoClick()
-	clickGeneration += 1
-	local generation = clickGeneration
+local function startAutoClick()
+	clickGeneration+=1
+	local generation=clickGeneration
 
 	task.spawn(function()
-		while AutoClick and generation == clickGeneration and ScreenGui.Parent do
-			DoClick(generation)
-			if not AutoClick or generation ~= clickGeneration then break end
+		while autoClick and generation==clickGeneration and autoGui.Parent do
+			doAutoClick(generation)
+			if not autoClick or generation~=clickGeneration then break end
 			task.wait(CLICK_INTERVAL)
 		end
 	end)
 end
 
-local function StopAutoClick()
-	AutoClick = false
-	clickGeneration += 1
-	dragging = false
+local function stopAutoClick()
+	autoClick=false
+	clickGeneration+=1
+	markerDragging=false
 end
 
-ToggleClick.Activated:Connect(function()
-	if AutoClick then
-		StopAutoClick()
-		ToggleClick.Text = "OFF"
-		ClickMarker.Visible = MarkerActive
+connect(toggleClick.Activated,function()
+	if autoClick then
+		stopAutoClick()
+		toggleClick.Text="OFF"
+		clickMarker.Visible=markerActive
 	else
-		AutoClick = true
-		ToggleClick.Text = "ON"
-		ClickMarker.Visible = false
-		StartAutoClick()
+		autoClick=true
+		toggleClick.Text="ON"
+		clickMarker.Visible=false
+		startAutoClick()
 	end
 end)
 
-MarkerToggle.Activated:Connect(function()
-	MarkerActive = not MarkerActive
-	MarkerToggle.Text = MarkerActive and "MARKER: AKTIF" or "MARKER: MATIKAN"
-
-	if not AutoClick then
-		ClickMarker.Visible = MarkerActive
-	end
+connect(markerToggle.Activated,function()
+	markerActive=not markerActive
+	markerToggle.Text=markerActive and "MARKER: AKTIF" or "MARKER: MATIKAN"
+	if not autoClick then clickMarker.Visible=markerActive end
 end)
 
-OpenMenuClick.Activated:Connect(function()
-	MainFrameMenuClick.Visible = not MainFrameMenuClick.Visible
+connect(autoOpen.Activated,function()
+	autoFrame.Visible=not autoFrame.Visible
 end)
+
+updateLabels()
+updateJump()
+
+task.delay(.2,updateJump)
+task.delay(.6,updateJump)
+task.delay(1,updateJump)
