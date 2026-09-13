@@ -1,181 +1,180 @@
+--// DELTA AUTO CLICKER
+--// Fixed 40ms
+--// Marker + Drag + ON/OFF + Marker Aktif/Matikan
+
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
-local RunService = game:GetService("RunService")
 
-local player = Players.LocalPlayer
-local playerGui = player:WaitForChild("PlayerGui")
+local Player = Players.LocalPlayer
+local PlayerGui = Player:WaitForChild("PlayerGui")
 
 local CLICK_INTERVAL = 0.04
 
-local gui = Instance.new("ScreenGui")
-gui.Name = "DeltaAutoClicker"
-gui.ResetOnSpawn = false
-gui.IgnoreGuiInset = true
-gui.Parent = playerGui
+--==================================================
+-- GUI
+--==================================================
 
-local openButton = Instance.new("TextButton")
-openButton.Name = "OpenMenuClick"
-openButton.Size = UDim2.fromOffset(52, 52)
-openButton.Position = UDim2.new(0, 15, 0.5, -26)
-openButton.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-openButton.Text = "CLICK"
-openButton.TextColor3 = Color3.new(1, 1, 1)
-openButton.TextSize = 13
-openButton.Font = Enum.Font.GothamBold
-openButton.Parent = gui
+local old = PlayerGui:FindFirstChild("DeltaAutoClicker")
+if old then
+	old:Destroy()
+end
 
-local openCorner = Instance.new("UICorner")
-openCorner.CornerRadius = UDim.new(1, 0)
-openCorner.Parent = openButton
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "DeltaAutoClicker"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.IgnoreGuiInset = true
+ScreenGui.Parent = PlayerGui
 
-local openStroke = Instance.new("UIStroke")
-openStroke.Thickness = 2
-openStroke.Color = Color3.new(1, 1, 1)
-openStroke.Parent = openButton
+--==================================================
+-- HELPERS
+--==================================================
 
-local menu = Instance.new("Frame")
-menu.Name = "MainFrameMenuClick"
-menu.Size = UDim2.fromOffset(220, 210)
-menu.Position = UDim2.new(0, 75, 0.5, -105)
-menu.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-menu.Visible = false
-menu.Parent = gui
+local function Stroke(parent)
+	local s = Instance.new("UIStroke")
+	s.Thickness = 2
+	s.Color = Color3.fromRGB(255,255,255)
+	s.Parent = parent
 
-local menuCorner = Instance.new("UICorner")
-menuCorner.CornerRadius = UDim.new(0, 12)
-menuCorner.Parent = menu
+	local g = Instance.new("UIGradient")
+	g.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(255,0,0)),
+		ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255,255,0)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(255,0,0))
+	})
+	g.Parent = s
 
-local menuStroke = Instance.new("UIStroke")
-menuStroke.Thickness = 2
-menuStroke.Color = Color3.new(1, 1, 1)
-menuStroke.Parent = menu
+	task.spawn(function()
+		while s.Parent do
+			g.Rotation = (g.Rotation + 2) % 360
+			task.wait()
+		end
+	end)
 
-local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1, -20, 0, 38)
-title.Position = UDim2.fromOffset(10, 8)
-title.BackgroundTransparency = 1
-title.Text = "DELTA AUTO CLICK"
-title.TextColor3 = Color3.new(1, 1, 1)
-title.TextSize = 17
-title.Font = Enum.Font.GothamBold
-title.Parent = menu
+	return s
+end
 
-local status = Instance.new("TextLabel")
-status.Size = UDim2.new(1, -20, 0, 25)
-status.Position = UDim2.fromOffset(10, 47)
-status.BackgroundTransparency = 1
-status.Text = "OFF"
-status.TextColor3 = Color3.fromRGB(255, 80, 80)
-status.TextSize = 14
-status.Font = Enum.Font.GothamBold
-status.Parent = menu
+local function Round(parent, radius)
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0, radius)
+	c.Parent = parent
+end
 
-local toggle = Instance.new("TextButton")
-toggle.Name = "AutoClickToggle"
-toggle.Size = UDim2.new(1, -30, 0, 42)
-toggle.Position = UDim2.fromOffset(15, 78)
-toggle.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
-toggle.Text = "AUTO CLICK : OFF"
-toggle.TextColor3 = Color3.new(1, 1, 1)
-toggle.TextSize = 14
-toggle.Font = Enum.Font.GothamBold
-toggle.Parent = menu
+local function Button(parent, text, position)
+	local b = Instance.new("TextButton")
+	b.Size = UDim2.new(0, 150, 0, 42)
+	b.Position = position
+	b.BackgroundColor3 = Color3.fromRGB(25,25,25)
+	b.TextColor3 = Color3.fromRGB(255,255,255)
+	b.TextSize = 15
+	b.Font = Enum.Font.GothamBold
+	b.Text = text
+	b.AutoButtonColor = false
+	b.Parent = parent
 
-local toggleCorner = Instance.new("UICorner")
-toggleCorner.CornerRadius = UDim.new(0, 8)
-toggleCorner.Parent = toggle
+	Round(b, 10)
+	Stroke(b)
 
-local markerToggle = Instance.new("TextButton")
-markerToggle.Name = "MarkerVisibility"
-markerToggle.Size = UDim2.new(1, -30, 0, 42)
-markerToggle.Position = UDim2.fromOffset(15, 128)
-markerToggle.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
-markerToggle.Text = "MARKER : AKTIF"
-markerToggle.TextColor3 = Color3.new(1, 1, 1)
-markerToggle.TextSize = 14
-markerToggle.Font = Enum.Font.GothamBold
-markerToggle.Parent = menu
+	return b
+end
 
-local markerCorner = Instance.new("UICorner")
-markerCorner.CornerRadius = UDim.new(0, 8)
-markerCorner.Parent = markerToggle
+--==================================================
+-- OPEN MENU
+--==================================================
 
-local info = Instance.new("TextLabel")
-info.Size = UDim2.new(1, -20, 0, 25)
-info.Position = UDim2.fromOffset(10, 177)
-info.BackgroundTransparency = 1
-info.Text = "40 MS"
-info.TextColor3 = Color3.fromRGB(200, 200, 200)
-info.TextSize = 13
-info.Font = Enum.Font.GothamBold
-info.Parent = menu
+local OpenMenuClick = Instance.new("TextButton")
+OpenMenuClick.Name = "OpenMenuClick"
+OpenMenuClick.Size = UDim2.new(0, 48, 0, 48)
+OpenMenuClick.Position = UDim2.new(0, 15, 0.5, -24)
+OpenMenuClick.BackgroundColor3 = Color3.fromRGB(20,20,20)
+OpenMenuClick.Text = "⌁"
+OpenMenuClick.TextColor3 = Color3.fromRGB(255,255,255)
+OpenMenuClick.TextSize = 28
+OpenMenuClick.Font = Enum.Font.GothamBold
+OpenMenuClick.Parent = ScreenGui
 
-local marker = Instance.new("TextButton")
-marker.Name = "ClickMarker"
-marker.Size = UDim2.fromOffset(58, 58)
-marker.Position = UDim2.new(0.5, -29, 0.5, -29)
-marker.BackgroundColor3 = Color3.fromRGB(255, 70, 70)
-marker.BackgroundTransparency = 0.15
-marker.Text = "●"
-marker.TextColor3 = Color3.new(1, 1, 1)
-marker.TextSize = 25
-marker.Font = Enum.Font.GothamBold
-marker.ZIndex = 100
-marker.Parent = gui
+Round(OpenMenuClick, 12)
+Stroke(OpenMenuClick)
 
-local markerCorner = Instance.new("UICorner")
-markerCorner.CornerRadius = UDim.new(1, 0)
-markerCorner.Parent = marker
+--==================================================
+-- MAIN MENU
+--==================================================
 
-local markerStroke = Instance.new("UIStroke")
-markerStroke.Thickness = 2
-markerStroke.Color = Color3.new(1, 1, 1)
-markerStroke.Parent = marker
+local MainFrameMenuClick = Instance.new("Frame")
+MainFrameMenuClick.Name = "MainFrameMenuClick"
+MainFrameMenuClick.Size = UDim2.new(0, 180, 0, 145)
+MainFrameMenuClick.Position = UDim2.new(0, 70, 0.5, -72)
+MainFrameMenuClick.BackgroundColor3 = Color3.fromRGB(15,15,15)
+MainFrameMenuClick.Visible = false
+MainFrameMenuClick.Parent = ScreenGui
 
-local clicking = false
-local markerVisible = true
+Round(MainFrameMenuClick, 12)
+Stroke(MainFrameMenuClick)
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 35)
+Title.BackgroundTransparency = 1
+Title.Text = "AUTO CLICKER"
+Title.TextColor3 = Color3.fromRGB(255,255,255)
+Title.TextSize = 16
+Title.Font = Enum.Font.GothamBold
+Title.Parent = MainFrameMenuClick
+
+--==================================================
+-- AUTO CLICK TOGGLE
+--==================================================
+
+local ToggleClick = Button(
+	MainFrameMenuClick,
+	"OFF",
+	UDim2.new(0, 15, 0, 42)
+)
+
+--==================================================
+-- MARKER TOGGLE
+--==================================================
+
+local MarkerToggle = Button(
+	MainFrameMenuClick,
+	"MARKER: AKTIF",
+	UDim2.new(0, 15, 0, 92)
+)
+
+--==================================================
+-- MARKER
+--==================================================
+
+local ClickMarker = Instance.new("TextButton")
+ClickMarker.Name = "ClickMarker"
+ClickMarker.Size = UDim2.new(0, 55, 0, 55)
+ClickMarker.Position = UDim2.new(0.5, -27, 0.5, -27)
+ClickMarker.AnchorPoint = Vector2.new(0,0)
+ClickMarker.BackgroundColor3 = Color3.fromRGB(255,255,255)
+ClickMarker.BackgroundTransparency = 0.25
+ClickMarker.Text = "●"
+ClickMarker.TextColor3 = Color3.fromRGB(255,0,0)
+ClickMarker.TextSize = 28
+ClickMarker.Font = Enum.Font.GothamBold
+ClickMarker.AutoButtonColor = false
+ClickMarker.Parent = ScreenGui
+
+Round(ClickMarker, 100)
+Stroke(ClickMarker)
+
+--==================================================
+-- DRAG MARKER
+--==================================================
+
 local dragging = false
 local dragStart
 local startPosition
 
-openButton.Activated:Connect(function()
-	menu.Visible = not menu.Visible
-end)
-
-toggle.Activated:Connect(function()
-	clicking = not clicking
-
-	if clicking then
-		toggle.Text = "AUTO CLICK : ON"
-		toggle.BackgroundColor3 = Color3.fromRGB(35, 130, 65)
-		status.Text = "ON • 40 MS"
-		status.TextColor3 = Color3.fromRGB(80, 255, 120)
-	else
-		toggle.Text = "AUTO CLICK : OFF"
-		toggle.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
-		status.Text = "OFF"
-		status.TextColor3 = Color3.fromRGB(255, 80, 80)
-	end
-end)
-
-markerToggle.Activated:Connect(function()
-	markerVisible = not markerVisible
-	marker.Visible = markerVisible
-
-	if markerVisible then
-		markerToggle.Text = "MARKER : AKTIF"
-	else
-		markerToggle.Text = "MARKER : MATIKAN"
-	end
-end)
-
-marker.InputBegan:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1
-		or input.UserInputType == Enum.UserInputType.Touch then
+ClickMarker.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.Touch
+		or input.UserInputType == Enum.UserInputType.MouseButton1 then
 
 		dragging = true
 		dragStart = input.Position
-		startPosition = marker.Position
+		startPosition = ClickMarker.Position
 
 		input.Changed:Connect(function()
 			if input.UserInputState == Enum.UserInputState.End then
@@ -190,12 +189,12 @@ UserInputService.InputChanged:Connect(function(input)
 		return
 	end
 
-	if input.UserInputType == Enum.UserInputType.MouseMovement
-		or input.UserInputType == Enum.UserInputType.Touch then
+	if input.UserInputType == Enum.UserInputType.Touch
+		or input.UserInputType == Enum.UserInputType.MouseMovement then
 
 		local delta = input.Position - dragStart
 
-		marker.Position = UDim2.new(
+		ClickMarker.Position = UDim2.new(
 			startPosition.X.Scale,
 			startPosition.X.Offset + delta.X,
 			startPosition.Y.Scale,
@@ -204,43 +203,111 @@ UserInputService.InputChanged:Connect(function(input)
 	end
 end)
 
-local function getButtonAtMarker()
-	local center = marker.AbsolutePosition + marker.AbsoluteSize / 2
-	local objects = gui:GetGuiObjectsAtPosition(center.X, center.Y)
+--==================================================
+-- MARKER POSITION
+--==================================================
 
-	for _, object in ipairs(objects) do
-		if object ~= marker and object:IsA("GuiButton") then
-			return object
-		end
+local function GetMarkerPosition()
+	local camera = workspace.CurrentCamera
+
+	if not camera then
+		return nil
 	end
 
-	for _, screenGui in ipairs(playerGui:GetChildren()) do
-		if screenGui:IsA("ScreenGui") and screenGui ~= gui then
-			local objects2 = screenGui:GetGuiObjectsAtPosition(center.X, center.Y)
+	local pos = ClickMarker.AbsolutePosition
+	local size = ClickMarker.AbsoluteSize
 
-			for _, object in ipairs(objects2) do
-				if object:IsA("GuiButton") and object.Visible then
-					return object
-				end
-			end
-		end
+	local x = math.floor(pos.X + size.X / 2)
+	local y = math.floor(pos.Y + size.Y / 2)
+
+	return x, y
+end
+
+--==================================================
+-- AUTO CLICK
+--==================================================
+
+local AutoClick = false
+
+local function DoClick()
+	local x, y = GetMarkerPosition()
+
+	if not x or not y then
+		return
 	end
 
-	return nil
+	if typeof(mousemoveabs) ~= "function" then
+		warn("Delta: mousemoveabs tidak tersedia.")
+		return
+	end
+
+	if typeof(mouse1click) ~= "function" then
+		warn("Delta: mouse1click tidak tersedia.")
+		return
+	end
+
+	mousemoveabs(x, y)
+	mouse1click()
 end
 
 task.spawn(function()
-	while gui.Parent do
-		if clicking then
-			local button = getButtonAtMarker()
-
-			if button then
-				pcall(function()
-					button:Activate()
-				end)
-			end
+	while ScreenGui.Parent do
+		if AutoClick then
+			DoClick()
+			task.wait(CLICK_INTERVAL)
+		else
+			task.wait(0.1)
 		end
-
-		task.wait(CLICK_INTERVAL)
 	end
+end)
+
+--==================================================
+-- AUTO CLICK BUTTON
+--==================================================
+
+ToggleClick.Activated:Connect(function()
+	AutoClick = not AutoClick
+
+	if AutoClick then
+		ToggleClick.Text = "ON"
+		ToggleClick.BackgroundColor3 = Color3.fromRGB(35,35,35)
+
+		-- marker otomatis disembunyikan agar tidak menghalangi klik
+		ClickMarker.Visible = false
+	else
+		ToggleClick.Text = "OFF"
+
+		if MarkerToggle.Text == "MARKER: AKTIF" then
+			ClickMarker.Visible = true
+		end
+	end
+end)
+
+--==================================================
+-- MARKER VISIBILITY
+--==================================================
+
+local MarkerActive = true
+
+MarkerToggle.Activated:Connect(function()
+	MarkerActive = not MarkerActive
+
+	if MarkerActive then
+		MarkerToggle.Text = "MARKER: AKTIF"
+
+		if not AutoClick then
+			ClickMarker.Visible = true
+		end
+	else
+		MarkerToggle.Text = "MARKER: MATIKAN"
+		ClickMarker.Visible = false
+	end
+end)
+
+--==================================================
+-- OPEN / CLOSE MENU
+--==================================================
+
+OpenMenuClick.Activated:Connect(function()
+	MainFrameMenuClick.Visible = not MainFrameMenuClick.Visible
 end)
