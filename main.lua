@@ -25,7 +25,16 @@ local function notify(text)
 	})
 end
 
+local function addCorner(parent)
+	local corner = Instance.new("UICorner")
+	corner.Name = "UICorner"
+	corner.CornerRadius = UDim.new(0.8, 0)
+	corner.Parent = parent
+end
+
 local function addGradient(parent)
+	addCorner(parent)
+
 	local stroke = Instance.new("UIStroke")
 	stroke.Name = "UIStroke"
 	stroke.Thickness = 2
@@ -48,6 +57,7 @@ local function addGradient(parent)
 				TweenInfo.new(2, Enum.EasingStyle.Linear),
 				{Rotation = gradient.Rotation + 360}
 			)
+
 			tween:Play()
 			tween.Completed:Wait()
 
@@ -90,9 +100,11 @@ local function createTeleportGui()
 	titleBar.Size = UDim2.new(1, 0, 0, 30)
 	titleBar.Font = Enum.Font.GothamBold
 	titleBar.Text = GUI_TITLE
-	titleBar.TextColor3 = Color3.fromRGB(255, 255, 255)
+	titleBar.TextColor3 = Color3.fromRGB(0, 0, 0)
 	titleBar.TextSize = 16
 	titleBar.Active = true
+
+	addCorner(titleBar)
 
 	local minimizeButton = Instance.new("TextButton")
 	minimizeButton.Name = "MinimizeButton"
@@ -102,8 +114,10 @@ local function createTeleportGui()
 	minimizeButton.Size = UDim2.new(0, 25, 1, 0)
 	minimizeButton.Font = Enum.Font.GothamBold
 	minimizeButton.Text = "▼"
-	minimizeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+	minimizeButton.TextColor3 = Color3.fromRGB(0, 0, 0)
 	minimizeButton.TextSize = 14
+
+	addCorner(minimizeButton)
 
 	local closeButton = Instance.new("TextButton")
 	closeButton.Name = "CloseButton"
@@ -114,8 +128,10 @@ local function createTeleportGui()
 	closeButton.Size = UDim2.new(0, 25, 1, 0)
 	closeButton.Font = Enum.Font.GothamBold
 	closeButton.Text = "X"
-	closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+	closeButton.TextColor3 = Color3.fromRGB(0, 0, 0)
 	closeButton.TextSize = 14
+
+	addCorner(closeButton)
 
 	local contentFrame = Instance.new("Frame")
 	contentFrame.Name = "ContentFrame"
@@ -123,6 +139,8 @@ local function createTeleportGui()
 	contentFrame.BackgroundTransparency = 1
 	contentFrame.Position = UDim2.new(0, 0, 0, 30)
 	contentFrame.Size = UDim2.new(1, 0, 1, -30)
+
+	addCorner(contentFrame)
 
 	local setLokasiButton = Instance.new("TextButton")
 	setLokasiButton.Name = "SetLokasiButton"
@@ -133,7 +151,7 @@ local function createTeleportGui()
 	setLokasiButton.Size = UDim2.new(1, -10, 0, 30)
 	setLokasiButton.Font = Enum.Font.GothamBold
 	setLokasiButton.Text = "Set Lokasi"
-	setLokasiButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+	setLokasiButton.TextColor3 = Color3.fromRGB(0, 0, 0)
 	setLokasiButton.TextSize = 14
 
 	addGradient(setLokasiButton)
@@ -147,7 +165,7 @@ local function createTeleportGui()
 	teleportButton.Size = UDim2.new(1, -10, 0, 30)
 	teleportButton.Font = Enum.Font.GothamBold
 	teleportButton.Text = "Teleport"
-	teleportButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+	teleportButton.TextColor3 = Color3.fromRGB(0, 0, 0)
 	teleportButton.TextSize = 14
 
 	addGradient(teleportButton)
@@ -161,7 +179,7 @@ local function createTeleportGui()
 	autoButton.Size = UDim2.new(1, -10, 0, 30)
 	autoButton.Font = Enum.Font.GothamBold
 	autoButton.Text = "AUTO TELEPORT"
-	autoButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+	autoButton.TextColor3 = Color3.fromRGB(0, 0, 0)
 	autoButton.TextSize = 13
 
 	addGradient(autoButton)
@@ -175,7 +193,7 @@ local function createTeleportGui()
 	loopButton.Size = UDim2.new(1, -10, 0, 30)
 	loopButton.Font = Enum.Font.GothamBold
 	loopButton.Text = "LOOP: OFF"
-	loopButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+	loopButton.TextColor3 = Color3.fromRGB(0, 0, 0)
 	loopButton.TextSize = 13
 
 	addGradient(loopButton)
@@ -189,7 +207,7 @@ local function createTeleportGui()
 	stopButton.Size = UDim2.new(1, -10, 0, 30)
 	stopButton.Font = Enum.Font.GothamBold
 	stopButton.Text = "STOP"
-	stopButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+	stopButton.TextColor3 = Color3.fromRGB(0, 0, 0)
 	stopButton.TextSize = 13
 
 	addGradient(stopButton)
@@ -213,6 +231,7 @@ local function createTeleportGui()
 
 	for i = 1, MAX_CHECKPOINTS do
 		local cpButton = Instance.new("TextButton")
+
 		cpButton.Name = "CP" .. i
 		cpButton.Parent = scrollingFrame
 		cpButton.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
@@ -220,7 +239,7 @@ local function createTeleportGui()
 		cpButton.Size = UDim2.new(1, 0, 0, 30)
 		cpButton.Font = Enum.Font.Gotham
 		cpButton.Text = "CP" .. i
-		cpButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+		cpButton.TextColor3 = Color3.fromRGB(0, 0, 0)
 		cpButton.TextSize = 14
 		cpButton.LayoutOrder = i
 
@@ -300,20 +319,24 @@ local function updateUI()
 	if autoTeleport then
 		guiElements.AutoTeleportButton.BackgroundColor3 =
 			Color3.fromRGB(0, 150, 0)
+
 		guiElements.AutoTeleportButton.Text = "AUTO: ON"
 	else
 		guiElements.AutoTeleportButton.BackgroundColor3 =
 			Color3.fromRGB(80, 80, 80)
+
 		guiElements.AutoTeleportButton.Text = "AUTO TELEPORT"
 	end
 
 	if loopEnabled then
 		guiElements.LoopButton.BackgroundColor3 =
 			Color3.fromRGB(0, 150, 0)
+
 		guiElements.LoopButton.Text = "LOOP: ON"
 	else
 		guiElements.LoopButton.BackgroundColor3 =
 			Color3.fromRGB(80, 80, 80)
+
 		guiElements.LoopButton.Text = "LOOP: OFF"
 	end
 
