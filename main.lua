@@ -1,747 +1,589 @@
-local Players=game:GetService("Players")
-local RunService=game:GetService("RunService")
-local UserInputService=game:GetService("UserInputService")
-local HttpService=game:GetService("HttpService")
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local StarterGui = game:GetService("StarterGui")
 
-local player=Players.LocalPlayer
-local playerGui=player:WaitForChild("PlayerGui")
-local CONFIG_FILE="DeltaMobileConfig.json"
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
 
-local defaultConfig={
-	JumpX=.85,
-	JumpY=.75,
-	JumpSize=.30,
-	Sensitivity=1
-}
+local MAX_CHECKPOINTS = 30
+local GUI_TITLE = "Teleport Tool"
+local currentMode = "Set Lokasi"
+local isMinimized = false
+local guiElements = {}
 
-local config={}
-for k,v in pairs(defaultConfig)do
-	config[k]=v
+local checkpoints = {}
+
+local autoTeleport = false
+local loopEnabled = false
+local TELEPORT_DELAY = 1
+
+local function notify(text)
+	StarterGui:SetCore("ChatMakeSystemMessage", {
+		Text = "[Teleport Tool]: " .. text;
+		Color = Color3.fromRGB(0, 255, 100);
+	})
 end
 
-pcall(function()
-	if readfile and isfile and isfile(CONFIG_FILE)then
-		local data=HttpService:JSONDecode(readfile(CONFIG_FILE))
-		if type(data)=="table"then
-			for k,v in pairs(data)do
-				if defaultConfig[k]~=nil and type(v)==type(defaultConfig[k])then
-					config[k]=v
+local function addGradient(parent)
+	local stroke = Instance.new("UIStroke")
+	stroke.Name = "UIStroke"
+	stroke.Thickness = 2
+	stroke.Color = Color3.fromRGB(255, 255, 255)
+	stroke.Parent = parent
+
+	local gradient = Instance.new("UIGradient")
+	gradient.Name = "UIGradient"
+	gradient.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 0, 0)),
+		ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 255, 0)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 0, 0))
+	})
+	gradient.Parent = stroke
+
+	task.spawn(function()
+		while gradient.Parent do
+			local tween = TweenService:Create(
+				gradient,
+				TweenInfo.new(2, Enum.EasingStyle.Linear),
+				{Rotation = gradient.Rotation + 360}
+			)
+			tween:Play()
+			tween.Completed:Wait()
+
+			if gradient.Parent then
+				gradient.Rotation = 0
+			end
+		end
+	end)
+end
+
+local function createTeleportGui()
+	local oldGui = playerGui:FindFirstChild("TeleportToolGui")
+
+	if oldGui then
+		oldGui:Destroy()
+	end
+
+	local screenGui = Instance.new("ScreenGui")
+	screenGui.Name = "TeleportToolGui"
+	screenGui.Parent = playerGui
+	screenGui.ResetOnSpawn = false
+	screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+	local mainFrame = Instance.new("Frame")
+	mainFrame.Name = "MainFrame"
+	mainFrame.Parent = screenGui
+	mainFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+	mainFrame.BorderSizePixel = 0
+	mainFrame.Position = UDim2.new(1, -160, 0.5, -200)
+	mainFrame.Size = UDim2.new(0, 150, 0, 400)
+	mainFrame.Active = true
+
+	addGradient(mainFrame)
+
+	local titleBar = Instance.new("TextLabel")
+	titleBar.Name = "TitleBar"
+	titleBar.Parent = mainFrame
+	titleBar.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+	titleBar.BorderSizePixel = 0
+	titleBar.Size = UDim2.new(1, 0, 0, 30)
+	titleBar.Font = Enum.Font.GothamBold
+	titleBar.Text = GUI_TITLE
+	titleBar.TextColor3 = Color3.fromRGB(255, 255, 255)
+	titleBar.TextSize = 16
+	titleBar.Active = true
+
+	local minimizeButton = Instance.new("TextButton")
+	minimizeButton.Name = "MinimizeButton"
+	minimizeButton.Parent = titleBar
+	minimizeButton.BackgroundTransparency = 1
+	minimizeButton.Position = UDim2.new(1, -50, 0, 0)
+	minimizeButton.Size = UDim2.new(0, 25, 1, 0)
+	minimizeButton.Font = Enum.Font.GothamBold
+	minimizeButton.Text = "▼"
+	minimizeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+	minimizeButton.TextSize = 14
+
+	local closeButton = Instance.new("TextButton")
+	closeButton.Name = "CloseButton"
+	closeButton.Parent = titleBar
+	closeButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+	closeButton.BorderSizePixel = 0
+	closeButton.Position = UDim2.new(1, -25, 0, 0)
+	closeButton.Size = UDim2.new(0, 25, 1, 0)
+	closeButton.Font = Enum.Font.GothamBold
+	closeButton.Text = "X"
+	closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+	closeButton.TextSize = 14
+
+	local contentFrame = Instance.new("Frame")
+	contentFrame.Name = "ContentFrame"
+	contentFrame.Parent = mainFrame
+	contentFrame.BackgroundTransparency = 1
+	contentFrame.Position = UDim2.new(0, 0, 0, 30)
+	contentFrame.Size = UDim2.new(1, 0, 1, -30)
+
+	local setLokasiButton = Instance.new("TextButton")
+	setLokasiButton.Name = "SetLokasiButton"
+	setLokasiButton.Parent = contentFrame
+	setLokasiButton.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
+	setLokasiButton.BorderSizePixel = 0
+	setLokasiButton.Position = UDim2.new(0, 5, 0, 5)
+	setLokasiButton.Size = UDim2.new(1, -10, 0, 30)
+	setLokasiButton.Font = Enum.Font.GothamBold
+	setLokasiButton.Text = "Set Lokasi"
+	setLokasiButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+	setLokasiButton.TextSize = 14
+
+	addGradient(setLokasiButton)
+
+	local teleportButton = Instance.new("TextButton")
+	teleportButton.Name = "TeleportButton"
+	teleportButton.Parent = contentFrame
+	teleportButton.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+	teleportButton.BorderSizePixel = 0
+	teleportButton.Position = UDim2.new(0, 5, 0, 40)
+	teleportButton.Size = UDim2.new(1, -10, 0, 30)
+	teleportButton.Font = Enum.Font.GothamBold
+	teleportButton.Text = "Teleport"
+	teleportButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+	teleportButton.TextSize = 14
+
+	addGradient(teleportButton)
+
+	local autoButton = Instance.new("TextButton")
+	autoButton.Name = "AutoTeleportButton"
+	autoButton.Parent = contentFrame
+	autoButton.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+	autoButton.BorderSizePixel = 0
+	autoButton.Position = UDim2.new(0, 5, 0, 75)
+	autoButton.Size = UDim2.new(1, -10, 0, 30)
+	autoButton.Font = Enum.Font.GothamBold
+	autoButton.Text = "AUTO TELEPORT"
+	autoButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+	autoButton.TextSize = 13
+
+	addGradient(autoButton)
+
+	local loopButton = Instance.new("TextButton")
+	loopButton.Name = "LoopButton"
+	loopButton.Parent = contentFrame
+	loopButton.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+	loopButton.BorderSizePixel = 0
+	loopButton.Position = UDim2.new(0, 5, 0, 110)
+	loopButton.Size = UDim2.new(1, -10, 0, 30)
+	loopButton.Font = Enum.Font.GothamBold
+	loopButton.Text = "LOOP: OFF"
+	loopButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+	loopButton.TextSize = 13
+
+	addGradient(loopButton)
+
+	local stopButton = Instance.new("TextButton")
+	stopButton.Name = "StopButton"
+	stopButton.Parent = contentFrame
+	stopButton.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
+	stopButton.BorderSizePixel = 0
+	stopButton.Position = UDim2.new(0, 5, 0, 145)
+	stopButton.Size = UDim2.new(1, -10, 0, 30)
+	stopButton.Font = Enum.Font.GothamBold
+	stopButton.Text = "STOP"
+	stopButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+	stopButton.TextSize = 13
+
+	addGradient(stopButton)
+
+	local scrollingFrame = Instance.new("ScrollingFrame")
+	scrollingFrame.Name = "ScrollingFrame"
+	scrollingFrame.Parent = contentFrame
+	scrollingFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+	scrollingFrame.BorderSizePixel = 0
+	scrollingFrame.Position = UDim2.new(0, 5, 0, 180)
+	scrollingFrame.Size = UDim2.new(1, -10, 1, -185)
+	scrollingFrame.ScrollBarThickness = 6
+	scrollingFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+
+	addGradient(scrollingFrame)
+
+	local listLayout = Instance.new("UIListLayout")
+	listLayout.Parent = scrollingFrame
+	listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	listLayout.Padding = UDim.new(0, 3)
+
+	for i = 1, MAX_CHECKPOINTS do
+		local cpButton = Instance.new("TextButton")
+		cpButton.Name = "CP" .. i
+		cpButton.Parent = scrollingFrame
+		cpButton.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+		cpButton.BorderSizePixel = 0
+		cpButton.Size = UDim2.new(1, 0, 0, 30)
+		cpButton.Font = Enum.Font.Gotham
+		cpButton.Text = "CP" .. i
+		cpButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+		cpButton.TextSize = 14
+		cpButton.LayoutOrder = i
+
+		addGradient(cpButton)
+	end
+
+	return {
+		ScreenGui = screenGui,
+		MainFrame = mainFrame,
+		TitleBar = titleBar,
+		MinimizeButton = minimizeButton,
+		CloseButton = closeButton,
+		ContentFrame = contentFrame,
+		SetLokasiButton = setLokasiButton,
+		TeleportButton = teleportButton,
+		AutoTeleportButton = autoButton,
+		LoopButton = loopButton,
+		StopButton = stopButton,
+		ScrollingFrame = scrollingFrame
+	}
+end
+
+local function makeDraggable(objectToMove, dragHandle)
+	local dragging = false
+	local dragStart
+	local startPos
+
+	dragHandle.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch then
+
+			dragging = true
+			dragStart = input.Position
+			startPos = objectToMove.Position
+
+			input.Changed:Connect(function()
+				if input.UserInputState == Enum.UserInputState.End then
+					dragging = false
+				end
+			end)
+		end
+	end)
+
+	UserInputService.InputChanged:Connect(function(input)
+		if dragging then
+			local delta = input.Position - dragStart
+
+			objectToMove.Position = UDim2.new(
+				startPos.X.Scale,
+				startPos.X.Offset + delta.X,
+				startPos.Y.Scale,
+				startPos.Y.Offset + delta.Y
+			)
+		end
+	end)
+end
+
+local function updateUI()
+	if not guiElements.SetLokasiButton then
+		return
+	end
+
+	if currentMode == "Set Lokasi" then
+		guiElements.SetLokasiButton.BackgroundColor3 =
+			Color3.fromRGB(0, 120, 215)
+
+		guiElements.TeleportButton.BackgroundColor3 =
+			Color3.fromRGB(80, 80, 80)
+	else
+		guiElements.SetLokasiButton.BackgroundColor3 =
+			Color3.fromRGB(80, 80, 80)
+
+		guiElements.TeleportButton.BackgroundColor3 =
+			Color3.fromRGB(215, 90, 0)
+	end
+
+	if autoTeleport then
+		guiElements.AutoTeleportButton.BackgroundColor3 =
+			Color3.fromRGB(0, 150, 0)
+		guiElements.AutoTeleportButton.Text = "AUTO: ON"
+	else
+		guiElements.AutoTeleportButton.BackgroundColor3 =
+			Color3.fromRGB(80, 80, 80)
+		guiElements.AutoTeleportButton.Text = "AUTO TELEPORT"
+	end
+
+	if loopEnabled then
+		guiElements.LoopButton.BackgroundColor3 =
+			Color3.fromRGB(0, 150, 0)
+		guiElements.LoopButton.Text = "LOOP: ON"
+	else
+		guiElements.LoopButton.BackgroundColor3 =
+			Color3.fromRGB(80, 80, 80)
+		guiElements.LoopButton.Text = "LOOP: OFF"
+	end
+
+	for i = 1, MAX_CHECKPOINTS do
+		local cpButton =
+			guiElements.ScrollingFrame:FindFirstChild("CP" .. i)
+
+		if cpButton then
+			local cpName = "CP" .. i
+			local checkpointData = checkpoints[cpName]
+
+			if checkpointData then
+				local x, y, z = checkpointData:GetComponents()
+
+				cpButton.Text = string.format(
+					"%s (%.1f, %.1f, %.1f)",
+					cpName,
+					x,
+					y,
+					z
+				)
+
+				cpButton.BackgroundColor3 =
+					Color3.fromRGB(0, 150, 0)
+			else
+				if currentMode == "Set Lokasi" then
+					cpButton.Text = cpName
+					cpButton.BackgroundColor3 =
+						Color3.fromRGB(70, 70, 70)
+				else
+					cpButton.Text = cpName .. " (Kosong)"
+					cpButton.BackgroundColor3 =
+						Color3.fromRGB(150, 0, 0)
 				end
 			end
 		end
 	end
-end)
-
-local function saveConfig()
-	pcall(function()
-		if writefile then
-			writefile(CONFIG_FILE,HttpService:JSONEncode(config))
-		end
-	end)
 end
 
-if _G.DeltaMobileControlsCleanup then
-	pcall(_G.DeltaMobileControlsCleanup)
-end
-
-local connections={}
-local gradientObjects={}
-local destroyed=false
-
-local function connect(signal,callback)
-	local c
-	pcall(function()
-		c=signal:Connect(callback)
-	end)
-	if c then
-		table.insert(connections,c)
-	end
-	return c
-end
-
-local function disconnectAll()
-	for i=#connections,1,-1 do
-		pcall(function()
-			connections[i]:Disconnect()
-		end)
-	end
-	table.clear(connections)
-end
-
-local function destroyGui(name)
-	local gui=playerGui:FindFirstChild(name)
-	if gui then
-		pcall(function()
-			gui:Destroy()
-		end)
-	end
-end
-
-_G.DeltaMobileControlsCleanup=function()
-	if destroyed then return end
-	destroyed=true
-	disconnectAll()
-	destroyGui("DeltaMobileControls")
-	destroyGui("DeltaMobileErgo")
-end
-
-destroyGui("DeltaMobileControls")
-destroyGui("DeltaMobileErgo")
-
-local PREMIUM_COLORS=ColorSequence.new({
-	ColorSequenceKeypoint.new(0,Color3.fromRGB(255,0,0)),
-	ColorSequenceKeypoint.new(.25,Color3.fromRGB(255,80,0)),
-	ColorSequenceKeypoint.new(.5,Color3.fromRGB(255,220,0)),
-	ColorSequenceKeypoint.new(.75,Color3.fromRGB(255,80,0)),
-	ColorSequenceKeypoint.new(1,Color3.fromRGB(255,0,0))
-})
-
-local function addPremiumStroke(obj,thickness)
-	if not obj or not obj:IsA("GuiObject")then
-		return
-	end
-
-	local oldStroke=obj:FindFirstChild("PremiumStroke")
-	if oldStroke then
-		oldStroke:Destroy()
-	end
-
-	local stroke=Instance.new("UIStroke")
-	stroke.Name="PremiumStroke"
-	stroke.Thickness=thickness or 2
-	stroke.Color=Color3.new(1,1,1)
-	stroke.Parent=obj
-
-	local gradient=Instance.new("UIGradient")
-	gradient.Name="PremiumGradient"
-	gradient.Color=PREMIUM_COLORS
-	gradient.Rotation=0
-	gradient.Parent=stroke
-
-	gradientObjects[gradient]=true
-
-	return stroke
-end
-
-local function makeButton(parent,name,pos,size,text,bg,z)
-	local button=Instance.new("TextButton")
-	button.Name=name
-	button.Position=pos
-	button.Size=size
-	button.Text=text
-	button.BackgroundColor3=bg or Color3.fromRGB(35,35,40)
-	button.BackgroundTransparency=.02
-	button.TextColor3=Color3.new(1,1,1)
-	button.Font=Enum.Font.GothamBold
-	button.TextSize=28
-	button.AutoButtonColor=false
-	button.Active=true
-	button.Selectable=false
-	button.BorderSizePixel=0
-	button.ZIndex=z or 43
-	button.Parent=parent
-
-	local corner=Instance.new("UICorner")
-	corner.CornerRadius=UDim.new(0,16)
-	corner.Parent=button
-
-	addPremiumStroke(button,2)
-
-	return button
-end
-
-local gui=Instance.new("ScreenGui")
-gui.Name="DeltaMobileErgo"
-gui.ResetOnSpawn=false
-gui.IgnoreGuiInset=true
-gui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
-gui.DisplayOrder=1000000
-gui.Parent=playerGui
-
-local menu=Instance.new("ImageButton")
-menu.Name="OpenMenu"
-menu.AnchorPoint=Vector2.new(1,1)
-menu.Position=UDim2.new(1,-22,1,-22)
-menu.Size=UDim2.fromOffset(68,68)
-menu.Image="rbxassetid://114480118578175"
-menu.BackgroundColor3=Color3.fromRGB(25,25,30)
-menu.BackgroundTransparency=.03
-menu.AutoButtonColor=false
-menu.Active=true
-menu.Selectable=false
-menu.ZIndex=100
-menu.Parent=gui
-
-local menuCorner=Instance.new("UICorner")
-menuCorner.CornerRadius=UDim.new(1,0)
-menuCorner.Parent=menu
-
-addPremiumStroke(menu,2.5)
-
-local settings=Instance.new("ScrollingFrame")
-settings.Name="SettingsFrame"
-settings.AnchorPoint=Vector2.new(.5,.5)
-settings.Position=UDim2.new(.5,0,.5,0)
-settings.Size=UDim2.new(
-	0,
-	320,
-	0,
-	math.min(
-		650,
-		(workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize.Y or 650)-30
-	)
-)
-settings.BackgroundColor3=Color3.fromRGB(18,18,22)
-settings.BackgroundTransparency=.02
-settings.BorderSizePixel=0
-settings.ScrollBarThickness=4
-settings.Visible=false
-settings.ZIndex=40
-settings.CanvasSize=UDim2.fromOffset(0,720)
-settings.Parent=gui
-
-local settingsCorner=Instance.new("UICorner")
-settingsCorner.CornerRadius=UDim.new(0,16)
-settingsCorner.Parent=settings
-
-addPremiumStroke(settings,2.5)
-
-local cameraSection=Instance.new("Frame")
-cameraSection.Name="CameraSensitivity"
-cameraSection.Size=UDim2.new(1,-20,0,150)
-cameraSection.Position=UDim2.fromOffset(10,10)
-cameraSection.BackgroundColor3=Color3.fromRGB(30,30,35)
-cameraSection.BorderSizePixel=0
-cameraSection.ZIndex=41
-cameraSection.Parent=settings
-
-local cameraCorner=Instance.new("UICorner")
-cameraCorner.CornerRadius=UDim.new(0,12)
-cameraCorner.Parent=cameraSection
-
-addPremiumStroke(cameraSection,1.5)
-
-local cameraTitle=Instance.new("TextLabel")
-cameraTitle.Size=UDim2.new(1,0,0,36)
-cameraTitle.Text="CAMERA SENSITIVITY"
-cameraTitle.TextColor3=Color3.new(1,1,1)
-cameraTitle.Font=Enum.Font.GothamBold
-cameraTitle.TextSize=17
-cameraTitle.BackgroundTransparency=1
-cameraTitle.ZIndex=42
-cameraTitle.Parent=cameraSection
-
-local sensitivityLabel=Instance.new("TextLabel")
-sensitivityLabel.Size=UDim2.new(1,0,0,30)
-sensitivityLabel.Position=UDim2.fromOffset(0,36)
-sensitivityLabel.TextColor3=Color3.fromRGB(220,220,220)
-sensitivityLabel.Font=Enum.Font.Gotham
-sensitivityLabel.TextSize=14
-sensitivityLabel.BackgroundTransparency=1
-sensitivityLabel.ZIndex=42
-sensitivityLabel.Parent=cameraSection
-
-local sensitivityMinus=makeButton(
-	cameraSection,
-	"SensitivityMinus",
-	UDim2.fromOffset(12,82),
-	UDim2.fromOffset(80,46),
-	"-",
-	nil,
-	43
-)
-
-local sensitivityReset=makeButton(
-	cameraSection,
-	"SensitivityReset",
-	UDim2.new(.5,-43,0,82),
-	UDim2.fromOffset(86,46),
-	"RESET",
-	nil,
-	43
-)
-
-local sensitivityPlus=makeButton(
-	cameraSection,
-	"SensitivityPlus",
-	UDim2.new(1,-92,0,82),
-	UDim2.fromOffset(80,46),
-	"+",
-	nil,
-	43
-)
-
-local function applySensitivity()
-	config.Sensitivity=math.clamp(config.Sensitivity,.1,10)
-
-	sensitivityLabel.Text=
-		"Multiplier: "..string.format("%.1f",config.Sensitivity).."x"
-
-	pcall(function()
-		UserSettings().GameSettings.MouseSensitivity=config.Sensitivity
-	end)
-end
-
-connect(sensitivityMinus.Activated,function()
-	config.Sensitivity=math.clamp(
-		config.Sensitivity-.1,
-		.1,
-		10
-	)
-
-	applySensitivity()
-end)
-
-connect(sensitivityPlus.Activated,function()
-	config.Sensitivity=math.clamp(
-		config.Sensitivity+.1,
-		.1,
-		10
-	)
-
-	applySensitivity()
-end)
-
-connect(sensitivityReset.Activated,function()
-	config.Sensitivity=defaultConfig.Sensitivity
-	applySensitivity()
-end)
-
-applySensitivity()
-
-local jumpSection=Instance.new("Frame")
-jumpSection.Name="JumpSetting"
-jumpSection.Size=UDim2.new(1,-20,0,430)
-jumpSection.Position=UDim2.fromOffset(10,170)
-jumpSection.BackgroundColor3=Color3.fromRGB(30,30,35)
-jumpSection.BorderSizePixel=0
-jumpSection.ZIndex=41
-jumpSection.Parent=settings
-
-local jumpCorner=Instance.new("UICorner")
-jumpCorner.CornerRadius=UDim.new(0,12)
-jumpCorner.Parent=jumpSection
-
-addPremiumStroke(jumpSection,1.5)
-
-local jumpTitle=Instance.new("TextLabel")
-jumpTitle.Size=UDim2.new(1,0,0,36)
-jumpTitle.Text="JUMP BUTTON POSITION"
-jumpTitle.TextColor3=Color3.new(1,1,1)
-jumpTitle.Font=Enum.Font.GothamBold
-jumpTitle.TextSize=17
-jumpTitle.BackgroundTransparency=1
-jumpTitle.ZIndex=42
-jumpTitle.Parent=jumpSection
-
-local targetLabel=Instance.new("TextLabel")
-targetLabel.Position=UDim2.fromOffset(10,36)
-targetLabel.Size=UDim2.new(1,-20,0,30)
-targetLabel.Text="TARGET: JUMP BUTTON BAWAAN ROBLOX"
-targetLabel.TextColor3=Color3.fromRGB(190,190,210)
-targetLabel.Font=Enum.Font.Gotham
-targetLabel.TextSize=12
-targetLabel.BackgroundTransparency=1
-targetLabel.ZIndex=42
-targetLabel.Parent=jumpSection
-
-local moveUp=makeButton(
-	jumpSection,
-	"MoveUp",
-	UDim2.new(.5,-38,0,75),
-	UDim2.fromOffset(76,50),
-	"↑",
-	nil,
-	43
-)
-
-local moveLeft=makeButton(
-	jumpSection,
-	"MoveLeft",
-	UDim2.fromOffset(28,128),
-	UDim2.fromOffset(76,50),
-	"←",
-	nil,
-	43
-)
-
-local moveRight=makeButton(
-	jumpSection,
-	"MoveRight",
-	UDim2.new(1,-104,0,128),
-	UDim2.fromOffset(76,50),
-	"→",
-	nil,
-	43
-)
-
-local moveDown=makeButton(
-	jumpSection,
-	"MoveDown",
-	UDim2.new(.5,-38,0,181),
-	UDim2.fromOffset(76,50),
-	"↓",
-	nil,
-	43
-)
-
-local sizePlus=makeButton(
-	jumpSection,
-	"SizePlus",
-	UDim2.fromOffset(20,250),
-	UDim2.fromOffset(85,42),
-	"SIZE +",
-	nil,
-	43
-)
-
-local resetJump=makeButton(
-	jumpSection,
-	"ResetJump",
-	UDim2.new(.5,-43,0,250),
-	UDim2.fromOffset(86,42),
-	"RESET",
-	nil,
-	43
-)
-
-local sizeMinus=makeButton(
-	jumpSection,
-	"SizeMinus",
-	UDim2.new(1,-105,0,250),
-	UDim2.fromOffset(85,42),
-	"SIZE -",
-	nil,
-	43
-)
-
-local positionLabel=Instance.new("TextLabel")
-positionLabel.Position=UDim2.fromOffset(10,315)
-positionLabel.Size=UDim2.new(1,-20,0,28)
-positionLabel.TextColor3=Color3.fromRGB(210,210,220)
-positionLabel.Font=Enum.Font.Gotham
-positionLabel.TextSize=13
-positionLabel.BackgroundTransparency=1
-positionLabel.ZIndex=42
-positionLabel.Parent=jumpSection
-
-local sizeLabel=Instance.new("TextLabel")
-sizeLabel.Position=UDim2.fromOffset(10,343)
-sizeLabel.Size=UDim2.new(1,-20,0,28)
-sizeLabel.TextColor3=Color3.fromRGB(210,210,220)
-sizeLabel.Font=Enum.Font.Gotham
-sizeLabel.TextSize=13
-sizeLabel.BackgroundTransparency=1
-sizeLabel.ZIndex=42
-sizeLabel.Parent=jumpSection
-
-local touchGui
-local jumpButton
-
-local function getJumpButton()
-	touchGui=playerGui:FindFirstChild("TouchGui")
-
-	if not touchGui then
-		jumpButton=nil
-		return nil
-	end
-
-	local button=touchGui:FindFirstChild("JumpButton",true)
-
-	if button and button:IsA("GuiObject")then
-		jumpButton=button
-		return button
-	end
-
-	jumpButton=nil
-	return nil
-end
-
-local function updateLabels()
-	positionLabel.Text=
-		"X: "..string.format("%.3f",config.JumpX)..
-		"    Y: "..string.format("%.3f",config.JumpY)
-
-	sizeLabel.Text=
-		"SIZE: "..string.format("%.2f",config.JumpSize)
-end
-
-local function applyJumpStroke(button)
-	local old=button:FindFirstChild("PremiumJumpStroke")
-
-	if old then
-		old:Destroy()
-	end
-
-	local overlay=Instance.new("Frame")
-	overlay.Name="PremiumJumpStroke"
-	overlay.Size=UDim2.fromScale(1,1)
-	overlay.BackgroundTransparency=1
-	overlay.BorderSizePixel=0
-	overlay.ZIndex=button.ZIndex+2
-	overlay.Parent=button
-
-	local corner=Instance.new("UICorner")
-	corner.CornerRadius=UDim.new(1,0)
-	corner.Parent=overlay
-
-	local stroke=Instance.new("UIStroke")
-	stroke.Name="PremiumStroke"
-	stroke.Thickness=2.5
-	stroke.Color=Color3.new(1,1,1)
-	stroke.Parent=overlay
-
-	local gradient=Instance.new("UIGradient")
-	gradient.Name="PremiumGradient"
-	gradient.Color=PREMIUM_COLORS
-	gradient.Rotation=0
-	gradient.Parent=stroke
-
-	gradientObjects[gradient]=true
-end
-
-local function updateJump()
-	if destroyed then return end
-
-	local button=getJumpButton()
-	local camera=workspace.CurrentCamera
-
-	if not button or not camera then
-		return
-	end
-
-	local viewport=camera.ViewportSize
-
-	if viewport.X<=0 or viewport.Y<=0 then
-		return
-	end
-
-	config.JumpX=math.clamp(config.JumpX,.04,.96)
-	config.JumpY=math.clamp(config.JumpY,.04,.96)
-	config.JumpSize=math.clamp(config.JumpSize,.08,.50)
-
-	local size=math.max(
-		52,
-		math.floor(viewport.Y*config.JumpSize)
-	)
-
-	pcall(function()
-		button.AnchorPoint=Vector2.new(.5,.5)
-
-		button.Position=UDim2.new(
-			config.JumpX,
-			0,
-			config.JumpY,
-			0
-		)
-
-		button.Size=UDim2.fromOffset(size,size)
-
-		applyJumpStroke(button)
-	end)
-
-	updateLabels()
-end
-
-local step=.015
-local holding={}
-
-local function bindPositionButton(button,dx,dy)
-	connect(button.InputBegan,function(input)
-		local t=input.UserInputType
-
-		if t==Enum.UserInputType.Touch
-			or t==Enum.UserInputType.MouseButton1 then
-
-			holding[button]=true
-			button.BackgroundColor3=Color3.fromRGB(65,65,75)
-		end
-	end)
-
-	connect(button.InputEnded,function(input)
-		local t=input.UserInputType
-
-		if t==Enum.UserInputType.Touch
-			or t==Enum.UserInputType.MouseButton1 then
-
-			holding[button]=false
-			button.BackgroundColor3=Color3.fromRGB(35,35,40)
-		end
-	end)
-
-	connect(button.Activated,function()
-		if holding[button] then
-			return
-		end
-
-		config.JumpX=math.clamp(
-			config.JumpX+dx,
-			.04,
-			.96
-		)
-
-		config.JumpY=math.clamp(
-			config.JumpY+dy,
-			.04,
-			.96
-		)
-
-		updateJump()
-	end)
-
-	button:SetAttribute("DX",dx)
-	button:SetAttribute("DY",dy)
-end
-
-bindPositionButton(moveUp,0,-step)
-bindPositionButton(moveLeft,-step,0)
-bindPositionButton(moveRight,step,0)
-bindPositionButton(moveDown,0,step)
-
-connect(UserInputService.InputEnded,function(input)
-	local t=input.UserInputType
-
-	if t==Enum.UserInputType.Touch
-		or t==Enum.UserInputType.MouseButton1 then
-
-		for button in pairs(holding)do
-			holding[button]=false
-			button.BackgroundColor3=Color3.fromRGB(35,35,40)
-		end
-	end
-end)
-
-connect(RunService.RenderStepped,function()
-	if destroyed then
-		return
-	end
-
-	for button,state in pairs(holding)do
-		if state then
-			local dx=button:GetAttribute("DX") or 0
-			local dy=button:GetAttribute("DY") or 0
-
-			config.JumpX=math.clamp(
-				config.JumpX+dx,
-				.04,
-				.96
-			)
-
-			config.JumpY=math.clamp(
-				config.JumpY+dy,
-				.04,
-				.96
-			)
-
-			updateJump()
-		end
-	end
-end)
-
-connect(sizePlus.Activated,function()
-	config.JumpSize=math.clamp(
-		config.JumpSize+.03,
-		.08,
-		.50
-	)
-
-	updateJump()
-end)
-
-connect(sizeMinus.Activated,function()
-	config.JumpSize=math.clamp(
-		config.JumpSize-.03,
-		.08,
-		.50
-	)
-
-	updateJump()
-end)
-
-connect(resetJump.Activated,function()
-	config.JumpX=defaultConfig.JumpX
-	config.JumpY=defaultConfig.JumpY
-	config.JumpSize=defaultConfig.JumpSize
-
-	updateJump()
-end)
-
-local saveButton=makeButton(
-	settings,
-	"SaveConfig",
-	UDim2.fromOffset(20,620),
-	UDim2.fromOffset(130,42),
-	"SAVE",
-	Color3.fromRGB(45,100,55),
-	43
-)
-
-local closeButton=makeButton(
-	settings,
-	"Close",
-	UDim2.new(1,-150,0,620),
-	UDim2.fromOffset(130,42),
-	"CLOSE",
-	Color3.fromRGB(100,40,40),
-	43
-)
-
-connect(saveButton.Activated,function()
-	saveConfig()
-
-	saveButton.Text="SAVED!"
-
-	task.delay(1,function()
-		if saveButton and saveButton.Parent then
-			saveButton.Text="SAVE"
-		end
-	end)
-end)
-
-connect(closeButton.Activated,function()
-	settings.Visible=false
-end)
-
-connect(menu.Activated,function()
-	settings.Visible=not settings.Visible
-end)
-
-connect(playerGui.ChildAdded,function(child)
-	if child.Name=="TouchGui" then
-		jumpButton=nil
-
-		task.defer(updateJump)
-		task.delay(.25,updateJump)
-		task.delay(.7,updateJump)
-		task.delay(1,updateJump)
-	end
-end)
-
-connect(RunService.RenderStepped,function()
-	if destroyed then
-		return
-	end
-
-	for gradient in pairs(gradientObjects)do
-		if gradient and gradient.Parent then
-			gradient.Rotation=(gradient.Rotation+1.5)%360
+local function getLastCheckpoint()
+	local last = 0
+
+	for i = 1, MAX_CHECKPOINTS do
+		if checkpoints["CP" .. i] then
+			last = i
 		else
-			gradientObjects[gradient]=nil
+			break
 		end
+	end
+
+	return last
+end
+
+local function teleportToCheckpoint(index)
+	local character = player.Character
+
+	if not character then
+		return false
+	end
+
+	local root = character:FindFirstChild("HumanoidRootPart")
+
+	if not root then
+		return false
+	end
+
+	local target = checkpoints["CP" .. index]
+
+	if not target then
+		return false
+	end
+
+	root.CFrame = target
+
+	return true
+end
+
+local function stopAutoTeleport()
+	autoTeleport = false
+	updateUI()
+	notify("Auto Teleport dihentikan.")
+end
+
+local function startAutoTeleport()
+	if autoTeleport then
+		return
+	end
+
+	local lastCheckpoint = getLastCheckpoint()
+
+	if lastCheckpoint < 1 then
+		notify("Belum ada CP yang disimpan.")
+		return
+	end
+
+	autoTeleport = true
+	updateUI()
+
+	notify(
+		"Auto Teleport: CP1 sampai CP"
+			.. lastCheckpoint
+	)
+
+	task.spawn(function()
+		while autoTeleport do
+			local currentLast = getLastCheckpoint()
+
+			if currentLast < 1 then
+				break
+			end
+
+			for i = 1, currentLast do
+				if not autoTeleport then
+					break
+				end
+
+				if not checkpoints["CP" .. i] then
+					break
+				end
+
+				teleportToCheckpoint(i)
+
+				task.wait(TELEPORT_DELAY)
+			end
+
+			if not loopEnabled then
+				break
+			end
+
+			task.wait(TELEPORT_DELAY)
+		end
+
+		autoTeleport = false
+		updateUI()
+	end)
+end
+
+guiElements = createTeleportGui()
+
+makeDraggable(
+	guiElements.MainFrame,
+	guiElements.TitleBar
+)
+
+guiElements.SetLokasiButton.MouseButton1Click:Connect(function()
+	currentMode = "Set Lokasi"
+	updateUI()
+end)
+
+guiElements.TeleportButton.MouseButton1Click:Connect(function()
+	currentMode = "Teleport"
+	updateUI()
+end)
+
+guiElements.AutoTeleportButton.MouseButton1Click:Connect(function()
+	if autoTeleport then
+		stopAutoTeleport()
+	else
+		startAutoTeleport()
 	end
 end)
 
-updateLabels()
-updateJump()
+guiElements.LoopButton.MouseButton1Click:Connect(function()
+	loopEnabled = not loopEnabled
+	updateUI()
 
-task.delay(.2,function()
-	updateJump()
+	if loopEnabled then
+		notify("Loop ON.")
+	else
+		notify("Loop OFF.")
+	end
 end)
 
-task.delay(.6,function()
-	updateJump()
+guiElements.StopButton.MouseButton1Click:Connect(function()
+	stopAutoTeleport()
 end)
 
-task.delay(1,function()
-	updateJump()
+guiElements.MinimizeButton.MouseButton1Click:Connect(function()
+	isMinimized = not isMinimized
+
+	local tweenInfo = TweenInfo.new(
+		0.3,
+		Enum.EasingStyle.Quad,
+		Enum.EasingDirection.Out
+	)
+
+	if isMinimized then
+		guiElements.MinimizeButton.Text = "▲"
+		guiElements.ContentFrame.Visible = false
+
+		TweenService:Create(
+			guiElements.MainFrame,
+			tweenInfo,
+			{Size = UDim2.new(0, 150, 0, 30)}
+		):Play()
+	else
+		guiElements.MinimizeButton.Text = "▼"
+		guiElements.ContentFrame.Visible = true
+
+		TweenService:Create(
+			guiElements.MainFrame,
+			tweenInfo,
+			{Size = UDim2.new(0, 150, 0, 400)}
+		):Play()
+	end
 end)
+
+guiElements.CloseButton.MouseButton1Click:Connect(function()
+	autoTeleport = false
+	loopEnabled = false
+	guiElements.ScreenGui:Destroy()
+end)
+
+for i = 1, MAX_CHECKPOINTS do
+	local cpButton =
+		guiElements.ScrollingFrame:FindFirstChild("CP" .. i)
+
+	if cpButton then
+		local cpIndex = i
+
+		cpButton.MouseButton1Click:Connect(function()
+			local character = player.Character
+
+			if not character then
+				notify("Karakter tidak ditemukan!")
+				return
+			end
+
+			local root =
+				character:FindFirstChild("HumanoidRootPart")
+
+			if not root then
+				notify("HumanoidRootPart tidak ditemukan!")
+				return
+			end
+
+			local cpName = "CP" .. cpIndex
+
+			if currentMode == "Set Lokasi" then
+				checkpoints[cpName] = root.CFrame
+
+				notify(
+					"Lokasi "
+						.. cpName
+						.. " telah disimpan!"
+				)
+
+				updateUI()
+
+			elseif currentMode == "Teleport" then
+				local targetCFrame =
+					checkpoints[cpName]
+
+				if targetCFrame then
+					root.CFrame = targetCFrame
+
+					notify(
+						"Berhasil teleport ke "
+							.. cpName
+							.. "!"
+					)
+				else
+					notify(
+						cpName
+							.. " belum disimpan!"
+					)
+				end
+			end
+		end)
+	end
+end
+
+updateUI()
