@@ -1,65 +1,71 @@
 local Players = game:GetService("Players")
-local TweenService = game:GetService("TweenService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
 -- =========================================================
--- ⚙️ PENGATURAN UTAMA (KHUSUS MOBILE)
+-- ⚙️ PENGATURAN UTAMA (HITBOX EXPANDER)
 -- =========================================================
-local HITBOX_LEBAR = 900         -- Lebar area hitbox ke samping (Sumbu X)
-local HITBOX_PANJANG = 992       -- Jangkauan area ke depan (Sumbu Z)
-local HITBOX_TINGGI = 6         -- Tinggi area hitbox (Sumbu Y)
+local HITBOX_UKURAN = 25        -- Ukuran fisik Hitbox Musuh (25 x 25 x 25 studs)
+local TRANSPARANSI_HITBOX = 0.6 -- Kejelasan visual (0 = Padat, 1 = Tak terlihat)
+local WARNA_HITBOX = Color3.fromRGB(255, 50, 50) -- Warna Kotak Hitbox (Merah)
 
-local COOLDOWN_ATTACK = 0.35    -- Jeda antar serangan otomatis (detik)
-local AUTO_ATTACK_AKTIF = true  -- Status awal Auto Attack (true = ON, false = OFF)
-
-local WARNA_HITBOX = Color3.fromRGB(255, 50, 50) -- Warna Hitbox Visual (Merah)
-local TRANSPARANSI_HITBOX = 0.5  -- Kejelasan visual (0 = Padat, 1 = Tidak Terlihat)
+local AUTO_ATTACK_AKTIF = true  -- Status ON/OFF saat mulai game
+local COOLDOWN_ATTACK = 0.2     -- Kecepatan tebasan (detik)
 -- =========================================================
 
 local sedangSerang = false
 local btnGuiInstance = nil
 
 -----------------------------------------------------------
--- 1. EFEK VISUAL HITBOX MERAH
+-- 1. FUNGSI MEMPERBESAR FISIK HITBOX MUSUH
 -----------------------------------------------------------
-local function tampilkanVisual(hrp)
-	local visual = Instance.new("Part")
-	visual.Name = "LocalHitbox_Visual"
-	visual.Size = Vector3.new(HITBOX_LEBAR, HITBOX_TINGGI, HITBOX_PANJANG)
-	visual.Material = Enum.Material.Forcefield
-	visual.Color = WARNA_HITBOX
-	visual.Transparency = TRANSPARANSI_HITBOX
-	visual.CanCollide = false
-	visual.CanQuery = false
-	visual.CanTouch = false
-	visual.Anchored = true
+local function perbesarHitboxMusuh(model)
+	if not model or model == player.Character then return end
 
-	-- Posisikan kotak di depan karakter
-	visual.CFrame = hrp.CFrame * CFrame.new(0, 0, -HITBOX_PANJANG / 2)
-	visual.Parent = workspace
+	local humanoid = model:FindFirstChildOfClass("Humanoid")
+	local hrp = model:FindFirstChild("HumanoidRootPart")
 
-	-- Animasi Menghilang Halus (Fade Out)
-	local tween = TweenService:Create(visual, TweenInfo.new(0.2), {Transparency = 1})
-	tween:Play()
-	tween.Completed:Connect(function()
-		visual:Destroy()
-	end)
+	if humanoid and hrp and humanoid.Health > 0 then
+		-- Pastikan target adalah MUSUH dan bukan Karakter Pemain Lain
+		if not Players:GetPlayerFromCharacter(model) then
+			-- UBAH FISIK HITBOX SECARA LANGSUNG
+			hrp.Size = Vector3.new(HITBOX_UKURAN, HITBOX_UKURAN, HITBOX_UKURAN)
+			hrp.Transparency = TRANSPARANSI_HITBOX
+			hrp.Color = WARNA_HITBOX
+			hrp.Material = Enum.Material.Forcefield
+			hrp.CanCollide = false -- Agar pemain tidak tersangkut/terdorong musuh
+		end
+	end
 end
 
 -----------------------------------------------------------
--- 2. MEMANGGIL EVENT SERANGAN MAP BAWAAN
+-- 2. LOOP OTOMATIS MEMINDAI DAN MEMPERBESAR SEMUA MUSUH
 -----------------------------------------------------------
-local function eksekusiSerangan(hrp)
-	if sedangSerang then return end
+task.spawn(function()
+	while true do
+		task.wait(0.5) -- Memindai musuh baru setiap 0.5 detik
+		if AUTO_ATTACK_AKTIF then
+			local folderEnemies = workspace:FindFirstChild("Enemies") or workspace
+			
+			for _, obj in ipairs(folderEnemies:GetDescendants()) do
+				if obj:IsA("Model") then
+					perbesarHitboxMusuh(obj)
+				end
+			end
+		end
+	end
+end)
+
+-----------------------------------------------------------
+-- 3. EKSEKUSI ATTACK BAWAAN MAP
+-----------------------------------------------------------
+local function eksekusiSerangan()
+	if sedangSerang or not AUTO_ATTACK_AKTIF then return end
 	sedangSerang = true
 
-	-- Tampilkan efek visual kotak merah
-	tampilkanVisual(hrp)
-
-	-- Memanggil RemoteEvent Combat bawaan map (Net -> Events -> Combat)
 	pcall(function()
 		local combatEvent = ReplicatedStorage:FindFirstChild("Net")
 			and ReplicatedStorage.Net:FindFirstChild("Events")
@@ -75,81 +81,37 @@ local function eksekusiSerangan(hrp)
 end
 
 -----------------------------------------------------------
--- 3. DETEKSI MUSUH DI HP (SEMUA MODEL / RIG)
------------------------------------------------------------
-local function cekHitbox()
-	if not AUTO_ATTACK_AKTIF or sedangSerang then return end
-
-	local character = player.Character
-	if not character then return end
-	local hrp = character:FindFirstChild("HumanoidRootPart")
-	local humanoid = character:FindFirstChildOfClass("Humanoid")
-
-	if not hrp or not humanoid or humanoid.Health <= 0 then return end
-
-	-- Buat batasan area kotak di depan pemain
-	local centerCFrame = hrp.CFrame * CFrame.new(0, 0, -HITBOX_PANJANG / 2)
-	local boxSize = Vector3.new(HITBOX_LEBAR, HITBOX_TINGGI, HITBOX_PANJANG)
-
-	local overlapParams = OverlapParams.new()
-	overlapParams.FilterType = Enum.RaycastFilterType.Exclude
-	overlapParams.FilterDescendantsInstances = {character}
-
-	local partsInBox = workspace:GetPartBoundsInBox(centerCFrame, boxSize, overlapParams)
-
-	for _, part in ipairs(partsInBox) do
-		local enemyModel = part:FindFirstAncestorOfClass("Model")
-		
-		if enemyModel and enemyModel ~= character then
-			local targetHumanoid = enemyModel:FindFirstChildOfClass("Humanoid")
-			
-			if targetHumanoid and targetHumanoid.Health > 0 then
-				local enemiesFolder = workspace:FindFirstChild("Enemies")
-				local isEnemy = (enemiesFolder and enemyModel:IsDescendantOf(enemiesFolder)) 
-					or not Players:GetPlayerFromCharacter(enemyModel)
-
-				if isEnemy then
-					eksekusiSerangan(hrp)
-					break
-				end
-			end
-		end
-	end
-end
-
------------------------------------------------------------
--- 4. GUI OPTIMASI LAYAR SENTUH HP (TOUCH & DRAGGABLE)
+-- 4. GUI TOMBOL DRAGGABLE UNTUK MOBILE
 -----------------------------------------------------------
 local function updateButtonUI()
 	if not btnGuiInstance then return end
 	if AUTO_ATTACK_AKTIF then
-		btnGuiInstance.Text = "AUTO ATTACK: ON"
-		btnGuiInstance.BackgroundColor3 = Color3.fromRGB(46, 204, 113) -- Hijau
+		btnGuiInstance.Text = "HITBOX & AUTO: ON"
+		btnGuiInstance.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
 	else
-		btnGuiInstance.Text = "AUTO ATTACK: OFF"
-		btnGuiInstance.BackgroundColor3 = Color3.fromRGB(231, 76, 60) -- Merah
+		btnGuiInstance.Text = "HITBOX & AUTO: OFF"
+		btnGuiInstance.BackgroundColor3 = Color3.fromRGB(231, 76, 60)
 	end
 end
 
 local function buatGUIMobile()
-	local existingGui = playerGui:FindFirstChild("AutoAttackGUI")
+	local existingGui = playerGui:FindFirstChild("HitboxAutoGUI")
 	if existingGui then existingGui:Destroy() end
 
 	local screenGui = Instance.new("ScreenGui")
-	screenGui.Name = "AutoAttackGUI"
+	screenGui.Name = "HitboxAutoGUI"
 	screenGui.ResetOnSpawn = false
 	screenGui.Parent = playerGui
 
-	-- Tombol Lebih Besar dan Mudah Ditap Jari
 	local btn = Instance.new("TextButton")
 	btn.Name = "ToggleButton"
-	btn.Size = UDim2.new(0, 160, 0, 50) -- Ukuran pas untuk ibu jari
-	btn.Position = UDim2.new(0.5, -80, 0.1, 0) -- Bagian atas layar HP
+	btn.Size = UDim2.new(0, 170, 0, 50)
+	btn.Position = UDim2.new(0.5, -85, 0.1, 0)
 	btn.Font = Enum.Font.SourceSansBold
-	btn.TextSize = 17
+	btn.TextSize = 16
 	btn.TextColor3 = Color3.fromRGB(255, 255, 255)
 	btn.Active = true
-	btn.Draggable = true -- BISA DIGESER DENGAN JARI DI LAYAR HP
+	btn.Draggable = true
 
 	local corner = Instance.new("UICorner")
 	corner.CornerRadius = UDim.new(0, 12)
@@ -162,7 +124,6 @@ local function buatGUIMobile()
 
 	btnGuiInstance = btn
 
-	-- Deteksi Sentuhan Layar HP (Activated)
 	btn.Activated:Connect(function()
 		AUTO_ATTACK_AKTIF = not AUTO_ATTACK_AKTIF
 		updateButtonUI()
@@ -173,7 +134,7 @@ local function buatGUIMobile()
 end
 
 -----------------------------------------------------------
--- 5. MENJALANKAN SISTEM AUTOMATIS
+-- 5. JALANKAN SISTEM
 -----------------------------------------------------------
 buatGUIMobile()
 
@@ -182,9 +143,9 @@ player.CharacterAdded:Connect(function()
 	buatGUIMobile()
 end)
 
-task.spawn(function()
-	while true do
-		task.wait(0.1)
-		cekHitbox()
+-- Loop Auto Attack Kontinu
+RunService.RenderStepped:Connect(function()
+	if AUTO_ATTACK_AKTIF then
+		eksekusiSerangan()
 	end
 end)
