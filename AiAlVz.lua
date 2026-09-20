@@ -8,8 +8,8 @@ local playerGui = player:WaitForChild("PlayerGui")
 -- =========================================================
 -- ⚙️ PENGATURAN UTAMA (KHUSUS MOBILE)
 -- =========================================================
-local HITBOX_LEBAR = 10         -- Lebar area hitbox ke samping (Sumbu X)
-local HITBOX_PANJANG = 12       -- Jangkauan area ke depan (Sumbu Z)
+local HITBOX_LEBAR = 900         -- Lebar area hitbox ke samping (Sumbu X)
+local HITBOX_PANJANG = 992       -- Jangkauan area ke depan (Sumbu Z)
 local HITBOX_TINGGI = 6         -- Tinggi area hitbox (Sumbu Y)
 
 local COOLDOWN_ATTACK = 0.35    -- Jeda antar serangan otomatis (detik)
