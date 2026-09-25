@@ -180,27 +180,30 @@ toggleGradient.Rotation = 0
 toggleGradient.Parent = toggleBtn
 
 --==================================================
--- HITBOX MANAGEMENT
+-- PERBAIKAN LOGIKA HITBOX (DEEP SCAN & CANTOUCH)
 --==================================================
 
 local function saveOriginalHitboxes()
 	hitboxes = {}
 
-	local stagesFolder = workspace:FindFirstChild("Stages")
+	-- Menunggu folder Stages hingga siap (timeout 10 detik)
+	local stagesFolder = workspace:WaitForChild("Stages", 10)
 
 	if stagesFolder then
-		for _, stage in ipairs(stagesFolder:GetChildren()) do
-			local hitbox = stage:FindFirstChild("Hitbox")
-
-			if hitbox and hitbox:IsA("BasePart") then
+		-- GetDescendants mencari ke semua kedalaman folder/model
+		for _, obj in ipairs(stagesFolder:GetDescendants()) do
+			if obj.Name == "Hitbox" and obj:IsA("BasePart") then
 				table.insert(hitboxes, {
-					part = hitbox,
-					originalCFrame = hitbox.CFrame,
-					originalAnchored = hitbox.Anchored,
-					originalCanCollide = hitbox.CanCollide
+					part = obj,
+					originalCFrame = obj.CFrame,
+					originalAnchored = obj.Anchored,
+					originalCanCollide = obj.CanCollide,
+					originalCanTouch = obj.CanTouch
 				})
 			end
 		end
+	else
+		warn("Folder Workspace.Stages tidak ditemukan!")
 	end
 end
 
@@ -210,6 +213,7 @@ local function restoreHitboxes()
 			data.part.CFrame = data.originalCFrame
 			data.part.Anchored = data.originalAnchored
 			data.part.CanCollide = data.originalCanCollide
+			data.part.CanTouch = data.originalCanTouch
 		end
 	end
 
@@ -232,25 +236,29 @@ toggleBtn.MouseButton1Click:Connect(function()
 	isBringActive = not isBringActive
 
 	if isBringActive then
-		toggleBtn.Text = "Bring Hitbox: ON"
-
 		saveOriginalHitboxes()
+
+		if #hitboxes == 0 then
+			warn("Tidak ada part bernama 'Hitbox' yang ditemukan di Workspace.Stages!")
+		end
+
+		toggleBtn.Text = "Bring Hitbox: ON (" .. #hitboxes .. " Found)"
 
 		for _, data in ipairs(hitboxes) do
 			if data.part and data.part.Parent then
 				data.part.CanCollide = false
+				data.part.CanTouch = true -- Memastikan terdeteksi sentuhan
 				data.part.Anchored = true
 			end
 		end
 	else
 		toggleBtn.Text = "Bring Hitbox: OFF"
-
 		restoreHitboxes()
 	end
 end)
 
 --==================================================
--- BRING HITBOX
+-- BRING HITBOX LOOP
 --==================================================
 
 RunService.Heartbeat:Connect(function()
@@ -279,7 +287,7 @@ RunService.Heartbeat:Connect(function()
 end)
 
 --==================================================
--- ANIMATED CYAN → PURPLE STROKES
+-- ANIMATION LOOP
 --==================================================
 
 task.spawn(function()
