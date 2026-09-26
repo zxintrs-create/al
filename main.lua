@@ -1021,7 +1021,10 @@ local function openLoadWindow()
 end
 
 guiElements = createTeleportGui()
+
+-- Mendaftarkan MainFrame dan OpenButton agar bisa digeser
 makeDraggable(guiElements.MainFrame, guiElements.TitleBar)
+makeDraggable(guiElements.OpenButton, guiElements.OpenButton)
 
 guiElements.OpenButton.MouseButton1Click:Connect(function()
 	local mainFrame = guiElements.MainFrame
