@@ -1,1175 +1,798 @@
 local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
+local UIS = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
-local StarterGui = game:GetService("StarterGui")
+local Lighting = game:GetService("Lighting")
 
-local player = Players.LocalPlayer
-local playerGui = player:WaitForChild("PlayerGui")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+local Mouse = LocalPlayer:GetMouse()
+local isPC = UIS.KeyboardEnabled and not UIS.TouchEnabled
+local isMobile = UIS.TouchEnabled and not UIS.KeyboardEnabled
 
-local MAX_CHECKPOINTS = 30
-local GUI_TITLE = "👑 AldoVYSR TELEPORT V2"
-local SAVE_FOLDER = "teleport_saves/"
-local currentSaveFileName = "Teleport 1"
+-- Settings
+local Theme = Color3.fromRGB(180, 30, 30)
+local FOVColor = Color3.fromRGB(160, 0, 255)
+local FOVTransparency = 0.4
 
-local currentMode = "Set Lokasi"
-local tpMethod = "Instan"
-local isMinimized = false
-local guiElements = {}
-local checkpoints = {}
+-- States
+local States = {
+	Shield = false,
+	Jump = false,
+	Noclip = false,
+	Fly = false,
+	Aimbot = false,
+	Hitbox = false,
+	ESP = false,
+	ShowFOV = true,
+	ShowNames = true,
+	ShowDistance = true,
+	ShowSkeleton = true,
+	Fullbright = false,
+	AntiRagdoll = false,
+	Zoom = false
+}
 
-local historyStack = {}
-local redoStack = {}
-local MAX_HISTORY_STEPS = 20
+local Speed = 16
+local FOV = 50
+local BodyVelocity, BodyGyro
+local OriginalSizes = {}
+local SavedCFrame = nil
+local HoldingRightClick = false
+local MenuOpen = true
+local ESPDrawings = {}
 
-local autoTeleport = false
-local loopEnabled = false
-local TELEPORT_DELAY = 0.5
-local TWEEN_SPEED = 0.02
-local currentPlatform = nil
+-- FOV Circle
+local FOVCircle = Drawing.new("Circle")
+FOVCircle.Visible = false
+FOVCircle.Thickness = 1.4
+FOVCircle.Color = FOVColor
+FOVCircle.Filled = false
+FOVCircle.Radius = FOV
+FOVCircle.Transparency = FOVTransparency
 
--- Warna Tema
-local CYAN = Color3.fromRGB(0, 255, 255)
-local PURPLE = Color3.fromRGB(145, 0, 255)
-local COLOR_ACTIVE_GREEN = Color3.fromRGB(0, 200, 100)
-local COLOR_INACTIVE_GRAY = Color3.fromRGB(45, 45, 55)
-local COLOR_CP_FILLED_SET = Color3.fromRGB(0, 140, 70)
-local COLOR_CP_TELEPORT = Color3.fromRGB(140, 40, 200)
-local COLOR_RED_OFF = Color3.fromRGB(180, 40, 40)
+-- ==================== UI ====================
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "AlVysr"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.IgnoreGuiInset = true
+ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
-pcall(function()
-	if isfolder and not isfolder(SAVE_FOLDER) then
-		makefolder(SAVE_FOLDER)
+-- Open / Toggle Button
+local ToggleBtn = Instance.new("TextButton")
+ToggleBtn.Size = UDim2.new(0, 75, 0, 32)
+ToggleBtn.Position = UDim2.new(1, -90, 0, 16)
+ToggleBtn.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+ToggleBtn.Text = "CLOSE"
+ToggleBtn.TextColor3 = Color3.new(1, 1, 1)
+ToggleBtn.Font = Enum.Font.GothamBold
+ToggleBtn.TextSize = 13
+ToggleBtn.Parent = ScreenGui
+Instance.new("UICorner", ToggleBtn).CornerRadius = UDim.new(0, 8)
+
+-- UIStroke & UIGradient untuk Open Button (Cyan - Ungu)
+local ToggleStroke = Instance.new("UIStroke", ToggleBtn)
+ToggleStroke.Color = Color3.fromRGB(255, 255, 255)
+ToggleStroke.Thickness = 2
+ToggleStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+
+local ToggleGradient = Instance.new("UIGradient", ToggleStroke)
+ToggleGradient.Color = ColorSequence.new({
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 255, 255)),   -- Cyan
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(160, 32, 240))  -- Ungu
+})
+
+-- Main Frame
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 290, 0, 480)
+MainFrame.Position = UDim2.new(0.014, 0, 0.045, 0)
+MainFrame.BackgroundColor3 = Color3.fromRGB(16, 16, 16)
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Parent = ScreenGui
+Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 18)
+
+-- UIStroke & UIGradient untuk Main Frame (Cyan - Ungu)
+local Stroke = Instance.new("UIStroke", MainFrame)
+Stroke.Color = Color3.fromRGB(255, 255, 255)
+Stroke.Thickness = 2
+Stroke.Transparency = 0
+Stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+
+local MainGradient = Instance.new("UIGradient", Stroke)
+MainGradient.Color = ColorSequence.new({
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 255, 255)),   -- Cyan
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(160, 32, 240))  -- Ungu
+})
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 42)
+Title.BackgroundTransparency = 1
+Title.Text = "👑VOID VAINLY STAR"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.Font = Enum.Font.GothamBlack
+Title.TextSize = 20
+Title.Parent = MainFrame
+
+local TitleGradient = Instance.new("UIGradient", Title)
+TitleGradient.Color = ColorSequence.new({
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 255, 255)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(160, 32, 240))
+})
+
+-- Tabs
+local TabContainer = Instance.new("Frame")
+TabContainer.Size = UDim2.new(1, -20, 0, 30)
+TabContainer.Position = UDim2.new(0, 10, 0, 44)
+TabContainer.BackgroundTransparency = 1
+TabContainer.Parent = MainFrame
+
+local function CreateTab(name, index)
+	local btn = Instance.new("TextButton")
+	btn.Size = UDim2.new(0.25, -3, 1, 0)
+	btn.Position = UDim2.new(index * 0.25, 0, 0, 0)
+	btn.BackgroundColor3 = Color3.fromRGB(32, 32, 32)
+	btn.Text = name
+	btn.TextColor3 = Color3.fromRGB(220, 220, 220)
+	btn.Font = Enum.Font.GothamBold
+	btn.TextSize = 12
+	btn.Parent = TabContainer
+	Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
+	return btn
+end
+
+local TabMain = CreateTab("MAIN", 0)
+local TabCombat = CreateTab("COMBAT", 1)
+local TabESP = CreateTab("ESP", 2)
+local TabUtils = CreateTab("UTILS", 3)
+TabMain.BackgroundColor3 = Theme
+
+local function CreatePage()
+	local page = Instance.new("Frame")
+	page.Size = UDim2.new(1, 0, 1, -84)
+	page.Position = UDim2.new(0, 0, 0, 82)
+	page.BackgroundTransparency = 1
+	page.Visible = false
+	page.Parent = MainFrame
+	return page
+end
+
+local PageMain = CreatePage()
+PageMain.Visible = true
+local PageCombat = CreatePage()
+local PageESP = CreatePage()
+local PageUtils = CreatePage()
+
+local function SwitchTab(tab)
+	PageMain.Visible = tab == "main"
+	PageCombat.Visible = tab == "combat"
+	PageESP.Visible = tab == "esp"
+	PageUtils.Visible = tab == "utils"
+
+	TabMain.BackgroundColor3 = tab == "main" and Theme or Color3.fromRGB(32, 32, 32)
+	TabCombat.BackgroundColor3 = tab == "combat" and Theme or Color3.fromRGB(32, 32, 32)
+	TabESP.BackgroundColor3 = tab == "esp" and Theme or Color3.fromRGB(32, 32, 32)
+	TabUtils.BackgroundColor3 = tab == "utils" and Theme or Color3.fromRGB(32, 32, 32)
+end
+
+TabMain.MouseButton1Click:Connect(function() SwitchTab("main") end)
+TabCombat.MouseButton1Click:Connect(function() SwitchTab("combat") end)
+TabESP.MouseButton1Click:Connect(function() SwitchTab("esp") end)
+TabUtils.MouseButton1Click:Connect(function() SwitchTab("utils") end)
+
+-- Button creator
+local function CreateButton(parent, text, y, color)
+	local btn = Instance.new("TextButton")
+	btn.Size = UDim2.new(1, -24, 0, 36)
+	btn.Position = UDim2.new(0, 12, 0, y)
+	btn.BackgroundColor3 = color or Color3.fromRGB(55, 10, 10)
+	btn.Text = text
+	btn.TextColor3 = Color3.new(1, 1, 1)
+	btn.Font = Enum.Font.GothamBold
+	btn.TextSize = 14
+	btn.AutoButtonColor = true
+	btn.Parent = parent
+	Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 10)
+	return btn
+end
+
+-- MAIN
+local BtnShield = CreateButton(PageMain, "Shield", 8)
+local BtnJump = CreateButton(PageMain, "Jump", 52)
+local BtnNoclip = CreateButton(PageMain, "Noclip", 96)
+local BtnFly = CreateButton(PageMain, "Fly", 140)
+
+local SpeedFrame = Instance.new("Frame", PageMain)
+SpeedFrame.Size = UDim2.new(1, -24, 0, 36)
+SpeedFrame.Position = UDim2.new(0, 12, 0, 195)
+SpeedFrame.BackgroundTransparency = 1
+
+local BtnSpeedPlus = Instance.new("TextButton", SpeedFrame)
+BtnSpeedPlus.Size = UDim2.new(0.2, 0, 1, 0)
+BtnSpeedPlus.BackgroundColor3 = Color3.fromRGB(20, 110, 20)
+BtnSpeedPlus.Text = "+"
+BtnSpeedPlus.TextColor3 = Color3.new(1, 1, 1)
+BtnSpeedPlus.Font = Enum.Font.GothamBold
+BtnSpeedPlus.TextSize = 18
+Instance.new("UICorner", BtnSpeedPlus).CornerRadius = UDim.new(0, 10)
+
+local SpeedLabel = Instance.new("TextLabel", SpeedFrame)
+SpeedLabel.Size = UDim2.new(0.52, 0, 1, 0)
+SpeedLabel.Position = UDim2.new(0.24, 0, 0, 0)
+SpeedLabel.BackgroundColor3 = Color3.fromRGB(28, 28, 28)
+SpeedLabel.Text = "Speed: 16"
+SpeedLabel.TextColor3 = Color3.new(1, 1, 1)
+SpeedLabel.Font = Enum.Font.GothamBold
+SpeedLabel.TextSize = 14
+Instance.new("UICorner", SpeedLabel).CornerRadius = UDim.new(0, 10)
+
+local BtnSpeedMinus = Instance.new("TextButton", SpeedFrame)
+BtnSpeedMinus.Size = UDim2.new(0.2, 0, 1, 0)
+BtnSpeedMinus.Position = UDim2.new(0.8, 0, 0, 0)
+BtnSpeedMinus.BackgroundColor3 = Color3.fromRGB(110, 20, 20)
+BtnSpeedMinus.Text = "-"
+BtnSpeedMinus.TextColor3 = Color3.new(1, 1, 1)
+BtnSpeedMinus.Font = Enum.Font.GothamBold
+BtnSpeedMinus.TextSize = 18
+Instance.new("UICorner", BtnSpeedMinus).CornerRadius = UDim.new(0, 10)
+
+-- COMBAT
+local BtnAimbot = CreateButton(PageCombat, "Aimbot", 8)
+local BtnHitbox = CreateButton(PageCombat, "Hitbox", 52)
+local BtnFOVToggle = CreateButton(PageCombat, "FOV Circle: ON", 96, Color3.fromRGB(20, 90, 20))
+
+local FOVFrame = Instance.new("Frame", PageCombat)
+FOVFrame.Size = UDim2.new(1, -24, 0, 36)
+FOVFrame.Position = UDim2.new(0, 12, 0, 150)
+FOVFrame.BackgroundTransparency = 1
+
+local BtnFOVPlus = Instance.new("TextButton", FOVFrame)
+BtnFOVPlus.Size = UDim2.new(0.2, 0, 1, 0)
+BtnFOVPlus.BackgroundColor3 = Color3.fromRGB(20, 110, 20)
+BtnFOVPlus.Text = "+"
+BtnFOVPlus.TextColor3 = Color3.new(1, 1, 1)
+BtnFOVPlus.Font = Enum.Font.GothamBold
+BtnFOVPlus.TextSize = 18
+Instance.new("UICorner", BtnFOVPlus).CornerRadius = UDim.new(0, 10)
+
+local FOVLabel = Instance.new("TextLabel", FOVFrame)
+FOVLabel.Size = UDim2.new(0.52, 0, 1, 0)
+FOVLabel.Position = UDim2.new(0.24, 0, 0, 0)
+FOVLabel.BackgroundColor3 = Color3.fromRGB(28, 28, 28)
+FOVLabel.Text = "FOV: 50"
+FOVLabel.TextColor3 = Color3.new(1, 1, 1)
+FOVLabel.Font = Enum.Font.GothamBold
+FOVLabel.TextSize = 14
+Instance.new("UICorner", FOVLabel).CornerRadius = UDim.new(0, 10)
+
+local BtnFOVMinus = Instance.new("TextButton", FOVFrame)
+BtnFOVMinus.Size = UDim2.new(0.2, 0, 1, 0)
+BtnFOVMinus.Position = UDim2.new(0.8, 0, 0, 0)
+BtnFOVMinus.BackgroundColor3 = Color3.fromRGB(110, 20, 20)
+BtnFOVMinus.Text = "-"
+BtnFOVMinus.TextColor3 = Color3.new(1, 1, 1)
+BtnFOVMinus.Font = Enum.Font.GothamBold
+BtnFOVMinus.TextSize = 18
+Instance.new("UICorner", BtnFOVMinus).CornerRadius = UDim.new(0, 10)
+
+-- ESP
+local BtnESP = CreateButton(PageESP, "ESP", 8)
+local BtnSkeleton = CreateButton(PageESP, "Skeleton: ON", 52, Color3.fromRGB(20, 90, 20))
+local BtnNames = CreateButton(PageESP, "Names: ON", 96, Color3.fromRGB(20, 90, 20))
+local BtnDistance = CreateButton(PageESP, "Distance: ON", 140, Color3.fromRGB(20, 90, 20))
+
+-- UTILS
+local BtnSave = CreateButton(PageUtils, "Save Position", 8, Color3.fromRGB(25, 80, 140))
+local BtnTP = CreateButton(PageUtils, "Teleport", 52, Color3.fromRGB(25, 110, 45))
+local BtnFullbright = CreateButton(PageUtils, "Fullbright", 104)
+local BtnAntiRagdoll = CreateButton(PageUtils, "Anti Ragdoll", 148)
+local BtnZoom = CreateButton(PageUtils, "Inf Zoom", 192)
+local BtnDelete = CreateButton(PageUtils, "Delete Hub", 250, Color3.fromRGB(130, 15, 15))
+
+local StatusLabel = Instance.new("TextLabel", PageUtils)
+StatusLabel.Size = UDim2.new(1, -24, 0, 18)
+StatusLabel.Position = UDim2.new(0, 12, 0, 300)
+StatusLabel.BackgroundTransparency = 1
+StatusLabel.Text = "No position saved"
+StatusLabel.TextColor3 = Color3.fromRGB(140, 140, 140)
+StatusLabel.Font = Enum.Font.Gotham
+StatusLabel.TextSize = 12
+
+-- ==================== LOGIC ====================
+local function SetButton(btn, state, onText, offText)
+	btn.Text = state and onText or offText
+	btn.BackgroundColor3 = state and Color3.fromRGB(20, 100, 20) or Color3.fromRGB(55, 10, 10)
+end
+
+local function ToggleMenu()
+	MenuOpen = not MenuOpen
+	if MenuOpen then
+		MainFrame.Visible = true
+		TweenService:Create(MainFrame, TweenInfo.new(0.18), {Position = UDim2.new(0.014, 0, 0.045, 0)}):Play()
+		ToggleBtn.Text = "CLOSE"
+	else
+		TweenService:Create(MainFrame, TweenInfo.new(0.18), {Position = UDim2.new(-0.5, 0, 0.045, 0)}):Play()
+		task.wait(0.18)
+		MainFrame.Visible = false
+		ToggleBtn.Text = "OPEN"
+	end
+end
+
+-- FITUR SHIELD (ASLI)
+local function ToggleShield()
+	States.Shield = not States.Shield
+	SetButton(BtnShield, States.Shield, "Shield ON", "Shield")
+end
+
+local function ToggleJump()
+	States.Jump = not States.Jump
+	SetButton(BtnJump, States.Jump, "Jump ON", "Jump")
+end
+
+local function ToggleNoclip()
+	States.Noclip = not States.Noclip
+	SetButton(BtnNoclip, States.Noclip, "Noclip ON", "Noclip")
+end
+
+-- TOGGLE FLY
+local function ToggleFly()
+	States.Fly = not States.Fly
+	SetButton(BtnFly, States.Fly, "Fly ON", "Fly")
+	local char = LocalPlayer.Character
+	local hum = char and char:FindFirstChildOfClass("Humanoid")
+	local root = char and char:FindFirstChild("HumanoidRootPart")
+	if not root then return end
+	if States.Fly then
+		if hum then hum.PlatformStand = true end
+		BodyVelocity = Instance.new("BodyVelocity")
+		BodyVelocity.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+		BodyVelocity.Velocity = Vector3.zero
+		BodyVelocity.Parent = root
+		BodyGyro = Instance.new("BodyGyro")
+		BodyGyro.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
+		BodyGyro.CFrame = root.CFrame
+		BodyGyro.Parent = root
+	else
+		if hum then hum.PlatformStand = false end
+		if BodyVelocity then BodyVelocity:Destroy() end
+		if BodyGyro then BodyGyro:Destroy() end
+	end
+end
+
+local function ToggleAimbot()
+	States.Aimbot = not States.Aimbot
+	SetButton(BtnAimbot, States.Aimbot, "Aimbot ON", "Aimbot")
+	FOVCircle.Visible = States.Aimbot and States.ShowFOV
+end
+
+local function ToggleHitbox()
+	States.Hitbox = not States.Hitbox
+	SetButton(BtnHitbox, States.Hitbox, "Hitbox ON", "Hitbox")
+	if not States.Hitbox then
+		for plr, size in pairs(OriginalSizes) do
+			if plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+				plr.Character.HumanoidRootPart.Size = size
+				plr.Character.HumanoidRootPart.Transparency = 0
+			end
+		end
+		OriginalSizes = {}
+	end
+end
+
+-- Connections
+BtnShield.MouseButton1Click:Connect(ToggleShield)
+BtnJump.MouseButton1Click:Connect(ToggleJump)
+BtnNoclip.MouseButton1Click:Connect(ToggleNoclip)
+BtnFly.MouseButton1Click:Connect(ToggleFly)
+BtnAimbot.MouseButton1Click:Connect(ToggleAimbot)
+BtnHitbox.MouseButton1Click:Connect(ToggleHitbox)
+ToggleBtn.MouseButton1Click:Connect(ToggleMenu)
+
+BtnSpeedPlus.MouseButton1Click:Connect(function()
+	Speed = math.min(Speed + 10, 400)
+	SpeedLabel.Text = "Speed: " .. Speed
+end)
+BtnSpeedMinus.MouseButton1Click:Connect(function()
+	Speed = math.max(Speed - 10, 0)
+	SpeedLabel.Text = "Speed: " .. Speed
+end)
+
+BtnFOVPlus.MouseButton1Click:Connect(function()
+	FOV = math.min(FOV + 5, 400)
+	FOVLabel.Text = "FOV: " .. FOV
+	FOVCircle.Radius = FOV
+end)
+BtnFOVMinus.MouseButton1Click:Connect(function()
+	FOV = math.max(FOV - 5, 10)
+	FOVLabel.Text = "FOV: " .. FOV
+	FOVCircle.Radius = FOV
+end)
+BtnFOVToggle.MouseButton1Click:Connect(function()
+	States.ShowFOV = not States.ShowFOV
+	BtnFOVToggle.Text = "FOV Circle: " .. (States.ShowFOV and "ON" or "OFF")
+	BtnFOVToggle.BackgroundColor3 = States.ShowFOV and Color3.fromRGB(20, 90, 20) or Color3.fromRGB(55, 10, 10)
+	FOVCircle.Visible = States.Aimbot and States.ShowFOV
+end)
+
+BtnESP.MouseButton1Click:Connect(function()
+	States.ESP = not States.ESP
+	SetButton(BtnESP, States.ESP, "ESP ON", "ESP")
+end)
+BtnSkeleton.MouseButton1Click:Connect(function()
+	States.ShowSkeleton = not States.ShowSkeleton
+	BtnSkeleton.Text = "Skeleton: " .. (States.ShowSkeleton and "ON" or "OFF")
+	BtnSkeleton.BackgroundColor3 = States.ShowSkeleton and Color3.fromRGB(20, 90, 20) or Color3.fromRGB(55, 10, 10)
+end)
+BtnNames.MouseButton1Click:Connect(function()
+	States.ShowNames = not States.ShowNames
+	BtnNames.Text = "Names: " .. (States.ShowNames and "ON" or "OFF")
+	BtnNames.BackgroundColor3 = States.ShowNames and Color3.fromRGB(20, 90, 20) or Color3.fromRGB(55, 10, 10)
+end)
+BtnDistance.MouseButton1Click:Connect(function()
+	States.ShowDistance = not States.ShowDistance
+	BtnDistance.Text = "Distance: " .. (States.ShowDistance and "ON" or "OFF")
+	BtnDistance.BackgroundColor3 = States.ShowDistance and Color3.fromRGB(20, 90, 20) or Color3.fromRGB(55, 10, 10)
+end)
+
+BtnSave.MouseButton1Click:Connect(function()
+	local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+	if root then
+		SavedCFrame = root.CFrame
+		StatusLabel.Text = string.format("Saved: %.0f, %.0f, %.0f", root.Position.X, root.Position.Y, root.Position.Z)
+		StatusLabel.TextColor3 = Color3.fromRGB(80, 220, 80)
+	end
+end)
+BtnTP.MouseButton1Click:Connect(function()
+	if SavedCFrame then
+		local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+		if root then root.CFrame = SavedCFrame end
+	else
+		StatusLabel.Text = "Save a position first"
+		StatusLabel.TextColor3 = Color3.fromRGB(255, 160, 40)
 	end
 end)
 
-local function notify(text)
-	pcall(function()
-		StarterGui:SetCore("ChatMakeSystemMessage", {
-			Text = "[Teleport Tool]: " .. text,
-			Color = CYAN
-		})
-	end)
-end
-
-local function addCorner(parent, radius)
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, radius or 8)
-	corner.Parent = parent
-	return corner
-end
-
-local function addStroke(parent, thickness)
-	local stroke = parent:FindFirstChildOfClass("UIStroke") or Instance.new("UIStroke")
-	stroke.Color = Color3.fromRGB(255, 255, 255)
-	stroke.Thickness = thickness or 1.5
-	stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-	stroke.Parent = parent
-
-	local oldGradient = stroke:FindFirstChild("CyanPurpleGradient")
-	if oldGradient then oldGradient:Destroy() end
-
-	local gradient = Instance.new("UIGradient")
-	gradient.Name = "CyanPurpleGradient"
-	gradient.Color = ColorSequence.new({
-		ColorSequenceKeypoint.new(0, CYAN),
-		ColorSequenceKeypoint.new(0.5, PURPLE),
-		ColorSequenceKeypoint.new(1, CYAN)
-	})
-	gradient.Rotation = 0
-	gradient.Parent = stroke
-
-	task.spawn(function()
-		while gradient and gradient.Parent do
-			local tween = TweenService:Create(
-				gradient,
-				TweenInfo.new(3, Enum.EasingStyle.Linear),
-				{Rotation = gradient.Rotation + 360}
-			)
-			tween:Play()
-			tween.Completed:Wait()
-		end
-	end)
-
-	return stroke
-end
-
-local function clearPlatform()
-	if currentPlatform then
-		currentPlatform:Destroy()
-		currentPlatform = nil
-	end
-end
-
-local function cloneCheckpoints()
-	local copy = {}
-	for k, v in pairs(checkpoints) do copy[k] = v end
-	return copy
-end
-
-local function pushHistory()
-	table.insert(historyStack, cloneCheckpoints())
-	if #historyStack > MAX_HISTORY_STEPS then table.remove(historyStack, 1) end
-	table.clear(redoStack)
-end
-
-local function serializeCheckpoints()
-	local entries = {}
-	for i = 1, MAX_CHECKPOINTS do
-		local cpName = "CP" .. i
-		local data = checkpoints[cpName]
-		if data then
-			local x, y, z = data:GetComponents()
-			table.insert(entries, string.format("%s={%.4f,%.4f,%.4f}", cpName, x, y, z))
-		end
-	end
-	return table.concat(entries, "\n")
-end
-
-local function deserializeCheckpoints(content)
-	local loaded = {}
-	for line in content:gmatch("[^\r\n]+") do
-		local cpName, xStr, yStr, zStr = line:match("^(%w+)=%{(%S+),(%S+),(%S+)%}$")
-		if cpName and xStr and yStr and zStr then
-			local x, y, z = tonumber(xStr), tonumber(yStr), tonumber(zStr)
-			if x and y and z then loaded[cpName] = CFrame.new(x, y, z) end
-		end
-	end
-	return loaded
-end
-
-local function getSaveFilePath(name)
-	local safeName = name:gsub("[^%w%s_-]", ""):gsub("%s+", "_")
-	return SAVE_FOLDER .. safeName .. ".json"
-end
-
-local function saveCheckpointsToFile(fileName)
-	if not fileName or fileName == "" then fileName = currentSaveFileName end
-	local filePath = getSaveFilePath(fileName)
-
-	local success, err = pcall(function()
-		if writefile then writefile(filePath, serializeCheckpoints()) end
-	end)
-
-	if success then
-		currentSaveFileName = fileName
-		notify("Berhasil disimpan dengan nama: " .. fileName)
+BtnFullbright.MouseButton1Click:Connect(function()
+	States.Fullbright = not States.Fullbright
+	SetButton(BtnFullbright, States.Fullbright, "Fullbright ON", "Fullbright")
+	if States.Fullbright then
+		Lighting.FogEnd = 1e9
+		Lighting.Brightness = 2.2
+		Lighting.GlobalShadows = false
+		Lighting.ClockTime = 14
 	else
-		notify("Gagal menyimpan: " .. tostring(err))
+		Lighting.FogEnd = 1000
+		Lighting.Brightness = 1
+		Lighting.GlobalShadows = true
 	end
-end
+end)
 
-local function loadCheckpointsFromFile(fileName)
-	local filePath = getSaveFilePath(fileName)
-	local success, content = pcall(function()
-		if readfile then return readfile(filePath) end
-	end)
+BtnAntiRagdoll.MouseButton1Click:Connect(function()
+	States.AntiRagdoll = not States.AntiRagdoll
+	SetButton(BtnAntiRagdoll, States.AntiRagdoll, "Anti Ragdoll ON", "Anti Ragdoll")
+end)
 
-	if not success or not content then
-		notify("File " .. fileName .. " tidak ditemukan!")
-		return false
+BtnZoom.MouseButton1Click:Connect(function()
+	States.Zoom = not States.Zoom
+	SetButton(BtnZoom, States.Zoom, "Inf Zoom ON", "Inf Zoom")
+	LocalPlayer.CameraMaxZoomDistance = States.Zoom and 99999 or 128
+end)
+
+BtnDelete.MouseButton1Click:Connect(function()
+	pcall(function() RunService:UnbindFromRenderStep("AimbotSystem") end)
+	if BodyVelocity then BodyVelocity:Destroy() end
+	if BodyGyro then BodyGyro:Destroy() end
+	FOVCircle:Remove()
+	for _, data in pairs(ESPDrawings) do
+		for _, line in pairs(data.Lines) do pcall(function() line:Remove() end) end
+		pcall(function() data.Name:Remove() end)
+		pcall(function() data.Dist:Remove() end)
 	end
+	ScreenGui:Destroy()
+end)
 
-	pushHistory()
-	table.clear(checkpoints)
-
-	local loaded = deserializeCheckpoints(content)
-	local count = 0
-	for cpName, cframe in pairs(loaded) do
-		checkpoints[cpName] = cframe
-		count += 1
+-- Keybinds
+UIS.InputBegan:Connect(function(input, processed)
+	if processed then return end
+	local key = input.KeyCode
+	if key == Enum.KeyCode.G then ToggleShield()
+	elseif key == Enum.KeyCode.J then ToggleJump()
+	elseif key == Enum.KeyCode.N then ToggleNoclip()
+	elseif key == Enum.KeyCode.F then ToggleFly()
+	elseif key == Enum.KeyCode.K then ToggleAimbot()
+	elseif key == Enum.KeyCode.H then ToggleMenu()
 	end
+end)
 
-	currentSaveFileName = fileName
-	notify("Memuat " .. count .. " checkpoint dari: " .. fileName)
-	if updateUI then updateUI() end
-	return true
-end
-
-local function deleteSaveFile(fileName)
-	local filePath = getSaveFilePath(fileName)
-	local success, err = pcall(function()
-		if delfile then
-			delfile(filePath)
+-- Loops (Shield Asli)
+RunService.Heartbeat:Connect(function()
+	local char = LocalPlayer.Character
+	local hum = char and char:FindFirstChildOfClass("Humanoid")
+	if hum then
+		hum.WalkSpeed = Speed
+		if States.Shield then
+			if hum.Health < hum.MaxHealth then hum.Health = hum.MaxHealth end
+			if not char:FindFirstChildOfClass("ForceField") then
+				Instance.new("ForceField", char)
+			end
 		end
-	end)
-
-	if success then
-		notify("Berhasil menghapus save: " .. fileName)
-	else
-		notify("Gagal menghapus file: " .. tostring(err))
-	end
-end
-
-local function createTeleportGui()
-	local oldGui = playerGui:FindFirstChild("TeleportToolGui")
-	if oldGui then oldGui:Destroy() end
-
-	local screenGui = Instance.new("ScreenGui")
-	screenGui.Name = "TeleportToolGui"
-	screenGui.Parent = playerGui
-	screenGui.ResetOnSpawn = false
-	screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-
-	local openButton = Instance.new("TextButton")
-	openButton.Name = "OpenButtonTp"
-	openButton.Parent = screenGui
-	openButton.BackgroundColor3 = Color3.fromRGB(24, 24, 28)
-	openButton.Position = UDim2.new(0.9, 0, 0.5, 0)
-	openButton.Size = UDim2.fromOffset(50, 50)
-	openButton.Font = Enum.Font.GothamBold
-	openButton.Text = "TP"
-	openButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-	openButton.TextSize = 18
-	openButton.Active = true
-	addCorner(openButton, 25)
-	addStroke(openButton, 2)
-
-	local mainFrame = Instance.new("Frame")
-	mainFrame.Name = "MainFrame"
-	mainFrame.Parent = screenGui
-	mainFrame.BackgroundColor3 = Color3.fromRGB(24, 24, 28)
-	mainFrame.BorderSizePixel = 0
-	mainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-	mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
-	mainFrame.Size = UDim2.new(0, 310, 0, 500)
-	mainFrame.Active = true
-	mainFrame.Visible = false
-	addCorner(mainFrame, 12)
-	addStroke(mainFrame, 2)
-
-	local titleBar = Instance.new("Frame")
-	titleBar.Name = "TitleBar"
-	titleBar.Parent = mainFrame
-	titleBar.BackgroundColor3 = Color3.fromRGB(35, 35, 42)
-	titleBar.BorderSizePixel = 0
-	titleBar.Size = UDim2.new(1, 0, 0, 45)
-	addCorner(titleBar, 12)
-
-	local titleLabel = Instance.new("TextLabel")
-	titleLabel.Name = "TitleLabel"
-	titleLabel.Parent = titleBar
-	titleLabel.BackgroundTransparency = 1
-	titleLabel.Position = UDim2.new(0, 12, 0, 0)
-	titleLabel.Size = UDim2.new(1, -80, 1, 0)
-	titleLabel.Font = Enum.Font.GothamBold
-	titleLabel.Text = GUI_TITLE
-	titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-	titleLabel.TextSize = 14
-	titleLabel.TextXAlignment = Enum.TextXAlignment.Left
-
-	local minimizeButton = Instance.new("TextButton")
-	minimizeButton.Name = "MinimizeButton"
-	minimizeButton.Parent = titleBar
-	minimizeButton.BackgroundColor3 = COLOR_INACTIVE_GRAY
-	minimizeButton.BorderSizePixel = 0
-	minimizeButton.Position = UDim2.new(1, -65, 0, 8)
-	minimizeButton.Size = UDim2.new(0, 28, 0, 28)
-	minimizeButton.Font = Enum.Font.GothamBold
-	minimizeButton.Text = "−"
-	minimizeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-	minimizeButton.TextSize = 16
-	addCorner(minimizeButton, 6)
-	addStroke(minimizeButton, 1)
-
-	local closeButton = Instance.new("TextButton")
-	closeButton.Name = "CloseButton"
-	closeButton.Parent = titleBar
-	closeButton.BackgroundColor3 = COLOR_RED_OFF
-	closeButton.BorderSizePixel = 0
-	closeButton.Position = UDim2.new(1, -32, 0, 8)
-	closeButton.Size = UDim2.new(0, 28, 0, 28)
-	closeButton.Font = Enum.Font.GothamBold
-	closeButton.Text = "×"
-	closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-	closeButton.TextSize = 18
-	addCorner(closeButton, 6)
-	addStroke(closeButton, 1)
-
-	local contentFrame = Instance.new("Frame")
-	contentFrame.Name = "ContentFrame"
-	contentFrame.Parent = mainFrame
-	contentFrame.BackgroundTransparency = 1
-	contentFrame.Position = UDim2.new(0, 10, 0, 52)
-	contentFrame.Size = UDim2.new(1, -20, 1, -60)
-
-	local modeFrame = Instance.new("Frame")
-	modeFrame.Name = "ModeFrame"
-	modeFrame.Parent = contentFrame
-	modeFrame.BackgroundTransparency = 1
-	modeFrame.Size = UDim2.new(1, 0, 0, 32)
-
-	local setLokasiButton = Instance.new("TextButton")
-	setLokasiButton.Name = "SetLokasiButton"
-	setLokasiButton.Parent = modeFrame
-	setLokasiButton.BackgroundColor3 = COLOR_ACTIVE_GREEN
-	setLokasiButton.BorderSizePixel = 0
-	setLokasiButton.Size = UDim2.new(0.38, 0, 1, 0)
-	setLokasiButton.Font = Enum.Font.GothamBold
-	setLokasiButton.Text = "SET LOKASI"
-	setLokasiButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-	setLokasiButton.TextSize = 10
-	addCorner(setLokasiButton, 6)
-	addStroke(setLokasiButton, 1)
-
-	local teleportButton = Instance.new("TextButton")
-	teleportButton.Name = "TeleportButton"
-	teleportButton.Parent = modeFrame
-	teleportButton.BackgroundColor3 = COLOR_INACTIVE_GRAY
-	teleportButton.BorderSizePixel = 0
-	teleportButton.Position = UDim2.new(0.40, 0, 0, 0)
-	teleportButton.Size = UDim2.new(0.38, 0, 1, 0)
-	teleportButton.Font = Enum.Font.GothamBold
-	teleportButton.Text = "TELEPORT"
-	teleportButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-	teleportButton.TextSize = 10
-	addCorner(teleportButton, 6)
-	addStroke(teleportButton, 1)
-
-	local undoButton = Instance.new("TextButton")
-	undoButton.Name = "UndoButton"
-	undoButton.Parent = modeFrame
-	undoButton.BackgroundColor3 = COLOR_INACTIVE_GRAY
-	undoButton.BorderSizePixel = 0
-	undoButton.Position = UDim2.new(0.80, 0, 0, 0)
-	undoButton.Size = UDim2.new(0.09, 0, 1, 0)
-	undoButton.Font = Enum.Font.GothamBold
-	undoButton.Text = "↩️"
-	undoButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-	undoButton.TextSize = 12
-	addCorner(undoButton, 6)
-	addStroke(undoButton, 1)
-
-	local redoButton = Instance.new("TextButton")
-	redoButton.Name = "RedoButton"
-	redoButton.Parent = modeFrame
-	redoButton.BackgroundColor3 = COLOR_INACTIVE_GRAY
-	redoButton.BorderSizePixel = 0
-	redoButton.Position = UDim2.new(0.91, 0, 0, 0)
-	redoButton.Size = UDim2.new(0.09, 0, 1, 0)
-	redoButton.Font = Enum.Font.GothamBold
-	redoButton.Text = "↪️"
-	redoButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-	redoButton.TextSize = 12
-	addCorner(redoButton, 6)
-	addStroke(redoButton, 1)
-
-	local methodFrame = Instance.new("Frame")
-	methodFrame.Name = "MethodFrame"
-	methodFrame.Parent = contentFrame
-	methodFrame.BackgroundTransparency = 1
-	methodFrame.Position = UDim2.new(0, 0, 0, 38)
-	methodFrame.Size = UDim2.new(1, 0, 0, 32)
-
-	local methodToggleBtn = Instance.new("TextButton")
-	methodToggleBtn.Name = "MethodToggleBtn"
-	methodToggleBtn.Parent = methodFrame
-	methodToggleBtn.BackgroundColor3 = COLOR_INACTIVE_GRAY
-	methodToggleBtn.BorderSizePixel = 0
-	methodToggleBtn.Size = UDim2.new(0.38, 0, 1, 0)
-	methodToggleBtn.Font = Enum.Font.GothamBold
-	methodToggleBtn.Text = "MODE: INSTAN"
-	methodToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-	methodToggleBtn.TextSize = 10
-	addCorner(methodToggleBtn, 6)
-	addStroke(methodToggleBtn, 1)
-
-	local speedSubFrame = Instance.new("Frame")
-	speedSubFrame.Name = "SpeedSubFrame"
-	speedSubFrame.Parent = methodFrame
-	speedSubFrame.BackgroundTransparency = 1
-	speedSubFrame.Position = UDim2.new(0.40, 0, 0, 0)
-	speedSubFrame.Size = UDim2.new(0.60, 0, 1, 0)
-
-	local speedDownBtn = Instance.new("TextButton")
-	speedDownBtn.Name = "SpeedDownBtn"
-	speedDownBtn.Parent = speedSubFrame
-	speedDownBtn.BackgroundColor3 = COLOR_INACTIVE_GRAY
-	speedDownBtn.BorderSizePixel = 0
-	speedDownBtn.Size = UDim2.new(0, 24, 1, 0)
-	speedDownBtn.Font = Enum.Font.GothamBold
-	speedDownBtn.Text = "-"
-	speedDownBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-	speedDownBtn.TextSize = 12
-	addCorner(speedDownBtn, 5)
-	addStroke(speedDownBtn, 1)
-
-	local speedDisplay = Instance.new("TextButton")
-	speedDisplay.Name = "SpeedDisplay"
-	speedDisplay.Parent = speedSubFrame
-	speedDisplay.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
-	speedDisplay.BorderSizePixel = 0
-	speedDisplay.Position = UDim2.new(0, 28, 0, 0)
-	speedDisplay.Size = UDim2.new(1, -56, 1, 0)
-	speedDisplay.Font = Enum.Font.GothamBold
-	speedDisplay.Text = string.format("Spd: %.3fs", TWEEN_SPEED)
-	speedDisplay.TextColor3 = Color3.fromRGB(255, 255, 255)
-	speedDisplay.TextSize = 10
-	addCorner(speedDisplay, 5)
-	addStroke(speedDisplay, 1)
-
-	local speedUpBtn = Instance.new("TextButton")
-	speedUpBtn.Name = "SpeedUpBtn"
-	speedUpBtn.Parent = speedSubFrame
-	speedUpBtn.BackgroundColor3 = COLOR_INACTIVE_GRAY
-	speedUpBtn.BorderSizePixel = 0
-	speedUpBtn.Position = UDim2.new(1, -24, 0, 0)
-	speedUpBtn.Size = UDim2.new(0, 24, 1, 0)
-	speedUpBtn.Font = Enum.Font.GothamBold
-	speedUpBtn.Text = "+"
-	speedUpBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-	speedUpBtn.TextSize = 12
-	addCorner(speedUpBtn, 5)
-	addStroke(speedUpBtn, 1)
-
-	local actionFrame = Instance.new("Frame")
-	actionFrame.Name = "ActionFrame"
-	actionFrame.Parent = contentFrame
-	actionFrame.BackgroundTransparency = 1
-	actionFrame.Position = UDim2.new(0, 0, 0, 75)
-	actionFrame.Size = UDim2.new(1, 0, 0, 72)
-
-	local autoButton = Instance.new("TextButton")
-	autoButton.Name = "AutoTeleportButton"
-	autoButton.Parent = actionFrame
-	autoButton.BackgroundColor3 = COLOR_INACTIVE_GRAY
-	autoButton.BorderSizePixel = 0
-	autoButton.Size = UDim2.new(0.48, 0, 0, 32)
-	autoButton.Font = Enum.Font.GothamBold
-	autoButton.Text = "AUTO TELEPORT"
-	autoButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-	autoButton.TextSize = 10
-	addCorner(autoButton, 6)
-	addStroke(autoButton, 1)
-
-	local loopButton = Instance.new("TextButton")
-	loopButton.Name = "LoopButton"
-	loopButton.Parent = actionFrame
-	loopButton.BackgroundColor3 = COLOR_INACTIVE_GRAY
-	loopButton.BorderSizePixel = 0
-	loopButton.Position = UDim2.new(0.52, 0, 0, 0)
-	loopButton.Size = UDim2.new(0.48, 0, 0, 32)
-	loopButton.Font = Enum.Font.GothamBold
-	loopButton.Text = "LOOP: OFF"
-	loopButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-	loopButton.TextSize = 10
-	addCorner(loopButton, 6)
-	addStroke(loopButton, 1)
-
-	local stopButton = Instance.new("TextButton")
-	stopButton.Name = "StopButton"
-	stopButton.Parent = actionFrame
-	stopButton.BackgroundColor3 = COLOR_RED_OFF
-	stopButton.BorderSizePixel = 0
-	stopButton.Position = UDim2.new(0, 0, 0, 36)
-	stopButton.Size = UDim2.new(1, 0, 0, 32)
-	stopButton.Font = Enum.Font.GothamBold
-	stopButton.Text = "⛔ STOP AUTO"
-	stopButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-	stopButton.TextSize = 11
-	addCorner(stopButton, 6)
-	addStroke(stopButton, 1)
-
-	local fileFrame = Instance.new("Frame")
-	fileFrame.Name = "FileFrame"
-	fileFrame.Parent = contentFrame
-	fileFrame.BackgroundTransparency = 1
-	fileFrame.Position = UDim2.new(0, 0, 0, 152)
-	fileFrame.Size = UDim2.new(1, 0, 0, 30)
-
-	local saveButton = Instance.new("TextButton")
-	saveButton.Name = "SaveButton"
-	saveButton.Parent = fileFrame
-	saveButton.BackgroundColor3 = COLOR_ACTIVE_GREEN
-	saveButton.BorderSizePixel = 0
-	saveButton.Size = UDim2.new(0.48, 0, 1, 0)
-	saveButton.Font = Enum.Font.GothamBold
-	saveButton.Text = "💾 SAVE"
-	saveButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-	saveButton.TextSize = 11
-	addCorner(saveButton, 6)
-	addStroke(saveButton, 1)
-
-	local loadButton = Instance.new("TextButton")
-	loadButton.Name = "LoadButton"
-	loadButton.Parent = fileFrame
-	loadButton.BackgroundColor3 = COLOR_CP_TELEPORT
-	loadButton.BorderSizePixel = 0
-	loadButton.Position = UDim2.new(0.52, 0, 0, 0)
-	loadButton.Size = UDim2.new(0.48, 0, 1, 0)
-	loadButton.Font = Enum.Font.GothamBold
-	loadButton.Text = "📂 LOAD"
-	loadButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-	loadButton.TextSize = 11
-	addCorner(loadButton, 6)
-	addStroke(loadButton, 1)
-
-	local scrollingFrame = Instance.new("ScrollingFrame")
-	scrollingFrame.Name = "ScrollingFrame"
-	scrollingFrame.Parent = contentFrame
-	scrollingFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
-	scrollingFrame.BorderSizePixel = 0
-	scrollingFrame.Position = UDim2.new(0, 0, 0, 188)
-	scrollingFrame.Size = UDim2.new(1, 0, 1, -188)
-	scrollingFrame.ScrollBarThickness = 4
-	scrollingFrame.ScrollBarImageColor3 = CYAN
-	scrollingFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
-	scrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
-	scrollingFrame.ScrollingDirection = Enum.ScrollingDirection.Y
-	addCorner(scrollingFrame, 8)
-	addStroke(scrollingFrame, 1)
-
-	local listLayout = Instance.new("UIListLayout")
-	listLayout.Name = "ListLayout"
-	listLayout.Parent = scrollingFrame
-	listLayout.SortOrder = Enum.SortOrder.LayoutOrder
-	listLayout.Padding = UDim.new(0, 5)
-
-	local listPadding = Instance.new("UIPadding")
-	listPadding.Name = "ListPadding"
-	listPadding.Parent = scrollingFrame
-	listPadding.PaddingTop = UDim.new(0, 5)
-	listPadding.PaddingBottom = UDim.new(0, 5)
-	listPadding.PaddingLeft = UDim.new(0, 5)
-	listPadding.PaddingRight = UDim.new(0, 5)
-
-	for i = 1, MAX_CHECKPOINTS do
-		local cpButton = Instance.new("TextButton")
-		cpButton.Name = "CP" .. i
-		cpButton.Parent = scrollingFrame
-		cpButton.BackgroundColor3 = COLOR_INACTIVE_GRAY
-		cpButton.BorderSizePixel = 0
-		cpButton.Size = UDim2.new(1, 0, 0, 35)
-		cpButton.Font = Enum.Font.GothamMedium
-		cpButton.Text = "CP" .. i
-		cpButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-		cpButton.TextSize = 11
-		cpButton.TextXAlignment = Enum.TextXAlignment.Center
-		cpButton.LayoutOrder = i
-		addCorner(cpButton, 6)
-		addStroke(cpButton, 1)
 	end
 
-	return {
-		ScreenGui = screenGui,
-		OpenButton = openButton,
-		MainFrame = mainFrame,
-		TitleBar = titleBar,
-		MinimizeButton = minimizeButton,
-		CloseButton = closeButton,
-		ContentFrame = contentFrame,
-		SetLokasiButton = setLokasiButton,
-		TeleportButton = teleportButton,
-		UndoButton = undoButton,
-		RedoButton = redoButton,
-		MethodToggleBtn = methodToggleBtn,
-		SpeedDisplay = speedDisplay,
-		SpeedUpBtn = speedUpBtn,
-		SpeedDownBtn = speedDownBtn,
-		AutoTeleportButton = autoButton,
-		LoopButton = loopButton,
-		StopButton = stopButton,
-		SaveButton = saveButton,
-		LoadButton = loadButton,
-		ScrollingFrame = scrollingFrame
-	}
-end
-
-local function makeDraggable(objectToMove, dragHandle)
-	local dragging = false
-	local dragStart = Vector3.new()
-	local startPos = UDim2.new()
-
-	dragHandle.InputBegan:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-			dragging = true
-			dragStart = input.Position
-			startPos = objectToMove.Position
-
-			input.Changed:Connect(function()
-				if input.UserInputState == Enum.UserInputState.End then
-					dragging = false
+	if States.Hitbox then
+		for _, plr in pairs(Players:GetPlayers()) do
+			if plr ~= LocalPlayer and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+				local hrp = plr.Character.HumanoidRootPart
+				if not OriginalSizes[plr] then
+					OriginalSizes[plr] = hrp.Size
 				end
-			end)
+				hrp.Size = Vector3.new(11, 14, 5)
+				hrp.Transparency = 0.55
+				hrp.CanCollide = false
+			end
 		end
+	end
+end)
+
+UIS.JumpRequest:Connect(function()
+	if States.Jump then
+		local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+		if root then root.Velocity = Vector3.new(root.Velocity.X, 70, root.Velocity.Z) end
+	end
+end)
+
+RunService.Stepped:Connect(function()
+	if States.Noclip and LocalPlayer.Character then
+		for _, part in pairs(LocalPlayer.Character:GetDescendants()) do
+			if part:IsA("BasePart") then part.CanCollide = false end
+		end
+	end
+end)
+
+-- ==================== PERBAIKAN FLY UNIVERSAL (PC & MOBILE) ====================
+RunService.RenderStepped:Connect(function(dt)
+	if not States.Fly then return end
+	local char = LocalPlayer.Character
+	local root = char and char:FindFirstChild("HumanoidRootPart")
+	local hum = char and char:FindFirstChildOfClass("Humanoid")
+	if not root or not BodyVelocity or not hum then return end
+
+	local moveDir = hum.MoveDirection
+	local cameraCF = Camera.CFrame
+	local velocity = Vector3.zero
+
+	if moveDir.Magnitude > 0 then
+		-- Proyeksi input pergerakan (Mendukung WASD PC & Touch Joystick Mobile secara bersamaan)
+		local lookH = Vector3.new(cameraCF.LookVector.X, 0, cameraCF.LookVector.Z)
+		local rightH = Vector3.new(cameraCF.RightVector.X, 0, cameraCF.RightVector.Z)
+		
+		if lookH.Magnitude > 0 then lookH = lookH.Unit end
+		if rightH.Magnitude > 0 then rightH = rightH.Unit end
+
+		local forwardInput = moveDir:Dot(lookH)
+		local rightInput = moveDir:Dot(rightH)
+
+		-- Menghasilkan arah pergerakan 3D mengikuti sudut pandang Kamera
+		local flyDirection = (cameraCF.LookVector * forwardInput) + (cameraCF.RightVector * rightInput)
+		if flyDirection.Magnitude > 0 then
+			velocity = flyDirection.Unit * (Speed * 3)
+		end
+	end
+
+	-- Kontrol vertikal khusus PC (Space = Naik, Shift/Ctrl = Turun)
+	if UIS:IsKeyDown(Enum.KeyCode.Space) then
+		velocity = velocity + Vector3.new(0, Speed * 2, 0)
+	elseif UIS:IsKeyDown(Enum.KeyCode.LeftControl) or UIS:IsKeyDown(Enum.KeyCode.LeftShift) then
+		velocity = velocity - Vector3.new(0, Speed * 2, 0)
+	end
+
+	-- Kontrol vertikal saat tombol Jump ditekan pada layar Mobile
+	if isMobile and hum.Jump then
+		velocity = velocity + Vector3.new(0, Speed * 2, 0)
+	end
+
+	BodyVelocity.Velocity = velocity
+	if BodyGyro then
+		BodyGyro.CFrame = cameraCF
+	end
+end)
+
+if isPC then
+	UIS.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton2 then HoldingRightClick = true end
 	end)
-
-	UserInputService.InputChanged:Connect(function(input)
-		if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-			local camera = workspace.CurrentCamera
-			local screenSize = camera and camera.ViewportSize or Vector2.new(800, 600)
-			local delta = input.Position - dragStart
-
-			local absSize = objectToMove.AbsoluteSize
-			local halfWidth = absSize.X / 2
-			local halfHeight = absSize.Y / 2
-
-			local rawX = (startPos.X.Scale * screenSize.X) + startPos.X.Offset + delta.X
-			local rawY = (startPos.Y.Scale * screenSize.Y) + startPos.Y.Offset + delta.Y
-
-			local clampedX = math.clamp(rawX, halfWidth, screenSize.X - halfWidth)
-			local clampedY = math.clamp(rawY, halfHeight, screenSize.Y - halfHeight)
-
-			objectToMove.Position = UDim2.new(0, clampedX, 0, clampedY)
-		end
+	UIS.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton2 then HoldingRightClick = false end
 	end)
 end
 
-function updateUI()
-	if not guiElements.SetLokasiButton then return end
+-- AIMBOT
+local function UpdateAimbot()
+	FOVCircle.Position = Camera.ViewportSize / 2
+	FOVCircle.Radius = FOV
+	FOVCircle.Color = FOVColor
+	FOVCircle.Transparency = FOVTransparency
+	FOVCircle.Visible = States.Aimbot and States.ShowFOV
 
-	if currentMode == "Set Lokasi" then
-		guiElements.SetLokasiButton.BackgroundColor3 = COLOR_ACTIVE_GREEN
-		guiElements.TeleportButton.BackgroundColor3 = COLOR_INACTIVE_GRAY
-	else
-		guiElements.SetLokasiButton.BackgroundColor3 = COLOR_INACTIVE_GRAY
-		guiElements.TeleportButton.BackgroundColor3 = COLOR_CP_TELEPORT
-	end
+	local canAim = (isPC and States.Aimbot and HoldingRightClick) or (isMobile and States.Aimbot) or (not isPC and not isMobile and States.Aimbot)
+	if not canAim then return end
 
-	if tpMethod == "Tween" then
-		guiElements.MethodToggleBtn.Text = "MODE: TWEEN"
-		guiElements.MethodToggleBtn.BackgroundColor3 = COLOR_ACTIVE_GREEN
-		guiElements.SpeedDisplay.Visible = true
-		guiElements.SpeedUpBtn.Visible = true
-		guiElements.SpeedDownBtn.Visible = true
-	else
-		guiElements.MethodToggleBtn.Text = "MODE: INSTAN"
-		guiElements.MethodToggleBtn.BackgroundColor3 = COLOR_INACTIVE_GRAY
-		guiElements.SpeedDisplay.Visible = false
-		guiElements.SpeedUpBtn.Visible = false
-		guiElements.SpeedDownBtn.Visible = false
-	end
-
-	if autoTeleport then
-		guiElements.AutoTeleportButton.Text = "AUTO: ON"
-		guiElements.AutoTeleportButton.BackgroundColor3 = COLOR_ACTIVE_GREEN
-	else
-		guiElements.AutoTeleportButton.Text = "AUTO TELEPORT"
-		guiElements.AutoTeleportButton.BackgroundColor3 = COLOR_INACTIVE_GRAY
-	end
-
-	if loopEnabled then
-		guiElements.LoopButton.Text = "LOOP: ON"
-		guiElements.LoopButton.BackgroundColor3 = COLOR_ACTIVE_GREEN
-	else
-		guiElements.LoopButton.Text = "LOOP: OFF"
-		guiElements.LoopButton.BackgroundColor3 = COLOR_INACTIVE_GRAY
-	end
-
-	guiElements.SpeedDisplay.Text = string.format("Spd: %.3fs", TWEEN_SPEED)
-
-	for i = 1, MAX_CHECKPOINTS do
-		local cpName = "CP" .. i
-		local cpButton = guiElements.ScrollingFrame:FindFirstChild(cpName)
-
-		if cpButton then
-			local hasData = checkpoints[cpName] ~= nil
-
-			if currentMode == "Set Lokasi" then
-				cpButton.Visible = true
-				cpButton.Text = cpName
-				if hasData then
-					cpButton.BackgroundColor3 = COLOR_CP_FILLED_SET
-				else
-					cpButton.BackgroundColor3 = COLOR_INACTIVE_GRAY
-				end
-			elseif currentMode == "Teleport" then
-				if hasData then
-					cpButton.Visible = true
-					cpButton.Text = "🚀 " .. cpName
-					cpButton.BackgroundColor3 = COLOR_CP_TELEPORT
-				else
-					cpButton.Visible = false
+	local closest, shortest = nil, math.huge
+	local center = Camera.ViewportSize / 2
+	for _, plr in pairs(Players:GetPlayers()) do
+		if plr ~= LocalPlayer and plr.Character and plr.Character:FindFirstChild("Head") then
+			local hum = plr.Character:FindFirstChildOfClass("Humanoid")
+			if hum and hum.Health > 0 then
+				local pos, visible = Camera:WorldToViewportPoint(plr.Character.Head.Position)
+				local dist = (Vector2.new(pos.X, pos.Y) - center).Magnitude
+				if visible and dist < shortest and dist < FOV then
+					shortest = dist
+					closest = plr
 				end
 			end
 		end
 	end
-end
-
-local function getLastCheckpoint()
-	local last = 0
-	for i = 1, MAX_CHECKPOINTS do
-		if checkpoints["CP" .. i] then last = i end
+	if closest and closest.Character and closest.Character:FindFirstChild("Head") then
+		Camera.CFrame = CFrame.new(Camera.CFrame.Position, closest.Character.Head.Position)
 	end
-	return last
 end
 
-local function createPlatform(cframe)
-	clearPlatform()
-	local platform = Instance.new("Part")
-	platform.Name = "TeleportPlatform_Invisible"
-	platform.Size = Vector3.new(6, 1, 6)
-	platform.CFrame = cframe * CFrame.new(0, -3.5, 0)
-	platform.Anchored = true
-	platform.CanCollide = true
-	platform.Transparency = 1
-	platform.Material = Enum.Material.SmoothPlastic
-	platform.Parent = workspace
+RunService:BindToRenderStep("AimbotSystem", Enum.RenderPriority.Camera.Value + 1, UpdateAimbot)
 
-	currentPlatform = platform
-end
-
-local function teleportToCheckpoint(index, isLastPoint)
-	local character = player.Character
-	if not character then return false end
-
-	local root = character:FindFirstChild("HumanoidRootPart")
-	if not root then return false end
-
-	local target = checkpoints["CP" .. index]
-	if not target then return false end
-
-	if tpMethod == "Instan" then
-		root.CFrame = target
-	else
-		local tweenInfo = TweenInfo.new(
-			TWEEN_SPEED,
-			Enum.EasingStyle.Linear,
-			Enum.EasingDirection.Out
-		)
-		local tween = TweenService:Create(root, tweenInfo, {CFrame = target})
-		tween:Play()
-		tween.Completed:Wait()
+-- ESP
+local function CreateESP(player)
+	if player == LocalPlayer then return end
+	local lines = {}
+	for i = 1, 5 do
+		local line = Drawing.new("Line")
+		line.Thickness = 1.6
+		line.Color = Color3.fromRGB(255, 50, 50)
+		line.Visible = false
+		table.insert(lines, line)
 	end
+	local name = Drawing.new("Text")
+	name.Size = 13
+	name.Center = true
+	name.Outline = true
+	name.Color = Color3.new(1, 1, 1)
+	name.Visible = false
+	local dist = Drawing.new("Text")
+	dist.Size = 12
+	dist.Center = true
+	dist.Outline = true
+	dist.Color = Color3.fromRGB(160, 190, 255)
+	dist.Visible = false
+	ESPDrawings[player] = {Lines = lines, Name = name, Dist = dist}
+end
 
-	if not isLastPoint then
-		createPlatform(target)
-	else
-		clearPlatform()
+for _, p in pairs(Players:GetPlayers()) do CreateESP(p) end
+Players.PlayerAdded:Connect(CreateESP)
+Players.PlayerRemoving:Connect(function(player)
+	local data = ESPDrawings[player]
+	if data then
+		for _, line in pairs(data.Lines) do pcall(function() line:Remove() end) end
+		pcall(function() data.Name:Remove() end)
+		pcall(function() data.Dist:Remove() end)
+		ESPDrawings[player] = nil
 	end
+end)
 
-	return true
+local function WorldToScreen(part)
+	if not part then return nil, false end
+	local pos, visible = Camera:WorldToViewportPoint(part.Position)
+	return Vector2.new(pos.X, pos.Y), visible
 end
 
-local function stopAutoTeleport()
-	autoTeleport = false
-	clearPlatform()
-	updateUI()
-	notify("Auto Teleport dihentikan.")
-end
-
-local function startAutoTeleport()
-	if autoTeleport then return end
-
-	local lastCheckpoint = getLastCheckpoint()
-	if lastCheckpoint < 1 then
-		notify("Belum ada CP yang disimpan.")
+RunService.RenderStepped:Connect(function()
+	if not States.ESP then
+		for _, data in pairs(ESPDrawings) do
+			for _, line in pairs(data.Lines) do line.Visible = false end
+			data.Name.Visible = false
+			data.Dist.Visible = false
+		end
 		return
 	end
 
-	autoTeleport = true
-	updateUI()
-	notify("Auto Teleport: CP1 sampai CP" .. lastCheckpoint)
+	for player, data in pairs(ESPDrawings) do
+		local char = player.Character
+		if char and char:FindFirstChildOfClass("Humanoid") and char.Humanoid.Health > 0 then
+			local head = char:FindFirstChild("Head")
+			local torso = char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso")
+			local lower = char:FindFirstChild("LowerTorso") or torso
+			local leftArm = char:FindFirstChild("LeftUpperArm") or char:FindFirstChild("Left Arm")
+			local rightArm = char:FindFirstChild("RightUpperArm") or char:FindFirstChild("Right Arm")
+			local leftLeg = char:FindFirstChild("LeftUpperLeg") or char:FindFirstChild("Left Leg")
+			local rightLeg = char:FindFirstChild("RightUpperLeg") or char:FindFirstChild("Right Leg")
+			local root = char:FindFirstChild("HumanoidRootPart")
 
-	task.spawn(function()
-		while autoTeleport do
-			local currentLast = getLastCheckpoint()
-			if currentLast < 1 then break end
+			local headPos, headVis = WorldToScreen(head)
+			local torsoPos, torsoVis = WorldToScreen(torso)
+			local lowerPos = WorldToScreen(lower)
+			local lArmPos = WorldToScreen(leftArm)
+			local rArmPos = WorldToScreen(rightArm)
+			local lLegPos = WorldToScreen(leftLeg)
+			local rLegPos = WorldToScreen(rightLeg)
 
-			for i = 1, currentLast do
-				if not autoTeleport or not checkpoints["CP" .. i] then break end
-				local isLastPoint = (i == currentLast)
-				teleportToCheckpoint(i, isLastPoint)
-				task.wait(TELEPORT_DELAY)
+			if headVis and torsoVis and States.ShowSkeleton then
+				data.Lines[1].From = headPos
+				data.Lines[1].To = torsoPos
+				data.Lines[1].Visible = true
+
+				if lArmPos then
+					data.Lines[2].From = torsoPos
+					data.Lines[2].To = lArmPos
+					data.Lines[2].Visible = true
+				else data.Lines[2].Visible = false end
+
+				if rArmPos then
+					data.Lines[3].From = torsoPos
+					data.Lines[3].To = rArmPos
+					data.Lines[3].Visible = true
+				else data.Lines[3].Visible = false end
+
+				if lLegPos then
+					data.Lines[4].From = lowerPos or torsoPos
+					data.Lines[4].To = lLegPos
+					data.Lines[4].Visible = true
+				else data.Lines[4].Visible = false end
+
+				if rLegPos then
+					data.Lines[5].From = lowerPos or torsoPos
+					data.Lines[5].To = rLegPos
+					data.Lines[5].Visible = true
+				else data.Lines[5].Visible = false end
+			else
+				for i = 1, 5 do data.Lines[i].Visible = false end
 			end
 
-			if not loopEnabled then break end
-			task.wait(TELEPORT_DELAY)
-		end
+			if States.ShowNames and headVis then
+				data.Name.Text = player.Name
+				data.Name.Position = Vector2.new(headPos.X, headPos.Y - 20)
+				data.Name.Visible = true
+			else
+				data.Name.Visible = false
+			end
 
-		autoTeleport = false
-		updateUI()
-	end)
-end
-
-local function openSaveWindow()
-	local existingPopup = playerGui:FindFirstChild("SavePopupGui")
-	if existingPopup then existingPopup:Destroy() end
-
-	local popupGui = Instance.new("ScreenGui")
-	popupGui.Name = "SavePopupGui"
-	popupGui.Parent = playerGui
-	popupGui.ResetOnSpawn = false
-	popupGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-
-	local popFrame = Instance.new("Frame")
-	popFrame.Parent = popupGui
-	popFrame.BackgroundColor3 = Color3.fromRGB(28, 28, 35)
-	popFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-	popFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
-	popFrame.Size = UDim2.new(0, 280, 0, 180)
-	addCorner(popFrame, 12)
-	addStroke(popFrame, 2)
-
-	local popTitle = Instance.new("TextLabel")
-	popTitle.Parent = popFrame
-	popTitle.BackgroundTransparency = 1
-	popTitle.Size = UDim2.new(1, 0, 0, 35)
-	popTitle.Font = Enum.Font.GothamBold
-	popTitle.Text = "💾 SIMPAN CHECKPOINT"
-	popTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
-	popTitle.TextSize = 13
-
-	local closePop = Instance.new("TextButton")
-	closePop.Parent = popFrame
-	closePop.BackgroundColor3 = COLOR_RED_OFF
-	closePop.Position = UDim2.new(1, -30, 0, 5)
-	closePop.Size = UDim2.new(0, 24, 0, 24)
-	closePop.Font = Enum.Font.GothamBold
-	closePop.Text = "×"
-	closePop.TextColor3 = Color3.fromRGB(255, 255, 255)
-	closePop.TextSize = 16
-	addCorner(closePop, 6)
-
-	closePop.MouseButton1Click:Connect(function() popupGui:Destroy() end)
-
-	local labelInfo = Instance.new("TextLabel")
-	labelInfo.Parent = popFrame
-	labelInfo.BackgroundTransparency = 1
-	labelInfo.Position = UDim2.new(0, 15, 0, 40)
-	labelInfo.Size = UDim2.new(1, -30, 0, 20)
-	labelInfo.Font = Enum.Font.Gotham
-	labelInfo.Text = "Masukkan Nama Save:"
-	labelInfo.TextColor3 = Color3.fromRGB(200, 200, 200)
-	labelInfo.TextSize = 11
-	labelInfo.TextXAlignment = Enum.TextXAlignment.Left
-
-	local textBox = Instance.new("TextBox")
-	textBox.Parent = popFrame
-	textBox.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
-	textBox.Position = UDim2.new(0, 15, 0, 65)
-	textBox.Size = UDim2.new(1, -30, 0, 35)
-	textBox.Font = Enum.Font.GothamMedium
-	textBox.PlaceholderText = "Contoh: Teleport 1"
-	textBox.Text = "Teleport 1"
-	textBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-	textBox.TextSize = 12
-	addCorner(textBox, 6)
-	addStroke(textBox, 1)
-
-	local confirmBtn = Instance.new("TextButton")
-	confirmBtn.Parent = popFrame
-	confirmBtn.BackgroundColor3 = COLOR_ACTIVE_GREEN
-	confirmBtn.Position = UDim2.new(0, 15, 0, 115)
-	confirmBtn.Size = UDim2.new(1, -30, 0, 40)
-	confirmBtn.Font = Enum.Font.GothamBold
-	confirmBtn.Text = "BIKIN SAVE"
-	confirmBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-	confirmBtn.TextSize = 12
-	addCorner(confirmBtn, 6)
-
-	confirmBtn.MouseButton1Click:Connect(function()
-		local text = textBox.Text
-		if text and text:gsub("%s+", "") ~= "" then
-			saveCheckpointsToFile(text)
-			popupGui:Destroy()
+			if States.ShowDistance and root and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and headVis then
+				local distance = (LocalPlayer.Character.HumanoidRootPart.Position - root.Position).Magnitude
+				data.Dist.Text = math.floor(distance) .. "m"
+				data.Dist.Position = Vector2.new(headPos.X, headPos.Y + 16)
+				data.Dist.Visible = true
+			else
+				data.Dist.Visible = false
+			end
 		else
-			notify("Nama tidak boleh kosong!")
+			for _, line in pairs(data.Lines) do line.Visible = false end
+			data.Name.Visible = false
+			data.Dist.Visible = false
 		end
-	end)
-end
+	end
+end)
 
-local function openLoadWindow()
-	local existingPopup = playerGui:FindFirstChild("LoadPopupGui")
-	if existingPopup then existingPopup:Destroy() end
-
-	local deleteMode = false
-
-	local popupGui = Instance.new("ScreenGui")
-	popupGui.Name = "LoadPopupGui"
-	popupGui.Parent = playerGui
-	popupGui.ResetOnSpawn = false
-	popupGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-
-	local popFrame = Instance.new("Frame")
-	popFrame.Parent = popupGui
-	popFrame.BackgroundColor3 = Color3.fromRGB(28, 28, 35)
-	popFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-	popFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
-	popFrame.Size = UDim2.new(0, 280, 0, 340)
-	addCorner(popFrame, 12)
-	addStroke(popFrame, 2)
-
-	local popTitle = Instance.new("TextLabel")
-	popTitle.Parent = popFrame
-	popTitle.BackgroundTransparency = 1
-	popTitle.Position = UDim2.new(0, 10, 0, 0)
-	popTitle.Size = UDim2.new(1, -50, 0, 35)
-	popTitle.Font = Enum.Font.GothamBold
-	popTitle.Text = "📂 PILIH SAVE (LOAD)"
-	popTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
-	popTitle.TextSize = 12
-	popTitle.TextXAlignment = Enum.TextXAlignment.Left
-
-	local closePop = Instance.new("TextButton")
-	closePop.Parent = popFrame
-	closePop.BackgroundColor3 = COLOR_RED_OFF
-	closePop.Position = UDim2.new(1, -30, 0, 6)
-	closePop.Size = UDim2.new(0, 24, 0, 24)
-	closePop.Font = Enum.Font.GothamBold
-	closePop.Text = "×"
-	closePop.TextColor3 = Color3.fromRGB(255, 255, 255)
-	closePop.TextSize = 16
-	addCorner(closePop, 6)
-
-	closePop.MouseButton1Click:Connect(function() popupGui:Destroy() end)
-
-	local deleteToggleBtn = Instance.new("TextButton")
-	deleteToggleBtn.Parent = popFrame
-	deleteToggleBtn.BackgroundColor3 = COLOR_INACTIVE_GRAY
-	deleteToggleBtn.Position = UDim2.new(0, 10, 0, 38)
-	deleteToggleBtn.Size = UDim2.new(1, -20, 0, 30)
-	deleteToggleBtn.Font = Enum.Font.GothamBold
-	deleteToggleBtn.Text = "DELETE: OFF"
-	deleteToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-	deleteToggleBtn.TextSize = 11
-	addCorner(deleteToggleBtn, 6)
-	addStroke(deleteToggleBtn, 1)
-
-	local popScroll = Instance.new("ScrollingFrame")
-	popScroll.Parent = popFrame
-	popScroll.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
-	popScroll.BorderSizePixel = 0
-	popScroll.Position = UDim2.new(0, 10, 0, 75)
-	popScroll.Size = UDim2.new(1, -20, 1, -85)
-	popScroll.ScrollBarThickness = 4
-	popScroll.ScrollBarImageColor3 = CYAN
-	popScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
-	addCorner(popScroll, 8)
-
-	local layout = Instance.new("UIListLayout")
-	layout.Parent = popScroll
-	layout.Padding = UDim.new(0, 5)
-
-	local function refreshFileList()
-		for _, child in ipairs(popScroll:GetChildren()) do
-			if child:IsA("TextButton") or child:IsA("TextLabel") then
-				child:Destroy()
-			end
+-- Anti Ragdoll
+RunService.Heartbeat:Connect(function()
+	if not States.AntiRagdoll then return end
+	local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+	if hum then
+		local state = hum:GetState()
+		if state == Enum.HumanoidStateType.Ragdoll or state == Enum.HumanoidStateType.FallingDown then
+			hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+			hum.Sit = false
 		end
+	end
+end)
 
-		local files = {}
-		pcall(function()
-			if listfiles then files = listfiles(SAVE_FOLDER) end
-		end)
-
-		local fileNamesFound = {}
-		for _, filePath in ipairs(files) do
-			local baseName = filePath:match("([^/\\]+)$")
-			if baseName then
-				local fileName = baseName:match("^(.*)%.json$")
-				if fileName then table.insert(fileNamesFound, fileName) end
-			end
-		end
-
-		table.sort(fileNamesFound)
-
-		if #fileNamesFound == 0 then
-			local emptyText = Instance.new("TextLabel")
-			emptyText.Parent = popScroll
-			emptyText.BackgroundTransparency = 1
-			emptyText.Size = UDim2.new(1, 0, 0, 40)
-			emptyText.Font = Enum.Font.Gotham
-			emptyText.Text = "Belum ada file save."
-			emptyText.TextColor3 = Color3.fromRGB(150, 150, 150)
-			emptyText.TextSize = 11
-		else
-			for _, name in ipairs(fileNamesFound) do
-				local btn = Instance.new("TextButton")
-				btn.Parent = popScroll
-				btn.Size = UDim2.new(1, 0, 0, 35)
-				btn.Font = Enum.Font.GothamMedium
-				btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-				btn.TextSize = 12
-				addCorner(btn, 6)
-				addStroke(btn, 1)
-
-				if deleteMode then
-					btn.BackgroundColor3 = COLOR_RED_OFF
-					btn.Text = name .. "   ❌"
-				else
-					btn.BackgroundColor3 = COLOR_INACTIVE_GRAY
-					btn.Text = "📁 " .. name
-				end
-
-				btn.MouseButton1Click:Connect(function()
-					if deleteMode then
-						deleteSaveFile(name)
-						refreshFileList()
-					else
-						loadCheckpointsFromFile(name)
-						popupGui:Destroy()
-						updateUI()
-					end
-				end)
+-- Ctrl + Click TP
+UIS.InputBegan:Connect(function(input, processed)
+	if processed then return end
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		if UIS:IsKeyDown(Enum.KeyCode.LeftControl) then
+			local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+			if root then
+				root.CFrame = CFrame.new(Mouse.Hit.Position + Vector3.new(0, 3, 0))
 			end
 		end
 	end
-
-	deleteToggleBtn.MouseButton1Click:Connect(function()
-		deleteMode = not deleteMode
-		if deleteMode then
-			deleteToggleBtn.Text = "DELETE: ON ❌"
-			deleteToggleBtn.BackgroundColor3 = COLOR_RED_OFF
-		else
-			deleteToggleBtn.Text = "DELETE: OFF"
-			deleteToggleBtn.BackgroundColor3 = COLOR_INACTIVE_GRAY
-		end
-		refreshFileList()
-	end)
-
-	refreshFileList()
-end
-
-guiElements = createTeleportGui()
-
--- Mendaftarkan MainFrame dan OpenButton agar bisa digeser
-makeDraggable(guiElements.MainFrame, guiElements.TitleBar)
-makeDraggable(guiElements.OpenButton, guiElements.OpenButton)
-
-guiElements.OpenButton.MouseButton1Click:Connect(function()
-	local mainFrame = guiElements.MainFrame
-	local isOpening = not mainFrame.Visible
-
-	if isOpening then
-		mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
-	end
-
-	mainFrame.Visible = isOpening
 end)
 
-guiElements.SetLokasiButton.MouseButton1Click:Connect(function()
-	currentMode = "Set Lokasi"
-	updateUI()
-end)
-
-guiElements.TeleportButton.MouseButton1Click:Connect(function()
-	currentMode = "Teleport"
-	updateUI()
-end)
-
-guiElements.UndoButton.MouseButton1Click:Connect(function()
-	if #historyStack > 0 then
-		table.insert(redoStack, cloneCheckpoints())
-		checkpoints = table.remove(historyStack)
-		updateUI()
-		notify("Undo berhasil.")
-	else
-		notify("Tidak ada riwayat untuk di-undo.")
-	end
-end)
-
-guiElements.RedoButton.MouseButton1Click:Connect(function()
-	if #redoStack > 0 then
-		table.insert(historyStack, cloneCheckpoints())
-		checkpoints = table.remove(redoStack)
-		updateUI()
-		notify("Redo berhasil.")
-	else
-		notify("Tidak ada riwayat untuk di-redo.")
-	end
-end)
-
-guiElements.MethodToggleBtn.MouseButton1Click:Connect(function()
-	tpMethod = (tpMethod == "Tween") and "Instan" or "Tween"
-	updateUI()
-	notify("Mode TP diubah ke: " .. tpMethod)
-end)
-
-guiElements.SpeedUpBtn.MouseButton1Click:Connect(function()
-	TWEEN_SPEED = math.clamp(TWEEN_SPEED + 0.005, 0.001, 1.0)
-	updateUI()
-end)
-
-guiElements.SpeedDownBtn.MouseButton1Click:Connect(function()
-	TWEEN_SPEED = math.clamp(TWEEN_SPEED - 0.005, 0.001, 1.0)
-	updateUI()
-end)
-
-guiElements.AutoTeleportButton.MouseButton1Click:Connect(function()
-	if autoTeleport then
-		stopAutoTeleport()
-	else
-		startAutoTeleport()
-	end
-end)
-
-guiElements.LoopButton.MouseButton1Click:Connect(function()
-	loopEnabled = not loopEnabled
-	updateUI()
-	notify(loopEnabled and "Loop ON." or "Loop OFF.")
-end)
-
-guiElements.StopButton.MouseButton1Click:Connect(function()
-	stopAutoTeleport()
-end)
-
-guiElements.SaveButton.MouseButton1Click:Connect(function()
-	openSaveWindow()
-end)
-
-guiElements.LoadButton.MouseButton1Click:Connect(function()
-	openLoadWindow()
-end)
-
-guiElements.MinimizeButton.MouseButton1Click:Connect(function()
-	isMinimized = not isMinimized
-	local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-
-	if isMinimized then
-		guiElements.MinimizeButton.Text = "+"
-		guiElements.ContentFrame.Visible = false
-		TweenService:Create(guiElements.MainFrame, tweenInfo, {Size = UDim2.new(0, 310, 0, 45)}):Play()
-	else
-		guiElements.MinimizeButton.Text = "−"
-		guiElements.ContentFrame.Visible = true
-		TweenService:Create(guiElements.MainFrame, tweenInfo, {Size = UDim2.new(0, 310, 0, 500)}):Play()
-	end
-end)
-
-guiElements.CloseButton.MouseButton1Click:Connect(function()
-	autoTeleport = false
-	loopEnabled = false
-	clearPlatform()
-	guiElements.ScreenGui:Destroy()
-end)
-
-for i = 1, MAX_CHECKPOINTS do
-	local cpButton = guiElements.ScrollingFrame:FindFirstChild("CP" .. i)
-
-	if cpButton then
-		local cpIndex = i
-
-		cpButton.MouseButton1Click:Connect(function()
-			local character = player.Character
-			if not character then
-				notify("Karakter tidak ditemukan!")
-				return
-			end
-
-			local root = character:FindFirstChild("HumanoidRootPart")
-			if not root then
-				notify("HumanoidRootPart tidak ditemukan!")
-				return
-			end
-
-			local cpName = "CP" .. cpIndex
-
-			if currentMode == "Set Lokasi" then
-				pushHistory()
-				checkpoints[cpName] = root.CFrame
-				notify("Lokasi " .. cpName .. " telah disimpan!")
-				updateUI()
-			elseif currentMode == "Teleport" then
-				local lastCheckpoint = getLastCheckpoint()
-				local isLastPoint = (cpIndex == lastCheckpoint)
-
-				if checkpoints[cpName] then
-					teleportToCheckpoint(cpIndex, isLastPoint)
-					notify("Berhasil teleport ke " .. cpName .. "!")
-				end
-			end
-		end)
-	end
-end
-
-updateUI()
+print("👑VOID VAINLY STAR")
