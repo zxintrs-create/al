@@ -574,7 +574,6 @@ local function createTeleportGui()
 	}
 end
 
--- SISTEM DRAG RESPONSIIF UNTUK PC MAUPUN MOBILE / ALL DPI
 local function makeDraggable(objectToMove, dragHandle)
 	local dragging = false
 	local dragStart = Vector3.new()
@@ -607,7 +606,6 @@ local function makeDraggable(objectToMove, dragHandle)
 			local rawX = (startPos.X.Scale * screenSize.X) + startPos.X.Offset + delta.X
 			local rawY = (startPos.Y.Scale * screenSize.Y) + startPos.Y.Offset + delta.Y
 
-			-- Batasi pergerakan agar selalu berada di dalam area viewport layar
 			local clampedX = math.clamp(rawX, halfWidth, screenSize.X - halfWidth)
 			local clampedY = math.clamp(rawY, halfHeight, screenSize.Y - halfHeight)
 
@@ -668,11 +666,10 @@ function updateUI()
 
 			if currentMode == "Set Lokasi" then
 				cpButton.Visible = true
+				cpButton.Text = cpName
 				if hasData then
-					cpButton.Text = cpName .. " [Tersimpan]"
 					cpButton.BackgroundColor3 = COLOR_CP_FILLED_SET
 				else
-					cpButton.Text = cpName .. " [Kosong]"
 					cpButton.BackgroundColor3 = COLOR_INACTIVE_GRAY
 				end
 			elseif currentMode == "Teleport" then
@@ -784,7 +781,6 @@ local function startAutoTeleport()
 	end)
 end
 
--- POPUP SAVE
 local function openSaveWindow()
 	local existingPopup = playerGui:FindFirstChild("SavePopupGui")
 	if existingPopup then existingPopup:Destroy() end
@@ -872,7 +868,6 @@ local function openSaveWindow()
 	end)
 end
 
--- POPUP LOAD
 local function openLoadWindow()
 	local existingPopup = playerGui:FindFirstChild("LoadPopupGui")
 	if existingPopup then existingPopup:Destroy() end
@@ -1028,13 +1023,11 @@ end
 guiElements = createTeleportGui()
 makeDraggable(guiElements.MainFrame, guiElements.TitleBar)
 
--- RESET POSISI MENU OTOMATIS SAAT TOMBOL OPEN DIKLIK
 guiElements.OpenButton.MouseButton1Click:Connect(function()
 	local mainFrame = guiElements.MainFrame
 	local isOpening = not mainFrame.Visible
 
 	if isOpening then
-		-- Kembalikan posisi otomatis ke tengah layar setiap kali di-open
 		mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 	end
 
