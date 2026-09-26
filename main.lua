@@ -1,4 +1,4 @@
-Local Players = game:GetService("Players")
+local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local StarterGui = game:GetService("StarterGui")
@@ -30,8 +30,9 @@ local currentPlatform = nil
 local CYAN = Color3.fromRGB(0, 255, 255)
 local PURPLE = Color3.fromRGB(145, 0, 255)
 
+-- Inisialisasi folder penyimpanan
 pcall(function()
-	if not isfolder(SAVE_FOLDER) then
+	if isfolder and not isfolder(SAVE_FOLDER) then
 		makefolder(SAVE_FOLDER)
 	end
 end)
@@ -131,15 +132,11 @@ local function serializeCheckpoints()
 
 		if data then
 			local x, y, z = data:GetComponents()
-
 			table.insert(
 				entries,
 				string.format(
-					"%s={%s,%s,%s}",
-					cpName,
-					string.format("%.4f", x),
-					string.format("%.4f", y),
-					string.format("%.4f", z)
+					"%s={%.4f,%.4f,%.4f}",
+					cpName, x, y, z
 				)
 			)
 		end
@@ -152,14 +149,10 @@ local function deserializeCheckpoints(content)
 	local loaded = {}
 
 	for line in content:gmatch("[^\r\n]+") do
-		local cpName, xStr, yStr, zStr =
-			line:match("^(%w+)=%{(%S+),(%S+),(%S+)%}$")
+		local cpName, xStr, yStr, zStr = line:match("^(%w+)=%{(%S+),(%S+),(%S+)%}$")
 
 		if cpName and xStr and yStr and zStr then
-			local x = tonumber(xStr)
-			local y = tonumber(yStr)
-			local z = tonumber(zStr)
-
+			local x, y, z = tonumber(xStr), tonumber(yStr), tonumber(zStr)
 			if x and y and z then
 				loaded[cpName] = CFrame.new(x, y, z)
 			end
@@ -182,8 +175,9 @@ local function saveCheckpointsToFile(fileName)
 	local filePath = getSaveFilePath(fileName)
 
 	local success, err = pcall(function()
-		local content = serializeCheckpoints()
-		writefile(filePath, content)
+		if writefile then
+			writefile(filePath, serializeCheckpoints())
+		end
 	end)
 
 	if success then
@@ -198,7 +192,9 @@ local function loadCheckpointsFromFile(fileName)
 	local filePath = getSaveFilePath(fileName)
 
 	local success, content = pcall(function()
-		return readfile(filePath)
+		if readfile then
+			return readfile(filePath)
+		end
 	end)
 
 	if not success or not content then
@@ -218,7 +214,6 @@ local function loadCheckpointsFromFile(fileName)
 	end
 
 	currentSaveFileName = fileName
-
 	notify("Memuat " .. count .. " checkpoint dari: " .. fileName)
 
 	if updateUI then
@@ -230,7 +225,6 @@ end
 
 local function createTeleportGui()
 	local oldGui = playerGui:FindFirstChild("TeleportToolGui")
-
 	if oldGui then
 		oldGui:Destroy()
 	end
@@ -269,17 +263,6 @@ local function createTeleportGui()
 	mainFrame.Visible = false
 	addCorner(mainFrame, 12)
 	addStroke(mainFrame, Color3.fromRGB(255, 255, 255), 2)
-
-	local sizeConstraint = Instance.new("UISizeConstraint")
-	sizeConstraint.Parent = mainFrame
-	sizeConstraint.MinSize = Vector2.new(240, 420)
-	sizeConstraint.MaxSize = Vector2.new(380, 680)
-
-	local aspectRatio = Instance.new("UIAspectRatioConstraint")
-	aspectRatio.Parent = mainFrame
-	aspectRatio.AspectType = Enum.AspectType.FitWithinMaxSize
-	aspectRatio.DominantAxis = Enum.DominantAxis.Height
-	aspectRatio.AspectRatio = 0.539
 
 	local titleBar = Instance.new("Frame")
 	titleBar.Name = "TitleBar"
@@ -635,13 +618,10 @@ end
 
 local function makeDraggable(objectToMove, dragHandle)
 	local dragging = false
-	local dragStart
-	local startPos
+	local dragStart, startPos
 
 	dragHandle.InputBegan:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1
-			or input.UserInputType == Enum.UserInputType.Touch then
-
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 			dragging = true
 			dragStart = input.Position
 			startPos = objectToMove.Position
@@ -655,12 +635,8 @@ local function makeDraggable(objectToMove, dragHandle)
 	end)
 
 	UserInputService.InputChanged:Connect(function(input)
-		if dragging
-			and (input.UserInputType == Enum.UserInputType.MouseMovement
-			or input.UserInputType == Enum.UserInputType.Touch) then
-
+		if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
 			local delta = input.Position - dragStart
-
 			objectToMove.Position = UDim2.new(
 				startPos.X.Scale,
 				startPos.X.Offset + delta.X,
@@ -672,15 +648,7 @@ local function makeDraggable(objectToMove, dragHandle)
 end
 
 function updateUI()
-	if not guiElements.SetLokasiButton then
-		return
-	end
-
-	if currentMode == "Set Lokasi" then
-		guiElements.SetLokasiButton.Text = "SET LOKASI"
-	else
-		guiElements.SetLokasiButton.Text = "SET LOKASI"
-	end
+	if not guiElements.SetLokasiButton then return end
 
 	if tpMethod == "Tween" then
 		guiElements.MethodToggleBtn.Text = "MODE: TWEEN"
@@ -694,38 +662,36 @@ function updateUI()
 		guiElements.SpeedDownBtn.Visible = false
 	end
 
-	guiElements.SpeedDisplay.Text =
-		string.format("Spd: %.3fs", TWEEN_SPEED)
-
-	if autoTeleport then
-		guiElements.AutoTeleportButton.Text = "AUTO: ON"
-	else
-		guiElements.AutoTeleportButton.Text = "AUTO TELEPORT"
-	end
-
-	if loopEnabled then
-		guiElements.LoopButton.Text = "LOOP: ON"
-	else
-		guiElements.LoopButton.Text = "LOOP: OFF"
-	end
-
+	guiElements.SpeedDisplay.Text = string.format("Spd: %.3fs", TWEEN_SPEED)
+	guiElements.AutoTeleportButton.Text = autoTeleport and "AUTO: ON" or "AUTO TELEPORT"
+	guiElements.LoopButton.Text = loopEnabled and "LOOP: ON" or "LOOP: OFF"
 	guiElements.FileSlotButton.Text = currentSaveFileName
 
+	-- LOGIKA PERBAIKAN: Menyembunyikan checkpoint kosong secara total
 	for i = 1, MAX_CHECKPOINTS do
-		local cpButton =
-			guiElements.ScrollingFrame:FindFirstChild("CP" .. i)
+		local cpName = "CP" .. i
+		local cpButton = guiElements.ScrollingFrame:FindFirstChild(cpName)
 
 		if cpButton then
-			local cpName = "CP" .. i
-			local checkpointData = checkpoints[cpName]
+			local hasData = checkpoints[cpName] ~= nil
 
-			if checkpointData then
-				cpButton.Text = cpName .. " (Tersimpan)"
-			else
-				if currentMode == "Set Lokasi" then
-					cpButton.Text = cpName
+			if currentMode == "Set Lokasi" then
+				cpButton.Visible = true
+				if hasData then
+					cpButton.Text = cpName .. " (Tersimpan)"
+					cpButton.BackgroundColor3 = Color3.fromRGB(0, 150, 150)
 				else
-					cpButton.Text = cpName .. " (Kosong)"
+					cpButton.Text = cpName
+					cpButton.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+				end
+			elseif currentMode == "Teleport" then
+				if hasData then
+					cpButton.Visible = true
+					cpButton.Text = cpName
+					cpButton.BackgroundColor3 = Color3.fromRGB(120, 40, 160)
+				else
+					-- Sembunyikan CP yang benar-benar tidak ada di Mode Teleport
+					cpButton.Visible = false
 				end
 			end
 		end
@@ -734,13 +700,11 @@ end
 
 local function getLastCheckpoint()
 	local last = 0
-
 	for i = 1, MAX_CHECKPOINTS do
 		if checkpoints["CP" .. i] then
 			last = i
 		end
 	end
-
 	return last
 end
 
@@ -762,22 +726,13 @@ end
 
 local function teleportToCheckpoint(index, isLastPoint)
 	local character = player.Character
-
-	if not character then
-		return false
-	end
+	if not character then return false end
 
 	local root = character:FindFirstChild("HumanoidRootPart")
-
-	if not root then
-		return false
-	end
+	if not root then return false end
 
 	local target = checkpoints["CP" .. index]
-
-	if not target then
-		return false
-	end
+	if not target then return false end
 
 	if tpMethod == "Instan" then
 		root.CFrame = target
@@ -788,12 +743,7 @@ local function teleportToCheckpoint(index, isLastPoint)
 			Enum.EasingDirection.Out
 		)
 
-		local tween = TweenService:Create(
-			root,
-			tweenInfo,
-			{CFrame = target}
-		)
-
+		local tween = TweenService:Create(root, tweenInfo, {CFrame = target})
 		tween:Play()
 		tween.Completed:Wait()
 	end
@@ -815,12 +765,9 @@ local function stopAutoTeleport()
 end
 
 local function startAutoTeleport()
-	if autoTeleport then
-		return
-	end
+	if autoTeleport then return end
 
 	local lastCheckpoint = getLastCheckpoint()
-
 	if lastCheckpoint < 1 then
 		notify("Belum ada CP yang disimpan.")
 		return
@@ -834,31 +781,17 @@ local function startAutoTeleport()
 	task.spawn(function()
 		while autoTeleport do
 			local currentLast = getLastCheckpoint()
-
-			if currentLast < 1 then
-				break
-			end
+			if currentLast < 1 then break end
 
 			for i = 1, currentLast do
-				if not autoTeleport then
-					break
-				end
+				if not autoTeleport or not checkpoints["CP" .. i] then break end
 
-				if not checkpoints["CP" .. i] then
-					break
-				end
-
-				local isLastPoint = i == currentLast
-
+				local isLastPoint = (i == currentLast)
 				teleportToCheckpoint(i, isLastPoint)
-
 				task.wait(TELEPORT_DELAY)
 			end
 
-			if not loopEnabled then
-				break
-			end
-
+			if not loopEnabled then break end
 			task.wait(TELEPORT_DELAY)
 		end
 
@@ -868,12 +801,8 @@ local function startAutoTeleport()
 end
 
 local function openFileListWindow(modeType)
-	local existingPopup =
-		playerGui:FindFirstChild("FilePopupGui")
-
-	if existingPopup then
-		existingPopup:Destroy()
-	end
+	local existingPopup = playerGui:FindFirstChild("FilePopupGui")
+	if existingPopup then existingPopup:Destroy() end
 
 	local popupGui = Instance.new("ScreenGui")
 	popupGui.Name = "FilePopupGui"
@@ -895,13 +824,7 @@ local function openFileListWindow(modeType)
 	popTitle.BackgroundTransparency = 1
 	popTitle.Size = UDim2.new(1, 0, 0, 40)
 	popTitle.Font = Enum.Font.GothamBold
-
-	if modeType == "LOAD" then
-		popTitle.Text = "📂 PILIH SAVE UNTUK DIMUAT"
-	else
-		popTitle.Text = "💾 PILIH SLOT SAVE"
-	end
-
+	popTitle.Text = (modeType == "LOAD") and "📂 PILIH SAVE UNTUK DIMUAT" or "💾 PILIH SLOT SAVE"
 	popTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
 	popTitle.TextSize = 12
 
@@ -936,27 +859,18 @@ local function openFileListWindow(modeType)
 	layout.Parent = popScroll
 	layout.Padding = UDim.new(0, 5)
 
-	local padding = Instance.new("UIPadding")
-	padding.Parent = popScroll
-	padding.PaddingTop = UDim.new(0, 5)
-	padding.PaddingBottom = UDim.new(0, 5)
-	padding.PaddingLeft = UDim.new(0, 5)
-	padding.PaddingRight = UDim.new(0, 5)
-
 	local files = {}
-
 	pcall(function()
-		files = listfiles(SAVE_FOLDER)
+		if listfiles then
+			files = listfiles(SAVE_FOLDER)
+		end
 	end)
 
 	local fileNamesFound = {}
-
 	for _, filePath in ipairs(files) do
 		local baseName = filePath:match("([^/\\]+)$")
-
 		if baseName then
 			local fileName = baseName:match("^(.*)%.json$")
-
 			if fileName then
 				table.insert(fileNamesFound, fileName)
 			end
@@ -996,16 +910,12 @@ local function openFileListWindow(modeType)
 	end
 end
 
+-- Initialize GUI & Events
 guiElements = createTeleportGui()
-
-makeDraggable(
-	guiElements.MainFrame,
-	guiElements.TitleBar
-)
+makeDraggable(guiElements.MainFrame, guiElements.TitleBar)
 
 guiElements.OpenButton.MouseButton1Click:Connect(function()
-	guiElements.MainFrame.Visible =
-		not guiElements.MainFrame.Visible
+	guiElements.MainFrame.Visible = not guiElements.MainFrame.Visible
 end)
 
 guiElements.SetLokasiButton.MouseButton1Click:Connect(function()
@@ -1020,14 +930,8 @@ end)
 
 guiElements.UndoButton.MouseButton1Click:Connect(function()
 	if #historyStack > 0 then
-		table.insert(
-			redoStack,
-			cloneCheckpoints()
-		)
-
-		checkpoints =
-			table.remove(historyStack)
-
+		table.insert(redoStack, cloneCheckpoints())
+		checkpoints = table.remove(historyStack)
 		updateUI()
 		notify("Undo berhasil.")
 	else
@@ -1037,14 +941,8 @@ end)
 
 guiElements.RedoButton.MouseButton1Click:Connect(function()
 	if #redoStack > 0 then
-		table.insert(
-			historyStack,
-			cloneCheckpoints()
-		)
-
-		checkpoints =
-			table.remove(redoStack)
-
+		table.insert(historyStack, cloneCheckpoints())
+		checkpoints = table.remove(redoStack)
 		updateUI()
 		notify("Redo berhasil.")
 	else
@@ -1053,35 +951,18 @@ guiElements.RedoButton.MouseButton1Click:Connect(function()
 end)
 
 guiElements.MethodToggleBtn.MouseButton1Click:Connect(function()
-	if tpMethod == "Tween" then
-		tpMethod = "Instan"
-	else
-		tpMethod = "Tween"
-	end
-
+	tpMethod = (tpMethod == "Tween") and "Instan" or "Tween"
 	updateUI()
 	notify("Mode TP diubah ke: " .. tpMethod)
 end)
 
 guiElements.SpeedUpBtn.MouseButton1Click:Connect(function()
-	TWEEN_SPEED =
-		math.clamp(
-			TWEEN_SPEED + 0.005,
-			0.001,
-			1.0
-		)
-
+	TWEEN_SPEED = math.clamp(TWEEN_SPEED + 0.005, 0.001, 1.0)
 	updateUI()
 end)
 
 guiElements.SpeedDownBtn.MouseButton1Click:Connect(function()
-	TWEEN_SPEED =
-		math.clamp(
-			TWEEN_SPEED - 0.005,
-			0.001,
-			1.0
-		)
-
+	TWEEN_SPEED = math.clamp(TWEEN_SPEED - 0.005, 0.001, 1.0)
 	updateUI()
 end)
 
@@ -1096,12 +977,7 @@ end)
 guiElements.LoopButton.MouseButton1Click:Connect(function()
 	loopEnabled = not loopEnabled
 	updateUI()
-
-	if loopEnabled then
-		notify("Loop ON.")
-	else
-		notify("Loop OFF.")
-	end
+	notify(loopEnabled and "Loop ON." or "Loop OFF.")
 end)
 
 guiElements.StopButton.MouseButton1Click:Connect(function()
@@ -1122,45 +998,16 @@ end)
 
 guiElements.MinimizeButton.MouseButton1Click:Connect(function()
 	isMinimized = not isMinimized
-
-	local tweenInfo = TweenInfo.new(
-		0.3,
-		Enum.EasingStyle.Quad,
-		Enum.EasingDirection.Out
-	)
+	local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
 	if isMinimized then
 		guiElements.MinimizeButton.Text = "+"
 		guiElements.ContentFrame.Visible = false
-
-		TweenService:Create(
-			guiElements.MainFrame,
-			tweenInfo,
-			{
-				Size = UDim2.new(
-					0,
-					310,
-					0,
-					45
-				)
-			}
-		):Play()
+		TweenService:Create(guiElements.MainFrame, tweenInfo, {Size = UDim2.new(0, 310, 0, 45)}):Play()
 	else
 		guiElements.MinimizeButton.Text = "−"
 		guiElements.ContentFrame.Visible = true
-
-		TweenService:Create(
-			guiElements.MainFrame,
-			tweenInfo,
-			{
-				Size = UDim2.new(
-					0,
-					310,
-					0,
-					575
-				)
-			}
-		):Play()
+		TweenService:Create(guiElements.MainFrame, tweenInfo, {Size = UDim2.new(0, 310, 0, 575)}):Play()
 	end
 end)
 
@@ -1168,28 +1015,23 @@ guiElements.CloseButton.MouseButton1Click:Connect(function()
 	autoTeleport = false
 	loopEnabled = false
 	clearPlatform()
-
 	guiElements.ScreenGui:Destroy()
 end)
 
 for i = 1, MAX_CHECKPOINTS do
-	local cpButton =
-		guiElements.ScrollingFrame:FindFirstChild("CP" .. i)
+	local cpButton = guiElements.ScrollingFrame:FindFirstChild("CP" .. i)
 
 	if cpButton then
 		local cpIndex = i
 
 		cpButton.MouseButton1Click:Connect(function()
 			local character = player.Character
-
 			if not character then
 				notify("Karakter tidak ditemukan!")
 				return
 			end
 
-			local root =
-				character:FindFirstChild("HumanoidRootPart")
-
+			local root = character:FindFirstChild("HumanoidRootPart")
 			if not root then
 				notify("HumanoidRootPart tidak ditemukan!")
 				return
@@ -1199,41 +1041,16 @@ for i = 1, MAX_CHECKPOINTS do
 
 			if currentMode == "Set Lokasi" then
 				pushHistory()
-
-				checkpoints[cpName] =
-					root.CFrame
-
-				notify(
-					"Lokasi " ..
-					cpName ..
-					" telah disimpan!"
-				)
-
+				checkpoints[cpName] = root.CFrame
+				notify("Lokasi " .. cpName .. " telah disimpan!")
 				updateUI()
-
 			elseif currentMode == "Teleport" then
-				local lastCheckpoint =
-					getLastCheckpoint()
-
-				local isLastPoint =
-					cpIndex == lastCheckpoint
+				local lastCheckpoint = getLastCheckpoint()
+				local isLastPoint = (cpIndex == lastCheckpoint)
 
 				if checkpoints[cpName] then
-					teleportToCheckpoint(
-						cpIndex,
-						isLastPoint
-					)
-
-					notify(
-						"Berhasil teleport ke " ..
-						cpName ..
-						"!"
-					)
-				else
-					notify(
-						cpName ..
-						" belum disimpan!"
-					)
+					teleportToCheckpoint(cpIndex, isLastPoint)
+					notify("Berhasil teleport ke " .. cpName .. "!")
 				end
 			end
 		end)
