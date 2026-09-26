@@ -7,12 +7,12 @@ local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
 local MAX_CHECKPOINTS = 30
-local GUI_TITLE = "👑 AldoVYSR TELEPON V2 🗿"
+local GUI_TITLE = "👑 AldoVYSR TELEPON V2"
 local SAVE_FOLDER = "teleport_saves/"
 local currentSaveFileName = "TELEPORT_1"
 
 local currentMode = "Set Lokasi"
-local tpMethod = "Tween"
+local tpMethod = "Instan" -- DEFAULT DIUBAH KE INSTAN
 local isMinimized = false
 local guiElements = {}
 local checkpoints = {}
@@ -27,8 +27,14 @@ local TELEPORT_DELAY = 0.5
 local TWEEN_SPEED = 0.02
 local currentPlatform = nil
 
+-- Warna Tema
 local CYAN = Color3.fromRGB(0, 255, 255)
 local PURPLE = Color3.fromRGB(145, 0, 255)
+local COLOR_ACTIVE_GREEN = Color3.fromRGB(0, 200, 100)
+local COLOR_INACTIVE_GRAY = Color3.fromRGB(45, 45, 55)
+local COLOR_CP_FILLED_SET = Color3.fromRGB(0, 140, 70)
+local COLOR_CP_TELEPORT = Color3.fromRGB(140, 40, 200)
+local COLOR_RED_OFF = Color3.fromRGB(180, 40, 40)
 
 pcall(function()
 	if isfolder and not isfolder(SAVE_FOLDER) then
@@ -52,7 +58,6 @@ local function addCorner(parent, radius)
 	return corner
 end
 
--- Menambahkan UIGradient khusus di dalam UIStroke
 local function addStroke(parent, thickness)
 	local stroke = parent:FindFirstChildOfClass("UIStroke") or Instance.new("UIStroke")
 	stroke.Color = Color3.fromRGB(255, 255, 255)
@@ -241,7 +246,7 @@ local function createTeleportGui()
 	local minimizeButton = Instance.new("TextButton")
 	minimizeButton.Name = "MinimizeButton"
 	minimizeButton.Parent = titleBar
-	minimizeButton.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+	minimizeButton.BackgroundColor3 = COLOR_INACTIVE_GRAY
 	minimizeButton.BorderSizePixel = 0
 	minimizeButton.Position = UDim2.new(1, -65, 0, 8)
 	minimizeButton.Size = UDim2.new(0, 28, 0, 28)
@@ -255,7 +260,7 @@ local function createTeleportGui()
 	local closeButton = Instance.new("TextButton")
 	closeButton.Name = "CloseButton"
 	closeButton.Parent = titleBar
-	closeButton.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+	closeButton.BackgroundColor3 = COLOR_RED_OFF
 	closeButton.BorderSizePixel = 0
 	closeButton.Position = UDim2.new(1, -32, 0, 8)
 	closeButton.Size = UDim2.new(0, 28, 0, 28)
@@ -282,7 +287,7 @@ local function createTeleportGui()
 	local setLokasiButton = Instance.new("TextButton")
 	setLokasiButton.Name = "SetLokasiButton"
 	setLokasiButton.Parent = modeFrame
-	setLokasiButton.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+	setLokasiButton.BackgroundColor3 = COLOR_ACTIVE_GREEN
 	setLokasiButton.BorderSizePixel = 0
 	setLokasiButton.Size = UDim2.new(0.38, 0, 1, 0)
 	setLokasiButton.Font = Enum.Font.GothamBold
@@ -295,7 +300,7 @@ local function createTeleportGui()
 	local teleportButton = Instance.new("TextButton")
 	teleportButton.Name = "TeleportButton"
 	teleportButton.Parent = modeFrame
-	teleportButton.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+	teleportButton.BackgroundColor3 = COLOR_INACTIVE_GRAY
 	teleportButton.BorderSizePixel = 0
 	teleportButton.Position = UDim2.new(0.40, 0, 0, 0)
 	teleportButton.Size = UDim2.new(0.38, 0, 1, 0)
@@ -309,7 +314,7 @@ local function createTeleportGui()
 	local undoButton = Instance.new("TextButton")
 	undoButton.Name = "UndoButton"
 	undoButton.Parent = modeFrame
-	undoButton.BackgroundColor3 = Color3.fromRGB(60, 60, 75)
+	undoButton.BackgroundColor3 = COLOR_INACTIVE_GRAY
 	undoButton.BorderSizePixel = 0
 	undoButton.Position = UDim2.new(0.80, 0, 0, 0)
 	undoButton.Size = UDim2.new(0.09, 0, 1, 0)
@@ -323,7 +328,7 @@ local function createTeleportGui()
 	local redoButton = Instance.new("TextButton")
 	redoButton.Name = "RedoButton"
 	redoButton.Parent = modeFrame
-	redoButton.BackgroundColor3 = Color3.fromRGB(60, 60, 75)
+	redoButton.BackgroundColor3 = COLOR_INACTIVE_GRAY
 	redoButton.BorderSizePixel = 0
 	redoButton.Position = UDim2.new(0.91, 0, 0, 0)
 	redoButton.Size = UDim2.new(0.09, 0, 1, 0)
@@ -344,11 +349,11 @@ local function createTeleportGui()
 	local methodToggleBtn = Instance.new("TextButton")
 	methodToggleBtn.Name = "MethodToggleBtn"
 	methodToggleBtn.Parent = methodFrame
-	methodToggleBtn.BackgroundColor3 = Color3.fromRGB(80, 80, 90)
+	methodToggleBtn.BackgroundColor3 = COLOR_INACTIVE_GRAY
 	methodToggleBtn.BorderSizePixel = 0
 	methodToggleBtn.Size = UDim2.new(0.38, 0, 1, 0)
 	methodToggleBtn.Font = Enum.Font.GothamBold
-	methodToggleBtn.Text = "MODE: TWEEN"
+	methodToggleBtn.Text = "MODE: INSTAN"
 	methodToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 	methodToggleBtn.TextSize = 10
 	addCorner(methodToggleBtn, 6)
@@ -364,7 +369,7 @@ local function createTeleportGui()
 	local speedDownBtn = Instance.new("TextButton")
 	speedDownBtn.Name = "SpeedDownBtn"
 	speedDownBtn.Parent = speedSubFrame
-	speedDownBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+	speedDownBtn.BackgroundColor3 = COLOR_INACTIVE_GRAY
 	speedDownBtn.BorderSizePixel = 0
 	speedDownBtn.Size = UDim2.new(0, 24, 1, 0)
 	speedDownBtn.Font = Enum.Font.GothamBold
@@ -391,7 +396,7 @@ local function createTeleportGui()
 	local speedUpBtn = Instance.new("TextButton")
 	speedUpBtn.Name = "SpeedUpBtn"
 	speedUpBtn.Parent = speedSubFrame
-	speedUpBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+	speedUpBtn.BackgroundColor3 = COLOR_INACTIVE_GRAY
 	speedUpBtn.BorderSizePixel = 0
 	speedUpBtn.Position = UDim2.new(1, -24, 0, 0)
 	speedUpBtn.Size = UDim2.new(0, 24, 1, 0)
@@ -412,7 +417,7 @@ local function createTeleportGui()
 	local autoButton = Instance.new("TextButton")
 	autoButton.Name = "AutoTeleportButton"
 	autoButton.Parent = actionFrame
-	autoButton.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+	autoButton.BackgroundColor3 = COLOR_INACTIVE_GRAY
 	autoButton.BorderSizePixel = 0
 	autoButton.Size = UDim2.new(0.48, 0, 0, 32)
 	autoButton.Font = Enum.Font.GothamBold
@@ -425,7 +430,7 @@ local function createTeleportGui()
 	local loopButton = Instance.new("TextButton")
 	loopButton.Name = "LoopButton"
 	loopButton.Parent = actionFrame
-	loopButton.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+	loopButton.BackgroundColor3 = COLOR_INACTIVE_GRAY
 	loopButton.BorderSizePixel = 0
 	loopButton.Position = UDim2.new(0.52, 0, 0, 0)
 	loopButton.Size = UDim2.new(0.48, 0, 0, 32)
@@ -439,7 +444,7 @@ local function createTeleportGui()
 	local stopButton = Instance.new("TextButton")
 	stopButton.Name = "StopButton"
 	stopButton.Parent = actionFrame
-	stopButton.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+	stopButton.BackgroundColor3 = COLOR_RED_OFF
 	stopButton.BorderSizePixel = 0
 	stopButton.Position = UDim2.new(0, 0, 0, 36)
 	stopButton.Size = UDim2.new(1, 0, 0, 32)
@@ -460,7 +465,7 @@ local function createTeleportGui()
 	local saveButton = Instance.new("TextButton")
 	saveButton.Name = "SaveButton"
 	saveButton.Parent = fileFrame
-	saveButton.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+	saveButton.BackgroundColor3 = COLOR_INACTIVE_GRAY
 	saveButton.BorderSizePixel = 0
 	saveButton.Size = UDim2.new(0.32, 0, 1, 0)
 	saveButton.Font = Enum.Font.GothamBold
@@ -473,7 +478,7 @@ local function createTeleportGui()
 	local loadButton = Instance.new("TextButton")
 	loadButton.Name = "LoadButton"
 	loadButton.Parent = fileFrame
-	loadButton.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+	loadButton.BackgroundColor3 = COLOR_INACTIVE_GRAY
 	loadButton.BorderSizePixel = 0
 	loadButton.Position = UDim2.new(0.34, 0, 0, 0)
 	loadButton.Size = UDim2.new(0.32, 0, 1, 0)
@@ -531,7 +536,7 @@ local function createTeleportGui()
 		local cpButton = Instance.new("TextButton")
 		cpButton.Name = "CP" .. i
 		cpButton.Parent = scrollingFrame
-		cpButton.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+		cpButton.BackgroundColor3 = COLOR_INACTIVE_GRAY
 		cpButton.BorderSizePixel = 0
 		cpButton.Size = UDim2.new(1, 0, 0, 35)
 		cpButton.Font = Enum.Font.GothamMedium
@@ -604,23 +609,51 @@ end
 function updateUI()
 	if not guiElements.SetLokasiButton then return end
 
+	-- Warna Mode
+	if currentMode == "Set Lokasi" then
+		guiElements.SetLokasiButton.BackgroundColor3 = COLOR_ACTIVE_GREEN
+		guiElements.TeleportButton.BackgroundColor3 = COLOR_INACTIVE_GRAY
+	else
+		guiElements.SetLokasiButton.BackgroundColor3 = COLOR_INACTIVE_GRAY
+		guiElements.TeleportButton.BackgroundColor3 = COLOR_CP_TELEPORT
+	end
+
+	-- Status Mode TP (Default: Instan)
 	if tpMethod == "Tween" then
 		guiElements.MethodToggleBtn.Text = "MODE: TWEEN"
+		guiElements.MethodToggleBtn.BackgroundColor3 = COLOR_ACTIVE_GREEN
 		guiElements.SpeedDisplay.Visible = true
 		guiElements.SpeedUpBtn.Visible = true
 		guiElements.SpeedDownBtn.Visible = true
 	else
 		guiElements.MethodToggleBtn.Text = "MODE: INSTAN"
+		guiElements.MethodToggleBtn.BackgroundColor3 = COLOR_INACTIVE_GRAY
 		guiElements.SpeedDisplay.Visible = false
 		guiElements.SpeedUpBtn.Visible = false
 		guiElements.SpeedDownBtn.Visible = false
 	end
 
+	-- Auto TP & Loop
+	if autoTeleport then
+		guiElements.AutoTeleportButton.Text = "AUTO: ON"
+		guiElements.AutoTeleportButton.BackgroundColor3 = COLOR_ACTIVE_GREEN
+	else
+		guiElements.AutoTeleportButton.Text = "AUTO TELEPORT"
+		guiElements.AutoTeleportButton.BackgroundColor3 = COLOR_INACTIVE_GRAY
+	end
+
+	if loopEnabled then
+		guiElements.LoopButton.Text = "LOOP: ON"
+		guiElements.LoopButton.BackgroundColor3 = COLOR_ACTIVE_GREEN
+	else
+		guiElements.LoopButton.Text = "LOOP: OFF"
+		guiElements.LoopButton.BackgroundColor3 = COLOR_INACTIVE_GRAY
+	end
+
 	guiElements.SpeedDisplay.Text = string.format("Spd: %.3fs", TWEEN_SPEED)
-	guiElements.AutoTeleportButton.Text = autoTeleport and "AUTO: ON" or "AUTO TELEPORT"
-	guiElements.LoopButton.Text = loopEnabled and "LOOP: ON" or "LOOP: OFF"
 	guiElements.FileSlotButton.Text = currentSaveFileName
 
+	-- CP Buttons
 	for i = 1, MAX_CHECKPOINTS do
 		local cpName = "CP" .. i
 		local cpButton = guiElements.ScrollingFrame:FindFirstChild(cpName)
@@ -631,17 +664,17 @@ function updateUI()
 			if currentMode == "Set Lokasi" then
 				cpButton.Visible = true
 				if hasData then
-					cpButton.Text = cpName .. " (Tersimpan)"
-					cpButton.BackgroundColor3 = Color3.fromRGB(0, 120, 120)
+					cpButton.Text = cpName .. " [Tersimpan]"
+					cpButton.BackgroundColor3 = COLOR_CP_FILLED_SET
 				else
-					cpButton.Text = cpName
-					cpButton.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+					cpButton.Text = cpName .. " [Kosong]"
+					cpButton.BackgroundColor3 = COLOR_INACTIVE_GRAY
 				end
 			elseif currentMode == "Teleport" then
 				if hasData then
 					cpButton.Visible = true
-					cpButton.Text = cpName
-					cpButton.BackgroundColor3 = Color3.fromRGB(100, 30, 140)
+					cpButton.Text = "🚀 " .. cpName
+					cpButton.BackgroundColor3 = COLOR_CP_TELEPORT
 				else
 					cpButton.Visible = false
 				end
@@ -776,7 +809,7 @@ local function openFileListWindow(modeType)
 
 	local closePop = Instance.new("TextButton")
 	closePop.Parent = popFrame
-	closePop.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+	closePop.BackgroundColor3 = COLOR_RED_OFF
 	closePop.Position = UDim2.new(1, -32, 0, 6)
 	closePop.Size = UDim2.new(0, 26, 0, 26)
 	closePop.Font = Enum.Font.GothamBold
@@ -828,7 +861,7 @@ local function openFileListWindow(modeType)
 	for _, name in ipairs(fileNamesFound) do
 		local btn = Instance.new("TextButton")
 		btn.Parent = popScroll
-		btn.BackgroundColor3 = Color3.fromRGB(45, 45, 60)
+		btn.BackgroundColor3 = COLOR_INACTIVE_GRAY
 		btn.Size = UDim2.new(1, 0, 0, 35)
 		btn.Font = Enum.Font.GothamMedium
 		btn.Text = "📁 " .. name
