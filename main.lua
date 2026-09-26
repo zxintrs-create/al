@@ -185,6 +185,21 @@ local function loadCheckpointsFromFile(fileName)
 	return true
 end
 
+local function deleteSaveFile(fileName)
+	local filePath = getSaveFilePath(fileName)
+	local success, err = pcall(function()
+		if delfile then
+			delfile(filePath)
+		end
+	end)
+
+	if success then
+		notify("Berhasil menghapus save: " .. fileName)
+	else
+		notify("Gagal menghapus file: " .. tostring(err))
+	end
+end
+
 local function createTeleportGui()
 	local oldGui = playerGui:FindFirstChild("TeleportToolGui")
 	if oldGui then oldGui:Destroy() end
@@ -594,7 +609,6 @@ end
 function updateUI()
 	if not guiElements.SetLokasiButton then return end
 
-	-- Warna Mode
 	if currentMode == "Set Lokasi" then
 		guiElements.SetLokasiButton.BackgroundColor3 = COLOR_ACTIVE_GREEN
 		guiElements.TeleportButton.BackgroundColor3 = COLOR_INACTIVE_GRAY
@@ -603,7 +617,6 @@ function updateUI()
 		guiElements.TeleportButton.BackgroundColor3 = COLOR_CP_TELEPORT
 	end
 
-	-- Status Mode TP
 	if tpMethod == "Tween" then
 		guiElements.MethodToggleBtn.Text = "MODE: TWEEN"
 		guiElements.MethodToggleBtn.BackgroundColor3 = COLOR_ACTIVE_GREEN
@@ -618,7 +631,6 @@ function updateUI()
 		guiElements.SpeedDownBtn.Visible = false
 	end
 
-	-- Auto TP & Loop
 	if autoTeleport then
 		guiElements.AutoTeleportButton.Text = "AUTO: ON"
 		guiElements.AutoTeleportButton.BackgroundColor3 = COLOR_ACTIVE_GREEN
@@ -637,7 +649,6 @@ function updateUI()
 
 	guiElements.SpeedDisplay.Text = string.format("Spd: %.3fs", TWEEN_SPEED)
 
-	-- CP Buttons
 	for i = 1, MAX_CHECKPOINTS do
 		local cpName = "CP" .. i
 		local cpButton = guiElements.ScrollingFrame:FindFirstChild(cpName)
@@ -763,7 +774,7 @@ local function startAutoTeleport()
 	end)
 end
 
--- POPUP KHUSUS UNTUK SAVE & LOAD KUSUS
+-- POPUP SAVE
 local function openSaveWindow()
 	local existingPopup = playerGui:FindFirstChild("SavePopupGui")
 	if existingPopup then existingPopup:Destroy() end
@@ -851,9 +862,12 @@ local function openSaveWindow()
 	end)
 end
 
+-- POPUP LOAD DENGAN TOGGLE DELETE
 local function openLoadWindow()
 	local existingPopup = playerGui:FindFirstChild("LoadPopupGui")
 	if existingPopup then existingPopup:Destroy() end
+
+	local deleteMode = false
 
 	local popupGui = Instance.new("ScreenGui")
 	popupGui.Name = "LoadPopupGui"
@@ -866,18 +880,20 @@ local function openLoadWindow()
 	popFrame.BackgroundColor3 = Color3.fromRGB(28, 28, 35)
 	popFrame.AnchorPoint = Vector2.new(0.5, 0.5)
 	popFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
-	popFrame.Size = UDim2.new(0, 280, 0, 320)
+	popFrame.Size = UDim2.new(0, 280, 0, 340)
 	addCorner(popFrame, 12)
 	addStroke(popFrame, 2)
 
 	local popTitle = Instance.new("TextLabel")
 	popTitle.Parent = popFrame
 	popTitle.BackgroundTransparency = 1
-	popTitle.Size = UDim2.new(1, 0, 0, 40)
+	popTitle.Position = UDim2.new(0, 10, 0, 0)
+	popTitle.Size = UDim2.new(1, -50, 0, 35)
 	popTitle.Font = Enum.Font.GothamBold
-	popTitle.Text = "📂 PILIH DAFTAR SAVE (LOAD)"
+	popTitle.Text = "📂 PILIH SAVE (LOAD)"
 	popTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
 	popTitle.TextSize = 12
+	popTitle.TextXAlignment = Enum.TextXAlignment.Left
 
 	local closePop = Instance.new("TextButton")
 	closePop.Parent = popFrame
@@ -892,12 +908,24 @@ local function openLoadWindow()
 
 	closePop.MouseButton1Click:Connect(function() popupGui:Destroy() end)
 
+	local deleteToggleBtn = Instance.new("TextButton")
+	deleteToggleBtn.Parent = popFrame
+	deleteToggleBtn.BackgroundColor3 = COLOR_INACTIVE_GRAY
+	deleteToggleBtn.Position = UDim2.new(0, 10, 0, 38)
+	deleteToggleBtn.Size = UDim2.new(1, -20, 0, 30)
+	deleteToggleBtn.Font = Enum.Font.GothamBold
+	deleteToggleBtn.Text = "DELETE: OFF"
+	deleteToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	deleteToggleBtn.TextSize = 11
+	addCorner(deleteToggleBtn, 6)
+	addStroke(deleteToggleBtn, 1)
+
 	local popScroll = Instance.new("ScrollingFrame")
 	popScroll.Parent = popFrame
 	popScroll.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
 	popScroll.BorderSizePixel = 0
-	popScroll.Position = UDim2.new(0, 10, 0, 45)
-	popScroll.Size = UDim2.new(1, -20, 1, -55)
+	popScroll.Position = UDim2.new(0, 10, 0, 75)
+	popScroll.Size = UDim2.new(1, -20, 1, -85)
 	popScroll.ScrollBarThickness = 4
 	popScroll.ScrollBarImageColor3 = CYAN
 	popScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
@@ -907,51 +935,84 @@ local function openLoadWindow()
 	layout.Parent = popScroll
 	layout.Padding = UDim.new(0, 5)
 
-	local files = {}
-	pcall(function()
-		if listfiles then files = listfiles(SAVE_FOLDER) end
+	local function refreshFileList()
+		for _, child in ipairs(popScroll:GetChildren()) do
+			if child:IsA("TextButton") or child:IsA("TextLabel") then
+				child:Destroy()
+			end
+		end
+
+		local files = {}
+		pcall(function()
+			if listfiles then files = listfiles(SAVE_FOLDER) end
+		end)
+
+		local fileNamesFound = {}
+		for _, filePath in ipairs(files) do
+			local baseName = filePath:match("([^/\\]+)$")
+			if baseName then
+				local fileName = baseName:match("^(.*)%.json$")
+				if fileName then table.insert(fileNamesFound, fileName) end
+			end
+		end
+
+		table.sort(fileNamesFound)
+
+		if #fileNamesFound == 0 then
+			local emptyText = Instance.new("TextLabel")
+			emptyText.Parent = popScroll
+			emptyText.BackgroundTransparency = 1
+			emptyText.Size = UDim2.new(1, 0, 0, 40)
+			emptyText.Font = Enum.Font.Gotham
+			emptyText.Text = "Belum ada file save."
+			emptyText.TextColor3 = Color3.fromRGB(150, 150, 150)
+			emptyText.TextSize = 11
+		else
+			for _, name in ipairs(fileNamesFound) do
+				local btn = Instance.new("TextButton")
+				btn.Parent = popScroll
+				btn.Size = UDim2.new(1, 0, 0, 35)
+				btn.Font = Enum.Font.GothamMedium
+				btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+				btn.TextSize = 12
+				addCorner(btn, 6)
+				addStroke(btn, 1)
+
+				if deleteMode then
+					btn.BackgroundColor3 = COLOR_RED_OFF
+					btn.Text = name .. "   ❌"
+				else
+					btn.BackgroundColor3 = COLOR_INACTIVE_GRAY
+					btn.Text = "📁 " .. name
+				end
+
+				btn.MouseButton1Click:Connect(function()
+					if deleteMode then
+						deleteSaveFile(name)
+						refreshFileList()
+					else
+						loadCheckpointsFromFile(name)
+						popupGui:Destroy()
+						updateUI()
+					end
+				end)
+			end
+		end
+	end
+
+	deleteToggleBtn.MouseButton1Click:Connect(function()
+		deleteMode = not deleteMode
+		if deleteMode then
+			deleteToggleBtn.Text = "DELETE: ON ❌"
+			deleteToggleBtn.BackgroundColor3 = COLOR_RED_OFF
+		else
+			deleteToggleBtn.Text = "DELETE: OFF"
+			deleteToggleBtn.BackgroundColor3 = COLOR_INACTIVE_GRAY
+		end
+		refreshFileList()
 	end)
 
-	local fileNamesFound = {}
-	for _, filePath in ipairs(files) do
-		local baseName = filePath:match("([^/\\]+)$")
-		if baseName then
-			local fileName = baseName:match("^(.*)%.json$")
-			if fileName then table.insert(fileNamesFound, fileName) end
-		end
-	end
-
-	table.sort(fileNamesFound)
-
-	if #fileNamesFound == 0 then
-		local emptyText = Instance.new("TextLabel")
-		emptyText.Parent = popScroll
-		emptyText.BackgroundTransparency = 1
-		emptyText.Size = UDim2.new(1, 0, 0, 40)
-		emptyText.Font = Enum.Font.Gotham
-		emptyText.Text = "Belum ada file save yang dibuat."
-		emptyText.TextColor3 = Color3.fromRGB(150, 150, 150)
-		emptyText.TextSize = 11
-	else
-		for _, name in ipairs(fileNamesFound) do
-			local btn = Instance.new("TextButton")
-			btn.Parent = popScroll
-			btn.BackgroundColor3 = COLOR_INACTIVE_GRAY
-			btn.Size = UDim2.new(1, 0, 0, 35)
-			btn.Font = Enum.Font.GothamMedium
-			btn.Text = "📁 " .. name
-			btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-			btn.TextSize = 12
-			addCorner(btn, 6)
-			addStroke(btn, 1)
-
-			btn.MouseButton1Click:Connect(function()
-				loadCheckpointsFromFile(name)
-				popupGui:Destroy()
-				updateUI()
-			end)
-		end
-	end
+	refreshFileList()
 end
 
 guiElements = createTeleportGui()
