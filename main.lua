@@ -7,12 +7,12 @@ local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
 local MAX_CHECKPOINTS = 30
-local GUI_TITLE = "👑 AldoVYSR TELEPON V2"
+local GUI_TITLE = "👑 AldoVYSR TELEPORT V2"
 local SAVE_FOLDER = "teleport_saves/"
-local currentSaveFileName = "TELEPORT_1"
+local currentSaveFileName = "Teleport 1"
 
 local currentMode = "Set Lokasi"
-local tpMethod = "Instan" -- DEFAULT DIUBAH KE INSTAN
+local tpMethod = "Instan"
 local isMinimized = false
 local guiElements = {}
 local checkpoints = {}
@@ -152,7 +152,7 @@ local function saveCheckpointsToFile(fileName)
 
 	if success then
 		currentSaveFileName = fileName
-		notify("Berhasil disimpan ke: " .. fileName)
+		notify("Berhasil disimpan dengan nama: " .. fileName)
 	else
 		notify("Gagal menyimpan: " .. tostring(err))
 	end
@@ -465,43 +465,29 @@ local function createTeleportGui()
 	local saveButton = Instance.new("TextButton")
 	saveButton.Name = "SaveButton"
 	saveButton.Parent = fileFrame
-	saveButton.BackgroundColor3 = COLOR_INACTIVE_GRAY
+	saveButton.BackgroundColor3 = COLOR_ACTIVE_GREEN
 	saveButton.BorderSizePixel = 0
-	saveButton.Size = UDim2.new(0.32, 0, 1, 0)
+	saveButton.Size = UDim2.new(0.48, 0, 1, 0)
 	saveButton.Font = Enum.Font.GothamBold
 	saveButton.Text = "💾 SAVE"
 	saveButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-	saveButton.TextSize = 10
+	saveButton.TextSize = 11
 	addCorner(saveButton, 6)
 	addStroke(saveButton, 1)
 
 	local loadButton = Instance.new("TextButton")
 	loadButton.Name = "LoadButton"
 	loadButton.Parent = fileFrame
-	loadButton.BackgroundColor3 = COLOR_INACTIVE_GRAY
+	loadButton.BackgroundColor3 = COLOR_CP_TELEPORT
 	loadButton.BorderSizePixel = 0
-	loadButton.Position = UDim2.new(0.34, 0, 0, 0)
-	loadButton.Size = UDim2.new(0.32, 0, 1, 0)
+	loadButton.Position = UDim2.new(0.52, 0, 0, 0)
+	loadButton.Size = UDim2.new(0.48, 0, 1, 0)
 	loadButton.Font = Enum.Font.GothamBold
 	loadButton.Text = "📂 LOAD"
 	loadButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-	loadButton.TextSize = 10
+	loadButton.TextSize = 11
 	addCorner(loadButton, 6)
 	addStroke(loadButton, 1)
-
-	local fileSlotButton = Instance.new("TextButton")
-	fileSlotButton.Name = "FileSlotButton"
-	fileSlotButton.Parent = fileFrame
-	fileSlotButton.BackgroundColor3 = Color3.fromRGB(70, 70, 90)
-	fileSlotButton.BorderSizePixel = 0
-	fileSlotButton.Position = UDim2.new(0.68, 0, 0, 0)
-	fileSlotButton.Size = UDim2.new(0.32, 0, 1, 0)
-	fileSlotButton.Font = Enum.Font.GothamBold
-	fileSlotButton.Text = currentSaveFileName
-	fileSlotButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-	fileSlotButton.TextSize = 9
-	addCorner(fileSlotButton, 6)
-	addStroke(fileSlotButton, 1)
 
 	local scrollingFrame = Instance.new("ScrollingFrame")
 	scrollingFrame.Name = "ScrollingFrame"
@@ -570,7 +556,6 @@ local function createTeleportGui()
 		StopButton = stopButton,
 		SaveButton = saveButton,
 		LoadButton = loadButton,
-		FileSlotButton = fileSlotButton,
 		ScrollingFrame = scrollingFrame
 	}
 end
@@ -618,7 +603,7 @@ function updateUI()
 		guiElements.TeleportButton.BackgroundColor3 = COLOR_CP_TELEPORT
 	end
 
-	-- Status Mode TP (Default: Instan)
+	-- Status Mode TP
 	if tpMethod == "Tween" then
 		guiElements.MethodToggleBtn.Text = "MODE: TWEEN"
 		guiElements.MethodToggleBtn.BackgroundColor3 = COLOR_ACTIVE_GREEN
@@ -651,7 +636,6 @@ function updateUI()
 	end
 
 	guiElements.SpeedDisplay.Text = string.format("Spd: %.3fs", TWEEN_SPEED)
-	guiElements.FileSlotButton.Text = currentSaveFileName
 
 	-- CP Buttons
 	for i = 1, MAX_CHECKPOINTS do
@@ -779,12 +763,13 @@ local function startAutoTeleport()
 	end)
 end
 
-local function openFileListWindow(modeType)
-	local existingPopup = playerGui:FindFirstChild("FilePopupGui")
+-- POPUP KHUSUS UNTUK SAVE & LOAD KUSUS
+local function openSaveWindow()
+	local existingPopup = playerGui:FindFirstChild("SavePopupGui")
 	if existingPopup then existingPopup:Destroy() end
 
 	local popupGui = Instance.new("ScreenGui")
-	popupGui.Name = "FilePopupGui"
+	popupGui.Name = "SavePopupGui"
 	popupGui.Parent = playerGui
 	popupGui.ResetOnSpawn = false
 	popupGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
@@ -794,7 +779,94 @@ local function openFileListWindow(modeType)
 	popFrame.BackgroundColor3 = Color3.fromRGB(28, 28, 35)
 	popFrame.AnchorPoint = Vector2.new(0.5, 0.5)
 	popFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
-	popFrame.Size = UDim2.new(0, 280, 0, 350)
+	popFrame.Size = UDim2.new(0, 280, 0, 180)
+	addCorner(popFrame, 12)
+	addStroke(popFrame, 2)
+
+	local popTitle = Instance.new("TextLabel")
+	popTitle.Parent = popFrame
+	popTitle.BackgroundTransparency = 1
+	popTitle.Size = UDim2.new(1, 0, 0, 35)
+	popTitle.Font = Enum.Font.GothamBold
+	popTitle.Text = "💾 SIMPAN CHECKPOINT"
+	popTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+	popTitle.TextSize = 13
+
+	local closePop = Instance.new("TextButton")
+	closePop.Parent = popFrame
+	closePop.BackgroundColor3 = COLOR_RED_OFF
+	closePop.Position = UDim2.new(1, -30, 0, 5)
+	closePop.Size = UDim2.new(0, 24, 0, 24)
+	closePop.Font = Enum.Font.GothamBold
+	closePop.Text = "×"
+	closePop.TextColor3 = Color3.fromRGB(255, 255, 255)
+	closePop.TextSize = 16
+	addCorner(closePop, 6)
+
+	closePop.MouseButton1Click:Connect(function() popupGui:Destroy() end)
+
+	local labelInfo = Instance.new("TextLabel")
+	labelInfo.Parent = popFrame
+	labelInfo.BackgroundTransparency = 1
+	labelInfo.Position = UDim2.new(0, 15, 0, 40)
+	labelInfo.Size = UDim2.new(1, -30, 0, 20)
+	labelInfo.Font = Enum.Font.Gotham
+	labelInfo.Text = "Masukkan Nama Folder / Save:"
+	labelInfo.TextColor3 = Color3.fromRGB(200, 200, 200)
+	labelInfo.TextSize = 11
+	labelInfo.TextXAlignment = Enum.TextXAlignment.Left
+
+	local textBox = Instance.new("TextBox")
+	textBox.Parent = popFrame
+	textBox.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
+	textBox.Position = UDim2.new(0, 15, 0, 65)
+	textBox.Size = UDim2.new(1, -30, 0, 35)
+	textBox.Font = Enum.Font.GothamMedium
+	textBox.PlaceholderText = "Contoh: Teleport 1"
+	textBox.Text = "Teleport 1"
+	textBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+	textBox.TextSize = 12
+	addCorner(textBox, 6)
+	addStroke(textBox, 1)
+
+	local confirmBtn = Instance.new("TextButton")
+	confirmBtn.Parent = popFrame
+	confirmBtn.BackgroundColor3 = COLOR_ACTIVE_GREEN
+	confirmBtn.Position = UDim2.new(0, 15, 0, 115)
+	confirmBtn.Size = UDim2.new(1, -30, 0, 40)
+	confirmBtn.Font = Enum.Font.GothamBold
+	confirmBtn.Text = "BIKIN SAVE"
+	confirmBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	confirmBtn.TextSize = 12
+	addCorner(confirmBtn, 6)
+
+	confirmBtn.MouseButton1Click:Connect(function()
+		local text = textBox.Text
+		if text and text:gsub("%s+", "") ~= "" then
+			saveCheckpointsToFile(text)
+			popupGui:Destroy()
+		else
+			notify("Nama tidak boleh kosong!")
+		end
+	end)
+end
+
+local function openLoadWindow()
+	local existingPopup = playerGui:FindFirstChild("LoadPopupGui")
+	if existingPopup then existingPopup:Destroy() end
+
+	local popupGui = Instance.new("ScreenGui")
+	popupGui.Name = "LoadPopupGui"
+	popupGui.Parent = playerGui
+	popupGui.ResetOnSpawn = false
+	popupGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+	local popFrame = Instance.new("Frame")
+	popFrame.Parent = popupGui
+	popFrame.BackgroundColor3 = Color3.fromRGB(28, 28, 35)
+	popFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+	popFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+	popFrame.Size = UDim2.new(0, 280, 0, 320)
 	addCorner(popFrame, 12)
 	addStroke(popFrame, 2)
 
@@ -803,25 +875,22 @@ local function openFileListWindow(modeType)
 	popTitle.BackgroundTransparency = 1
 	popTitle.Size = UDim2.new(1, 0, 0, 40)
 	popTitle.Font = Enum.Font.GothamBold
-	popTitle.Text = (modeType == "LOAD") and "📂 PILIH SAVE UNTUK DIMUAT" or "💾 PILIH SLOT SAVE"
+	popTitle.Text = "📂 PILIH DAFTAR SAVE (LOAD)"
 	popTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
 	popTitle.TextSize = 12
 
 	local closePop = Instance.new("TextButton")
 	closePop.Parent = popFrame
 	closePop.BackgroundColor3 = COLOR_RED_OFF
-	closePop.Position = UDim2.new(1, -32, 0, 6)
-	closePop.Size = UDim2.new(0, 26, 0, 26)
+	closePop.Position = UDim2.new(1, -30, 0, 6)
+	closePop.Size = UDim2.new(0, 24, 0, 24)
 	closePop.Font = Enum.Font.GothamBold
 	closePop.Text = "×"
 	closePop.TextColor3 = Color3.fromRGB(255, 255, 255)
 	closePop.TextSize = 16
 	addCorner(closePop, 6)
-	addStroke(closePop, 1)
 
-	closePop.MouseButton1Click:Connect(function()
-		popupGui:Destroy()
-	end)
+	closePop.MouseButton1Click:Connect(function() popupGui:Destroy() end)
 
 	local popScroll = Instance.new("ScrollingFrame")
 	popScroll.Parent = popFrame
@@ -852,33 +921,36 @@ local function openFileListWindow(modeType)
 		end
 	end
 
-	if #fileNamesFound == 0 then
-		for i = 1, 5 do table.insert(fileNamesFound, "TELEPORT_" .. i) end
-	end
-
 	table.sort(fileNamesFound)
 
-	for _, name in ipairs(fileNamesFound) do
-		local btn = Instance.new("TextButton")
-		btn.Parent = popScroll
-		btn.BackgroundColor3 = COLOR_INACTIVE_GRAY
-		btn.Size = UDim2.new(1, 0, 0, 35)
-		btn.Font = Enum.Font.GothamMedium
-		btn.Text = "📁 " .. name
-		btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-		btn.TextSize = 12
-		addCorner(btn, 6)
-		addStroke(btn, 1)
+	if #fileNamesFound == 0 then
+		local emptyText = Instance.new("TextLabel")
+		emptyText.Parent = popScroll
+		emptyText.BackgroundTransparency = 1
+		emptyText.Size = UDim2.new(1, 0, 0, 40)
+		emptyText.Font = Enum.Font.Gotham
+		emptyText.Text = "Belum ada file save yang dibuat."
+		emptyText.TextColor3 = Color3.fromRGB(150, 150, 150)
+		emptyText.TextSize = 11
+	else
+		for _, name in ipairs(fileNamesFound) do
+			local btn = Instance.new("TextButton")
+			btn.Parent = popScroll
+			btn.BackgroundColor3 = COLOR_INACTIVE_GRAY
+			btn.Size = UDim2.new(1, 0, 0, 35)
+			btn.Font = Enum.Font.GothamMedium
+			btn.Text = "📁 " .. name
+			btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+			btn.TextSize = 12
+			addCorner(btn, 6)
+			addStroke(btn, 1)
 
-		btn.MouseButton1Click:Connect(function()
-			if modeType == "LOAD" then
+			btn.MouseButton1Click:Connect(function()
 				loadCheckpointsFromFile(name)
-			else
-				saveCheckpointsToFile(name)
-			end
-			popupGui:Destroy()
-			updateUI()
-		end)
+				popupGui:Destroy()
+				updateUI()
+			end)
+		end
 	end
 end
 
@@ -956,15 +1028,11 @@ guiElements.StopButton.MouseButton1Click:Connect(function()
 end)
 
 guiElements.SaveButton.MouseButton1Click:Connect(function()
-	openFileListWindow("SAVE")
+	openSaveWindow()
 end)
 
 guiElements.LoadButton.MouseButton1Click:Connect(function()
-	openFileListWindow("LOAD")
-end)
-
-guiElements.FileSlotButton.MouseButton1Click:Connect(function()
-	openFileListWindow("LOAD")
+	openLoadWindow()
 end)
 
 guiElements.MinimizeButton.MouseButton1Click:Connect(function()
