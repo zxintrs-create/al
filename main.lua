@@ -1,5 +1,5 @@
 --[[
-    👑 AldoVYSR TELEPORT V2 (Fixed UI & Separated Instant/Tween Modes)
+    👑 AldoVYSR TELEPORT V2
 ]]
 
 local Players = game:GetService("Players")
@@ -15,16 +15,21 @@ local GUI_TITLE = "👑 AldoVYSR TELEPORT V2"
 local SAVE_FOLDER = "teleport_saves/"
 local currentSaveFileName = "TELEPORT 1"
 
-local currentMode = "Set Lokasi" -- "Set Lokasi" atau "Teleport"
-local tpMethod = "Tween"         -- "Instan" atau "Tween"
+local currentMode = "Set Lokasi"
+local tpMethod = "Tween"
 local isMinimized = false
 local guiElements = {}
 local checkpoints = {}
 
+-- Sistem Riwayat Undo / Redo
+local historyStack = {}
+local redoStack = {}
+local MAX_HISTORY_STEPS = 20
+
 local autoTeleport = false
 local loopEnabled = false
 local TELEPORT_DELAY = 0.5
-local TWEEN_SPEED = 0.02 -- Default sangat cepat (mendekati instan tapi tetap tween)
+local TWEEN_SPEED = 0.02
 local currentPlatform = nil
 
 -- Pastikan folder save ada
@@ -74,6 +79,22 @@ local function addStroke(parent, color, thickness)
 	stroke.Thickness = thickness or 1
 	stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 	stroke.Parent = parent
+end
+
+local function cloneCheckpoints()
+	local copy = {}
+	for k, v in pairs(checkpoints) do
+		copy[k] = v
+	end
+	return copy
+end
+
+local function pushHistory()
+	table.insert(historyStack, cloneCheckpoints())
+	if #historyStack > MAX_HISTORY_STEPS then
+		table.remove(historyStack, 1)
+	end
+	table.clear(redoStack)
 end
 
 local function serializeCheckpoints()
@@ -137,6 +158,7 @@ local function loadCheckpointsFromFile(fileName)
 		return false
 	end
 
+	pushHistory()
 	table.clear(checkpoints)
 	local loaded = deserializeCheckpoints(content)
 	local count = 0
@@ -185,12 +207,27 @@ local function createTeleportGui()
 	mainFrame.Parent = screenGui
 	mainFrame.BackgroundColor3 = Color3.fromRGB(24, 24, 28)
 	mainFrame.BorderSizePixel = 0
-	mainFrame.Position = UDim2.new(1, -330, 0.5, -290)
+	-- Menggunakan Scale + Offset agar responsif di berbagai ukuran layar & DPI
+	mainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+	mainFrame.Position = UDim2.new(0.8, 0, 0.5, 0)
 	mainFrame.Size = UDim2.new(0, 310, 0, 575)
 	mainFrame.Active = true
 	mainFrame.Visible = false
 	addCorner(mainFrame, 12)
 	addStroke(mainFrame, Color3.fromRGB(255, 170, 0), 2)
+
+	-- TAMBAHAN: UISizeConstraint agar tidak terlalu besar di DPI 400 / terlalu kecil di DPI 900
+	local sizeConstraint = Instance.new("UISizeConstraint")
+	sizeConstraint.Parent = mainFrame
+	sizeConstraint.MinSize = Vector2.new(240, 420)
+	sizeConstraint.MaxSize = Vector2.new(380, 680)
+
+	-- TAMBAHAN: UIAspectRatioConstraint agar bentuk kotak menu tetap ideal
+	local aspectRatio = Instance.new("UIAspectRatioConstraint")
+	aspectRatio.Parent = mainFrame
+	aspectRatio.AspectType = Enum.AspectType.FitWithinMaxSize
+	aspectRatio.DominantAxis = Enum.DominantAxis.Height
+	aspectRatio.AspectRatio = 0.539 -- Perbandingan rasio lebar terhadap tinggi menu (310 / 575)
 
 	local titleBar = Instance.new("Frame")
 	titleBar.Name = "TitleBar"
@@ -245,7 +282,7 @@ local function createTeleportGui()
 	contentFrame.Position = UDim2.new(0, 10, 0, 52)
 	contentFrame.Size = UDim2.new(1, -20, 1, -60)
 
-	-- Baris 1: Mode Set Lokasi / Teleport
+	-- Baris 1: Mode Set Lokasi / Teleport + Tombol Undo (↩️) dan Redo (↪️)
 	local modeFrame = Instance.new("Frame")
 	modeFrame.Name = "ModeFrame"
 	modeFrame.Parent = contentFrame
@@ -257,11 +294,11 @@ local function createTeleportGui()
 	setLokasiButton.Parent = modeFrame
 	setLokasiButton.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
 	setLokasiButton.BorderSizePixel = 0
-	setLokasiButton.Size = UDim2.new(0.48, 0, 1, 0)
+	setLokasiButton.Size = UDim2.new(0.38, 0, 1, 0)
 	setLokasiButton.Font = Enum.Font.GothamBold
 	setLokasiButton.Text = "SET LOKASI"
 	setLokasiButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-	setLokasiButton.TextSize = 11
+	setLokasiButton.TextSize = 10
 	addCorner(setLokasiButton, 6)
 
 	local teleportButton = Instance.new("TextButton")
@@ -269,15 +306,43 @@ local function createTeleportGui()
 	teleportButton.Parent = modeFrame
 	teleportButton.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
 	teleportButton.BorderSizePixel = 0
-	teleportButton.Position = UDim2.new(0.52, 0, 0, 0)
-	teleportButton.Size = UDim2.new(0.48, 0, 1, 0)
+	teleportButton.Position = UDim2.new(0.40, 0, 0, 0)
+	teleportButton.Size = UDim2.new(0.38, 0, 1, 0)
 	teleportButton.Font = Enum.Font.GothamBold
 	teleportButton.Text = "TELEPORT"
 	teleportButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-	teleportButton.TextSize = 11
+	teleportButton.TextSize = 10
 	addCorner(teleportButton, 6)
 
-	-- Baris 2: Metode TP (Instan vs Tween) & Speed Tween
+	-- Tombol Undo (↩️)
+	local undoButton = Instance.new("TextButton")
+	undoButton.Name = "UndoButton"
+	undoButton.Parent = modeFrame
+	undoButton.BackgroundColor3 = Color3.fromRGB(60, 60, 75)
+	undoButton.BorderSizePixel = 0
+	undoButton.Position = UDim2.new(0.80, 0, 0, 0)
+	undoButton.Size = UDim2.new(0.09, 0, 1, 0)
+	undoButton.Font = Enum.Font.GothamBold
+	undoButton.Text = "↩️"
+	undoButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+	undoButton.TextSize = 12
+	addCorner(undoButton, 6)
+
+	-- Tombol Redo (↪️)
+	local redoButton = Instance.new("TextButton")
+	redoButton.Name = "RedoButton"
+	redoButton.Parent = modeFrame
+	redoButton.BackgroundColor3 = Color3.fromRGB(60, 60, 75)
+	redoButton.BorderSizePixel = 0
+	redoButton.Position = UDim2.new(0.91, 0, 0, 0)
+	redoButton.Size = UDim2.new(0.09, 0, 1, 0)
+	redoButton.Font = Enum.Font.GothamBold
+	redoButton.Text = "↪️"
+	redoButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+	redoButton.TextSize = 12
+	addCorner(redoButton, 6)
+
+	-- Baris 2: Metode TP & Speed Tween
 	local methodFrame = Instance.new("Frame")
 	methodFrame.Name = "MethodFrame"
 	methodFrame.Parent = contentFrame
@@ -297,13 +362,12 @@ local function createTeleportGui()
 	methodToggleBtn.TextSize = 10
 	addCorner(methodToggleBtn, 6)
 
-	-- Kontrol Speed Tween (+ / - / Display)
 	local speedSubFrame = Instance.new("Frame")
 	speedSubFrame.Name = "SpeedSubFrame"
 	speedSubFrame.Parent = methodFrame
 	speedSubFrame.BackgroundTransparency = 1
-	speedSubFrame.Position = UDim2.new(0.41, 0, 0, 0)
-	speedSubFrame.Size = UDim2.new(0.59, 0, 1, 0)
+	speedSubFrame.Position = UDim2.new(0.40, 0, 0, 0)
+	speedSubFrame.Size = UDim2.new(0.60, 0, 1, 0)
 
 	local speedDownBtn = Instance.new("TextButton")
 	speedDownBtn.Name = "SpeedDownBtn"
@@ -343,7 +407,7 @@ local function createTeleportGui()
 	speedUpBtn.TextSize = 12
 	addCorner(speedUpBtn, 5)
 
-	-- Baris 3: Tombol Aksi (Auto, Loop, Stop)
+	-- Baris 3: Tombol Aksi
 	local actionFrame = Instance.new("Frame")
 	actionFrame.Name = "ActionFrame"
 	actionFrame.Parent = contentFrame
@@ -490,6 +554,8 @@ local function createTeleportGui()
 		ContentFrame = contentFrame,
 		SetLokasiButton = setLokasiButton,
 		TeleportButton = teleportButton,
+		UndoButton = undoButton,
+		RedoButton = redoButton,
 		MethodToggleBtn = methodToggleBtn,
 		SpeedDisplay = speedDisplay,
 		SpeedUpBtn = speedUpBtn,
@@ -611,7 +677,6 @@ local function getLastCheckpoint()
 	return last
 end
 
--- Eksekusi Teleport Berdasarkan Mode (Instan atau Tween)
 local function teleportToCheckpoint(index, isLastPoint)
 	local character = player.Character
 	if not character then return false end
@@ -701,6 +766,28 @@ guiElements.TeleportButton.MouseButton1Click:Connect(function()
 	updateUI()
 end)
 
+guiElements.UndoButton.MouseButton1Click:Connect(function()
+	if #historyStack > 0 then
+		table.insert(redoStack, cloneCheckpoints())
+		checkpoints = table.remove(historyStack)
+		updateUI()
+		notify("Undo berhasil (perubahan dibatalkan).")
+	else
+		notify("Tidak ada riwayat untuk di-undo.")
+	end
+end)
+
+guiElements.RedoButton.MouseButton1Click:Connect(function()
+	if #redoStack > 0 then
+		table.insert(historyStack, cloneCheckpoints())
+		checkpoints = table.remove(redoStack)
+		updateUI()
+		notify("Redo berhasil.")
+	else
+		notify("Tidak ada riwayat untuk di-redo.")
+	end
+end)
+
 guiElements.MethodToggleBtn.MouseButton1Click:Connect(function()
 	if tpMethod == "Tween" then
 		tpMethod = "Instan"
@@ -712,12 +799,12 @@ guiElements.MethodToggleBtn.MouseButton1Click:Connect(function()
 end)
 
 guiElements.SpeedUpBtn.MouseButton1Click:Connect(function()
-	TWEEN_SPEED = math.clamp(TWEEN_SPEED + 0.01, 0.001, 1.0)
+	TWEEN_SPEED = math.clamp(TWEEN_SPEED + 0.005, 0.001, 1.0)
 	updateUI()
 end)
 
 guiElements.SpeedDownBtn.MouseButton1Click:Connect(function()
-	TWEEN_SPEED = math.clamp(TWEEN_SPEED - 0.01, 0.001, 1.0)
+	TWEEN_SPEED = math.clamp(TWEEN_SPEED - 0.005, 0.001, 1.0)
 	updateUI()
 end)
 
@@ -797,6 +884,7 @@ for i = 1, MAX_CHECKPOINTS do
 
 			local cpName = "CP" .. cpIndex
 			if currentMode == "Set Lokasi" then
+				pushHistory()
 				checkpoints[cpName] = root.CFrame
 				notify("Lokasi " .. cpName .. " telah disimpan!")
 				updateUI()
