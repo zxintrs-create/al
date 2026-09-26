@@ -1,5 +1,5 @@
 --[[
-    👑 AldoVYSR TELEPORT V2 (Updated with Speed Control UI)
+    👑 AldoVYSR TELEPORT V2 (Fixed UI & Separated Instant/Tween Modes)
 ]]
 
 local Players = game:GetService("Players")
@@ -15,7 +15,8 @@ local GUI_TITLE = "👑 AldoVYSR TELEPORT V2"
 local SAVE_FOLDER = "teleport_saves/"
 local currentSaveFileName = "TELEPORT 1"
 
-local currentMode = "Set Lokasi"
+local currentMode = "Set Lokasi" -- "Set Lokasi" atau "Teleport"
+local tpMethod = "Tween"         -- "Instan" atau "Tween"
 local isMinimized = false
 local guiElements = {}
 local checkpoints = {}
@@ -23,7 +24,7 @@ local checkpoints = {}
 local autoTeleport = false
 local loopEnabled = false
 local TELEPORT_DELAY = 0.5
-local TWEEN_SPEED = 0.1 -- Kecepatan default tween (semakin kecil semakin cepat)
+local TWEEN_SPEED = 0.02 -- Default sangat cepat (mendekati instan tapi tetap tween)
 local currentPlatform = nil
 
 -- Pastikan folder save ada
@@ -184,8 +185,8 @@ local function createTeleportGui()
 	mainFrame.Parent = screenGui
 	mainFrame.BackgroundColor3 = Color3.fromRGB(24, 24, 28)
 	mainFrame.BorderSizePixel = 0
-	mainFrame.Position = UDim2.new(1, -330, 0.5, -300)
-	mainFrame.Size = UDim2.new(0, 310, 0, 595)
+	mainFrame.Position = UDim2.new(1, -330, 0.5, -290)
+	mainFrame.Size = UDim2.new(0, 310, 0, 575)
 	mainFrame.Active = true
 	mainFrame.Visible = false
 	addCorner(mainFrame, 12)
@@ -244,11 +245,12 @@ local function createTeleportGui()
 	contentFrame.Position = UDim2.new(0, 10, 0, 52)
 	contentFrame.Size = UDim2.new(1, -20, 1, -60)
 
+	-- Baris 1: Mode Set Lokasi / Teleport
 	local modeFrame = Instance.new("Frame")
 	modeFrame.Name = "ModeFrame"
 	modeFrame.Parent = contentFrame
 	modeFrame.BackgroundTransparency = 1
-	modeFrame.Size = UDim2.new(1, 0, 0, 36)
+	modeFrame.Size = UDim2.new(1, 0, 0, 32)
 
 	local setLokasiButton = Instance.new("TextButton")
 	setLokasiButton.Name = "SetLokasiButton"
@@ -259,7 +261,7 @@ local function createTeleportGui()
 	setLokasiButton.Font = Enum.Font.GothamBold
 	setLokasiButton.Text = "SET LOKASI"
 	setLokasiButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-	setLokasiButton.TextSize = 12
+	setLokasiButton.TextSize = 11
 	addCorner(setLokasiButton, 6)
 
 	local teleportButton = Instance.new("TextButton")
@@ -272,84 +274,93 @@ local function createTeleportGui()
 	teleportButton.Font = Enum.Font.GothamBold
 	teleportButton.Text = "TELEPORT"
 	teleportButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-	teleportButton.TextSize = 12
+	teleportButton.TextSize = 11
 	addCorner(teleportButton, 6)
 
-	-- TWEEN SPEED SETTING FRAME
-	local speedFrame = Instance.new("Frame")
-	speedFrame.Name = "SpeedFrame"
-	speedFrame.Parent = contentFrame
-	speedFrame.BackgroundTransparency = 1
-	speedFrame.Position = UDim2.new(0, 0, 0, 42)
-	speedFrame.Size = UDim2.new(1, 0, 0, 30)
+	-- Baris 2: Metode TP (Instan vs Tween) & Speed Tween
+	local methodFrame = Instance.new("Frame")
+	methodFrame.Name = "MethodFrame"
+	methodFrame.Parent = contentFrame
+	methodFrame.BackgroundTransparency = 1
+	methodFrame.Position = UDim2.new(0, 0, 0, 38)
+	methodFrame.Size = UDim2.new(1, 0, 0, 32)
 
-	local speedLabel = Instance.new("TextLabel")
-	speedLabel.Name = "SpeedLabel"
-	speedLabel.Parent = speedFrame
-	speedLabel.BackgroundTransparency = 1
-	speedLabel.Size = UDim2.new(0.5, 0, 1, 0)
-	speedLabel.Font = Enum.Font.GothamBold
-	speedLabel.Text = "TWEEN SPEED:"
-	speedLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-	speedLabel.TextSize = 11
-	speedLabel.TextXAlignment = Enum.TextXAlignment.Left
+	local methodToggleBtn = Instance.new("TextButton")
+	methodToggleBtn.Name = "MethodToggleBtn"
+	methodToggleBtn.Parent = methodFrame
+	methodToggleBtn.BackgroundColor3 = Color3.fromRGB(80, 40, 140)
+	methodToggleBtn.BorderSizePixel = 0
+	methodToggleBtn.Size = UDim2.new(0.38, 0, 1, 0)
+	methodToggleBtn.Font = Enum.Font.GothamBold
+	methodToggleBtn.Text = "MODE: TWEEN"
+	methodToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	methodToggleBtn.TextSize = 10
+	addCorner(methodToggleBtn, 6)
 
-	local speedDownButton = Instance.new("TextButton")
-	speedDownButton.Name = "SpeedDownButton"
-	speedDownButton.Parent = speedFrame
-	speedDownButton.BackgroundColor3 = Color3.fromRGB(60, 60, 75)
-	speedDownButton.BorderSizePixel = 0
-	speedDownButton.Position = UDim2.new(0.5, 0, 0, 0)
-	speedDownButton.Size = UDim2.new(0, 28, 1, 0)
-	speedDownButton.Font = Enum.Font.GothamBold
-	speedDownButton.Text = "-"
-	speedDownButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-	speedDownButton.TextSize = 14
-	addCorner(speedDownButton, 5)
+	-- Kontrol Speed Tween (+ / - / Display)
+	local speedSubFrame = Instance.new("Frame")
+	speedSubFrame.Name = "SpeedSubFrame"
+	speedSubFrame.Parent = methodFrame
+	speedSubFrame.BackgroundTransparency = 1
+	speedSubFrame.Position = UDim2.new(0.41, 0, 0, 0)
+	speedSubFrame.Size = UDim2.new(0.59, 0, 1, 0)
 
-	local speedDisplayButton = Instance.new("TextButton")
-	speedDisplayButton.Name = "SpeedDisplayButton"
-	speedDisplayButton.Parent = speedFrame
-	speedDisplayButton.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
-	speedDisplayButton.BorderSizePixel = 0
-	speedDisplayButton.Position = UDim2.new(0.5, 33, 0, 0)
-	speedDisplayButton.Size = UDim2.new(1, -99, 1, 0)
-	speedDisplayButton.Font = Enum.Font.GothamBold
-	speedDisplayButton.Text = string.format("%.2fs", TWEEN_SPEED)
-	speedDisplayButton.TextColor3 = Color3.fromRGB(255, 170, 0)
-	speedDisplayButton.TextSize = 11
-	addCorner(speedDisplayButton, 5)
+	local speedDownBtn = Instance.new("TextButton")
+	speedDownBtn.Name = "SpeedDownBtn"
+	speedDownBtn.Parent = speedSubFrame
+	speedDownBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+	speedDownBtn.BorderSizePixel = 0
+	speedDownBtn.Size = UDim2.new(0, 24, 1, 0)
+	speedDownBtn.Font = Enum.Font.GothamBold
+	speedDownBtn.Text = "-"
+	speedDownBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	speedDownBtn.TextSize = 12
+	addCorner(speedDownBtn, 5)
 
-	local speedUpButton = Instance.new("TextButton")
-	speedUpButton.Name = "SpeedUpButton"
-	speedUpButton.Parent = speedFrame
-	speedUpButton.BackgroundColor3 = Color3.fromRGB(60, 60, 75)
-	speedUpButton.BorderSizePixel = 0
-	speedUpButton.Position = UDim2.new(1, -28, 0, 0)
-	speedUpButton.Size = UDim2.new(0, 28, 1, 0)
-	speedUpButton.Font = Enum.Font.GothamBold
-	speedUpButton.Text = "+"
-	speedUpButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-	speedUpButton.TextSize = 14
-	addCorner(speedUpButton, 5)
+	local speedDisplay = Instance.new("TextButton")
+	speedDisplay.Name = "SpeedDisplay"
+	speedDisplay.Parent = speedSubFrame
+	speedDisplay.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+	speedDisplay.BorderSizePixel = 0
+	speedDisplay.Position = UDim2.new(0, 28, 0, 0)
+	speedDisplay.Size = UDim2.new(1, -56, 1, 0)
+	speedDisplay.Font = Enum.Font.GothamBold
+	speedDisplay.Text = string.format("Spd: %.3fs", TWEEN_SPEED)
+	speedDisplay.TextColor3 = Color3.fromRGB(255, 170, 0)
+	speedDisplay.TextSize = 10
+	addCorner(speedDisplay, 5)
 
+	local speedUpBtn = Instance.new("TextButton")
+	speedUpBtn.Name = "SpeedUpBtn"
+	speedUpBtn.Parent = speedSubFrame
+	speedUpBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+	speedUpBtn.BorderSizePixel = 0
+	speedUpBtn.Position = UDim2.new(1, -24, 0, 0)
+	speedUpBtn.Size = UDim2.new(0, 24, 1, 0)
+	speedUpBtn.Font = Enum.Font.GothamBold
+	speedUpBtn.Text = "+"
+	speedUpBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	speedUpBtn.TextSize = 12
+	addCorner(speedUpBtn, 5)
+
+	-- Baris 3: Tombol Aksi (Auto, Loop, Stop)
 	local actionFrame = Instance.new("Frame")
 	actionFrame.Name = "ActionFrame"
 	actionFrame.Parent = contentFrame
 	actionFrame.BackgroundTransparency = 1
-	actionFrame.Position = UDim2.new(0, 0, 0, 78)
-	actionFrame.Size = UDim2.new(1, 0, 0, 80)
+	actionFrame.Position = UDim2.new(0, 0, 0, 75)
+	actionFrame.Size = UDim2.new(1, 0, 0, 72)
 
 	local autoButton = Instance.new("TextButton")
 	autoButton.Name = "AutoTeleportButton"
 	autoButton.Parent = actionFrame
 	autoButton.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
 	autoButton.BorderSizePixel = 0
-	autoButton.Size = UDim2.new(0.48, 0, 0, 34)
+	autoButton.Size = UDim2.new(0.48, 0, 0, 32)
 	autoButton.Font = Enum.Font.GothamBold
 	autoButton.Text = "AUTO TELEPORT"
 	autoButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-	autoButton.TextSize = 11
+	autoButton.TextSize = 10
 	addCorner(autoButton, 6)
 
 	local loopButton = Instance.new("TextButton")
@@ -358,11 +369,11 @@ local function createTeleportGui()
 	loopButton.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
 	loopButton.BorderSizePixel = 0
 	loopButton.Position = UDim2.new(0.52, 0, 0, 0)
-	loopButton.Size = UDim2.new(0.48, 0, 0, 34)
+	loopButton.Size = UDim2.new(0.48, 0, 0, 32)
 	loopButton.Font = Enum.Font.GothamBold
 	loopButton.Text = "LOOP: OFF"
 	loopButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-	loopButton.TextSize = 11
+	loopButton.TextSize = 10
 	addCorner(loopButton, 6)
 
 	local stopButton = Instance.new("TextButton")
@@ -370,20 +381,21 @@ local function createTeleportGui()
 	stopButton.Parent = actionFrame
 	stopButton.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
 	stopButton.BorderSizePixel = 0
-	stopButton.Position = UDim2.new(0, 0, 0, 40)
-	stopButton.Size = UDim2.new(1, 0, 0, 34)
+	stopButton.Position = UDim2.new(0, 0, 0, 36)
+	stopButton.Size = UDim2.new(1, 0, 0, 32)
 	stopButton.Font = Enum.Font.GothamBold
 	stopButton.Text = "⛔ STOP AUTO"
 	stopButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-	stopButton.TextSize = 12
+	stopButton.TextSize = 11
 	addCorner(stopButton, 6)
 
+	-- Baris 4: File Save / Load / Slot
 	local fileFrame = Instance.new("Frame")
 	fileFrame.Name = "FileFrame"
 	fileFrame.Parent = contentFrame
 	fileFrame.BackgroundTransparency = 1
-	fileFrame.Position = UDim2.new(0, 0, 0, 164)
-	fileFrame.Size = UDim2.new(1, 0, 0, 32)
+	fileFrame.Position = UDim2.new(0, 0, 0, 152)
+	fileFrame.Size = UDim2.new(1, 0, 0, 30)
 
 	local saveButton = Instance.new("TextButton")
 	saveButton.Name = "SaveButton"
@@ -394,7 +406,7 @@ local function createTeleportGui()
 	saveButton.Font = Enum.Font.GothamBold
 	saveButton.Text = "💾 SAVE"
 	saveButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-	saveButton.TextSize = 11
+	saveButton.TextSize = 10
 	addCorner(saveButton, 6)
 
 	local loadButton = Instance.new("TextButton")
@@ -407,7 +419,7 @@ local function createTeleportGui()
 	loadButton.Font = Enum.Font.GothamBold
 	loadButton.Text = "📂 LOAD"
 	loadButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-	loadButton.TextSize = 11
+	loadButton.TextSize = 10
 	addCorner(loadButton, 6)
 
 	local fileSlotButton = Instance.new("TextButton")
@@ -420,16 +432,17 @@ local function createTeleportGui()
 	fileSlotButton.Font = Enum.Font.GothamBold
 	fileSlotButton.Text = currentSaveFileName
 	fileSlotButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-	fileSlotButton.TextSize = 10
+	fileSlotButton.TextSize = 9
 	addCorner(fileSlotButton, 6)
 
+	-- Scrolling Frame Checkpoints
 	local scrollingFrame = Instance.new("ScrollingFrame")
 	scrollingFrame.Name = "ScrollingFrame"
 	scrollingFrame.Parent = contentFrame
 	scrollingFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
 	scrollingFrame.BorderSizePixel = 0
-	scrollingFrame.Position = UDim2.new(0, 0, 0, 204)
-	scrollingFrame.Size = UDim2.new(1, 0, 1, -204)
+	scrollingFrame.Position = UDim2.new(0, 0, 0, 188)
+	scrollingFrame.Size = UDim2.new(1, 0, 1, -188)
 	scrollingFrame.ScrollBarThickness = 4
 	scrollingFrame.ScrollBarImageColor3 = Color3.fromRGB(100, 100, 120)
 	scrollingFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
@@ -441,15 +454,15 @@ local function createTeleportGui()
 	listLayout.Name = "ListLayout"
 	listLayout.Parent = scrollingFrame
 	listLayout.SortOrder = Enum.SortOrder.LayoutOrder
-	listLayout.Padding = UDim.new(0, 6)
+	listLayout.Padding = UDim.new(0, 5)
 
 	local listPadding = Instance.new("UIPadding")
 	listPadding.Name = "ListPadding"
 	listPadding.Parent = scrollingFrame
-	listPadding.PaddingTop = UDim.new(0, 6)
-	listPadding.PaddingBottom = UDim.new(0, 6)
-	listPadding.PaddingLeft = UDim.new(0, 6)
-	listPadding.PaddingRight = UDim.new(0, 6)
+	listPadding.PaddingTop = UDim.new(0, 5)
+	listPadding.PaddingBottom = UDim.new(0, 5)
+	listPadding.PaddingLeft = UDim.new(0, 5)
+	listPadding.PaddingRight = UDim.new(0, 5)
 
 	for i = 1, MAX_CHECKPOINTS do
 		local cpButton = Instance.new("TextButton")
@@ -457,11 +470,11 @@ local function createTeleportGui()
 		cpButton.Parent = scrollingFrame
 		cpButton.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
 		cpButton.BorderSizePixel = 0
-		cpButton.Size = UDim2.new(1, 0, 0, 38)
+		cpButton.Size = UDim2.new(1, 0, 0, 35)
 		cpButton.Font = Enum.Font.GothamMedium
 		cpButton.Text = "CP" .. i
 		cpButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-		cpButton.TextSize = 12
+		cpButton.TextSize = 11
 		cpButton.TextXAlignment = Enum.TextXAlignment.Center
 		cpButton.LayoutOrder = i
 		addCorner(cpButton, 6)
@@ -477,9 +490,10 @@ local function createTeleportGui()
 		ContentFrame = contentFrame,
 		SetLokasiButton = setLokasiButton,
 		TeleportButton = teleportButton,
-		SpeedDisplayButton = speedDisplayButton,
-		SpeedUpButton = speedUpButton,
-		SpeedDownButton = speedDownButton,
+		MethodToggleBtn = methodToggleBtn,
+		SpeedDisplay = speedDisplay,
+		SpeedUpBtn = speedUpBtn,
+		SpeedDownBtn = speedDownBtn,
 		AutoTeleportButton = autoButton,
 		LoopButton = loopButton,
 		StopButton = stopButton,
@@ -532,9 +546,21 @@ function updateUI()
 		guiElements.TeleportButton.BackgroundColor3 = Color3.fromRGB(220, 100, 0)
 	end
 
-	if guiElements.SpeedDisplayButton then
-		guiElements.SpeedDisplayButton.Text = string.format("%.2fs", TWEEN_SPEED)
+	if tpMethod == "Tween" then
+		guiElements.MethodToggleBtn.Text = "MODE: TWEEN"
+		guiElements.MethodToggleBtn.BackgroundColor3 = Color3.fromRGB(80, 40, 140)
+		guiElements.SpeedDisplay.Visible = true
+		guiElements.SpeedUpBtn.Visible = true
+		guiElements.SpeedDownBtn.Visible = true
+	else
+		guiElements.MethodToggleBtn.Text = "MODE: INSTAN"
+		guiElements.MethodToggleBtn.BackgroundColor3 = Color3.fromRGB(140, 80, 40)
+		guiElements.SpeedDisplay.Visible = false
+		guiElements.SpeedUpBtn.Visible = false
+		guiElements.SpeedDownBtn.Visible = false
 	end
+
+	guiElements.SpeedDisplay.Text = string.format("Spd: %.3fs", TWEEN_SPEED)
 
 	if autoTeleport then
 		guiElements.AutoTeleportButton.BackgroundColor3 = Color3.fromRGB(40, 160, 70)
@@ -585,7 +611,7 @@ local function getLastCheckpoint()
 	return last
 end
 
--- Tween Teleport berdasarkan TWEEN_SPEED yang disetel di UI
+-- Eksekusi Teleport Berdasarkan Mode (Instan atau Tween)
 local function teleportToCheckpoint(index, isLastPoint)
 	local character = player.Character
 	if not character then return false end
@@ -596,10 +622,14 @@ local function teleportToCheckpoint(index, isLastPoint)
 	local target = checkpoints["CP" .. index]
 	if not target then return false end
 
-	local tweenInfo = TweenInfo.new(TWEEN_SPEED, Enum.EasingStyle.Linear, Enum.EasingDirection.Out)
-	local tween = TweenService:Create(root, tweenInfo, {CFrame = target})
-	tween:Play()
-	tween.Completed:Wait()
+	if tpMethod == "Instan" then
+		root.CFrame = target
+	else
+		local tweenInfo = TweenInfo.new(TWEEN_SPEED, Enum.EasingStyle.Linear, Enum.EasingDirection.Out)
+		local tween = TweenService:Create(root, tweenInfo, {CFrame = target})
+		tween:Play()
+		tween.Completed:Wait()
+	end
 
 	if not isLastPoint then
 		createPlatform(target)
@@ -671,14 +701,23 @@ guiElements.TeleportButton.MouseButton1Click:Connect(function()
 	updateUI()
 end)
 
--- Kontrol Tombol Kecepatan Tween
-guiElements.SpeedUpButton.MouseButton1Click:Connect(function()
-	TWEEN_SPEED = math.clamp(TWEEN_SPEED + 0.05, 0.0, 2.0)
+guiElements.MethodToggleBtn.MouseButton1Click:Connect(function()
+	if tpMethod == "Tween" then
+		tpMethod = "Instan"
+	else
+		tpMethod = "Tween"
+	end
+	updateUI()
+	notify("Mode TP diubah ke: " .. tpMethod)
+end)
+
+guiElements.SpeedUpBtn.MouseButton1Click:Connect(function()
+	TWEEN_SPEED = math.clamp(TWEEN_SPEED + 0.01, 0.001, 1.0)
 	updateUI()
 end)
 
-guiElements.SpeedDownButton.MouseButton1Click:Connect(function()
-	TWEEN_SPEED = math.clamp(TWEEN_SPEED - 0.05, 0.0, 2.0)
+guiElements.SpeedDownBtn.MouseButton1Click:Connect(function()
+	TWEEN_SPEED = math.clamp(TWEEN_SPEED - 0.01, 0.001, 1.0)
 	updateUI()
 end)
 
@@ -728,7 +767,7 @@ guiElements.MinimizeButton.MouseButton1Click:Connect(function()
 	else
 		guiElements.MinimizeButton.Text = "−"
 		guiElements.ContentFrame.Visible = true
-		TweenService:Create(guiElements.MainFrame, tweenInfo, { Size = UDim2.new(0, 310, 0, 595) }):Play()
+		TweenService:Create(guiElements.MainFrame, tweenInfo, { Size = UDim2.new(0, 310, 0, 575) }):Play()
 	end
 end)
 
