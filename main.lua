@@ -214,14 +214,13 @@ local function createTeleportGui()
 	openButton.Name = "OpenButtonTp"
 	openButton.Parent = screenGui
 	openButton.BackgroundColor3 = Color3.fromRGB(24, 24, 28)
-	openButton.Position = UDim2.new(1, -70, 0.5, -150)
+	openButton.Position = UDim2.new(0.9, 0, 0.5, 0)
 	openButton.Size = UDim2.fromOffset(50, 50)
 	openButton.Font = Enum.Font.GothamBold
 	openButton.Text = "TP"
 	openButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 	openButton.TextSize = 18
 	openButton.Active = true
-	openButton.Draggable = true
 	addCorner(openButton, 25)
 	addStroke(openButton, 2)
 
@@ -231,8 +230,8 @@ local function createTeleportGui()
 	mainFrame.BackgroundColor3 = Color3.fromRGB(24, 24, 28)
 	mainFrame.BorderSizePixel = 0
 	mainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-	mainFrame.Position = UDim2.new(0.8, 0, 0.5, 0)
-	mainFrame.Size = UDim2.new(0, 310, 0, 575)
+	mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+	mainFrame.Size = UDim2.new(0, 310, 0, 500)
 	mainFrame.Active = true
 	mainFrame.Visible = false
 	addCorner(mainFrame, 12)
@@ -575,9 +574,11 @@ local function createTeleportGui()
 	}
 end
 
+-- SISTEM DRAG RESPONSIIF UNTUK PC MAUPUN MOBILE / ALL DPI
 local function makeDraggable(objectToMove, dragHandle)
 	local dragging = false
-	local dragStart, startPos
+	local dragStart = Vector3.new()
+	local startPos = UDim2.new()
 
 	dragHandle.InputBegan:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -595,13 +596,22 @@ local function makeDraggable(objectToMove, dragHandle)
 
 	UserInputService.InputChanged:Connect(function(input)
 		if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+			local camera = workspace.CurrentCamera
+			local screenSize = camera and camera.ViewportSize or Vector2.new(800, 600)
 			local delta = input.Position - dragStart
-			objectToMove.Position = UDim2.new(
-				startPos.X.Scale,
-				startPos.X.Offset + delta.X,
-				startPos.Y.Scale,
-				startPos.Y.Offset + delta.Y
-			)
+
+			local absSize = objectToMove.AbsoluteSize
+			local halfWidth = absSize.X / 2
+			local halfHeight = absSize.Y / 2
+
+			local rawX = (startPos.X.Scale * screenSize.X) + startPos.X.Offset + delta.X
+			local rawY = (startPos.Y.Scale * screenSize.Y) + startPos.Y.Offset + delta.Y
+
+			-- Batasi pergerakan agar selalu berada di dalam area viewport layar
+			local clampedX = math.clamp(rawX, halfWidth, screenSize.X - halfWidth)
+			local clampedY = math.clamp(rawY, halfHeight, screenSize.Y - halfHeight)
+
+			objectToMove.Position = UDim2.new(0, clampedX, 0, clampedY)
 		end
 	end)
 end
@@ -822,7 +832,7 @@ local function openSaveWindow()
 	labelInfo.Position = UDim2.new(0, 15, 0, 40)
 	labelInfo.Size = UDim2.new(1, -30, 0, 20)
 	labelInfo.Font = Enum.Font.Gotham
-	labelInfo.Text = "Masukkan Nama Folder / Save:"
+	labelInfo.Text = "Masukkan Nama Save:"
 	labelInfo.TextColor3 = Color3.fromRGB(200, 200, 200)
 	labelInfo.TextSize = 11
 	labelInfo.TextXAlignment = Enum.TextXAlignment.Left
@@ -862,7 +872,7 @@ local function openSaveWindow()
 	end)
 end
 
--- POPUP LOAD DENGAN TOGGLE DELETE
+-- POPUP LOAD
 local function openLoadWindow()
 	local existingPopup = playerGui:FindFirstChild("LoadPopupGui")
 	if existingPopup then existingPopup:Destroy() end
@@ -1018,8 +1028,17 @@ end
 guiElements = createTeleportGui()
 makeDraggable(guiElements.MainFrame, guiElements.TitleBar)
 
+-- RESET POSISI MENU OTOMATIS SAAT TOMBOL OPEN DIKLIK
 guiElements.OpenButton.MouseButton1Click:Connect(function()
-	guiElements.MainFrame.Visible = not guiElements.MainFrame.Visible
+	local mainFrame = guiElements.MainFrame
+	local isOpening = not mainFrame.Visible
+
+	if isOpening then
+		-- Kembalikan posisi otomatis ke tengah layar setiap kali di-open
+		mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+	end
+
+	mainFrame.Visible = isOpening
 end)
 
 guiElements.SetLokasiButton.MouseButton1Click:Connect(function()
@@ -1107,7 +1126,7 @@ guiElements.MinimizeButton.MouseButton1Click:Connect(function()
 	else
 		guiElements.MinimizeButton.Text = "−"
 		guiElements.ContentFrame.Visible = true
-		TweenService:Create(guiElements.MainFrame, tweenInfo, {Size = UDim2.new(0, 310, 0, 575)}):Play()
+		TweenService:Create(guiElements.MainFrame, tweenInfo, {Size = UDim2.new(0, 310, 0, 500)}):Play()
 	end
 end)
 
