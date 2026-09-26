@@ -1,3 +1,7 @@
+--[[
+    👑 AldoVYSR TELEPORT V2 (Updated with Speed Control UI)
+]]
+
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
@@ -7,19 +11,27 @@ local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
 local MAX_CHECKPOINTS = 30
-local GUI_TITLE = "👑 AldoVS TELEPORT"
-local SAVE_FILE = "teleport_checkpoints.json"
+local GUI_TITLE = "👑 AldoVYSR TELEPORT V2"
+local SAVE_FOLDER = "teleport_saves/"
+local currentSaveFileName = "TELEPORT 1"
+
 local currentMode = "Set Lokasi"
 local isMinimized = false
 local guiElements = {}
-
 local checkpoints = {}
 
 local autoTeleport = false
 local loopEnabled = false
 local TELEPORT_DELAY = 0.5
-
+local TWEEN_SPEED = 0.1 -- Kecepatan default tween (semakin kecil semakin cepat)
 local currentPlatform = nil
+
+-- Pastikan folder save ada
+pcall(function()
+	if not isfolder(SAVE_FOLDER) then
+		makefolder(SAVE_FOLDER)
+	end
+end)
 
 local function notify(text)
 	StarterGui:SetCore("ChatMakeSystemMessage", {
@@ -28,7 +40,6 @@ local function notify(text)
 	})
 end
 
--- Fungsi Membuat/Menghapus Pijakan Invisible
 local function clearPlatform()
 	if currentPlatform then
 		currentPlatform:Destroy()
@@ -38,17 +49,15 @@ end
 
 local function createPlatform(cframe)
 	clearPlatform()
-
 	local platform = Instance.new("Part")
 	platform.Name = "TeleportPlatform_Invisible"
 	platform.Size = Vector3.new(6, 1, 6)
-	platform.CFrame = cframe * CFrame.new(0, -3.5, 0) -- Berada di bawah kaki karakter
+	platform.CFrame = cframe * CFrame.new(0, -3.5, 0)
 	platform.Anchored = true
 	platform.CanCollide = true
-	platform.Transparency = 1 -- Completely invisible
+	platform.Transparency = 1
 	platform.Material = Enum.Material.SmoothPlastic
 	platform.Parent = workspace
-
 	currentPlatform = platform
 end
 
@@ -66,7 +75,6 @@ local function addStroke(parent, color, thickness)
 	stroke.Parent = parent
 end
 
--- Serialize checkpoints
 local function serializeCheckpoints()
 	local entries = {}
 	for i = 1, MAX_CHECKPOINTS do
@@ -86,7 +94,6 @@ local function serializeCheckpoints()
 	return table.concat(entries, "\n")
 end
 
--- Deserialize checkpoints
 local function deserializeCheckpoints(content)
 	local loaded = {}
 	for line in content:gmatch("[^\r\n]+") do
@@ -101,27 +108,35 @@ local function deserializeCheckpoints(content)
 	return loaded
 end
 
+local function getSaveFilePath(name)
+	local safeName = name:gsub("[^%w%s_-]", ""):gsub("%s+", "_")
+	return SAVE_FOLDER .. safeName .. ".json"
+end
+
 local function saveCheckpointsToFile()
+	local filePath = getSaveFilePath(currentSaveFileName)
 	local success, err = pcall(function()
 		local content = serializeCheckpoints()
-		writefile(SAVE_FILE, content)
+		writefile(filePath, content)
 	end)
 	if success then
-		notify("Checkpoint disimpan ke " .. SAVE_FILE)
+		notify("Disimpan ke " .. currentSaveFileName)
 	else
 		notify("Gagal menyimpan: " .. tostring(err))
 	end
 end
 
-local function loadCheckpointsFromFile()
+local function loadCheckpointsFromFile(fileName)
+	local filePath = getSaveFilePath(fileName)
 	local success, content = pcall(function()
-		return readfile(SAVE_FILE)
+		return readfile(filePath)
 	end)
 	if not success or not content then
-		notify("Gagal memuat file: " .. tostring(content or "file tidak ditemukan"))
+		notify("File " .. fileName .. " tidak ditemukan")
 		return false
 	end
 
+	table.clear(checkpoints)
 	local loaded = deserializeCheckpoints(content)
 	local count = 0
 	for cpName, cframe in pairs(loaded) do
@@ -129,14 +144,11 @@ local function loadCheckpointsFromFile()
 		count = count + 1
 	end
 
-	if count > 0 then
-		notify("Loaded " .. count .. " checkpoint dari " .. SAVE_FILE)
-		updateUI()
-		return true
-	else
-		notify("Tidak ada checkpoint valid di file")
-		return false
-	end
+	currentSaveFileName = fileName
+	notify("Memuat " .. count .. " checkpoint dari " .. fileName)
+	updateUI = updateUI or function() end
+	updateUI()
+	return true
 end
 
 local function createTeleportGui()
@@ -151,14 +163,31 @@ local function createTeleportGui()
 	screenGui.ResetOnSpawn = false
 	screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
+	-- Tombol Buka Menu (OpenButtonTp)
+	local openButton = Instance.new("TextButton")
+	openButton.Name = "OpenButtonTp"
+	openButton.Parent = screenGui
+	openButton.BackgroundColor3 = Color3.fromRGB(24, 24, 28)
+	openButton.Position = UDim2.new(1, -70, 0.5, -150)
+	openButton.Size = UDim2.fromOffset(50, 50)
+	openButton.Font = Enum.Font.GothamBold
+	openButton.Text = "TP"
+	openButton.TextColor3 = Color3.fromRGB(255, 170, 0)
+	openButton.TextSize = 18
+	openButton.Active = true
+	openButton.Draggable = true
+	addCorner(openButton, 25)
+	addStroke(openButton, Color3.fromRGB(255, 170, 0), 2)
+
 	local mainFrame = Instance.new("Frame")
 	mainFrame.Name = "MainFrame"
 	mainFrame.Parent = screenGui
 	mainFrame.BackgroundColor3 = Color3.fromRGB(24, 24, 28)
 	mainFrame.BorderSizePixel = 0
-	mainFrame.Position = UDim2.new(1, -330, 0.5, -270)
-	mainFrame.Size = UDim2.new(0, 310, 0, 540)
+	mainFrame.Position = UDim2.new(1, -330, 0.5, -300)
+	mainFrame.Size = UDim2.new(0, 310, 0, 595)
 	mainFrame.Active = true
+	mainFrame.Visible = false
 	addCorner(mainFrame, 12)
 	addStroke(mainFrame, Color3.fromRGB(255, 170, 0), 2)
 
@@ -179,7 +208,7 @@ local function createTeleportGui()
 	titleLabel.Font = Enum.Font.GothamBold
 	titleLabel.Text = GUI_TITLE
 	titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-	titleLabel.TextSize = 15
+	titleLabel.TextSize = 14
 	titleLabel.TextXAlignment = Enum.TextXAlignment.Left
 
 	local minimizeButton = Instance.new("TextButton")
@@ -226,7 +255,6 @@ local function createTeleportGui()
 	setLokasiButton.Parent = modeFrame
 	setLokasiButton.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
 	setLokasiButton.BorderSizePixel = 0
-	setLokasiButton.Position = UDim2.new(0, 0, 0, 0)
 	setLokasiButton.Size = UDim2.new(0.48, 0, 1, 0)
 	setLokasiButton.Font = Enum.Font.GothamBold
 	setLokasiButton.Text = "SET LOKASI"
@@ -247,11 +275,69 @@ local function createTeleportGui()
 	teleportButton.TextSize = 12
 	addCorner(teleportButton, 6)
 
+	-- TWEEN SPEED SETTING FRAME
+	local speedFrame = Instance.new("Frame")
+	speedFrame.Name = "SpeedFrame"
+	speedFrame.Parent = contentFrame
+	speedFrame.BackgroundTransparency = 1
+	speedFrame.Position = UDim2.new(0, 0, 0, 42)
+	speedFrame.Size = UDim2.new(1, 0, 0, 30)
+
+	local speedLabel = Instance.new("TextLabel")
+	speedLabel.Name = "SpeedLabel"
+	speedLabel.Parent = speedFrame
+	speedLabel.BackgroundTransparency = 1
+	speedLabel.Size = UDim2.new(0.5, 0, 1, 0)
+	speedLabel.Font = Enum.Font.GothamBold
+	speedLabel.Text = "TWEEN SPEED:"
+	speedLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+	speedLabel.TextSize = 11
+	speedLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+	local speedDownButton = Instance.new("TextButton")
+	speedDownButton.Name = "SpeedDownButton"
+	speedDownButton.Parent = speedFrame
+	speedDownButton.BackgroundColor3 = Color3.fromRGB(60, 60, 75)
+	speedDownButton.BorderSizePixel = 0
+	speedDownButton.Position = UDim2.new(0.5, 0, 0, 0)
+	speedDownButton.Size = UDim2.new(0, 28, 1, 0)
+	speedDownButton.Font = Enum.Font.GothamBold
+	speedDownButton.Text = "-"
+	speedDownButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+	speedDownButton.TextSize = 14
+	addCorner(speedDownButton, 5)
+
+	local speedDisplayButton = Instance.new("TextButton")
+	speedDisplayButton.Name = "SpeedDisplayButton"
+	speedDisplayButton.Parent = speedFrame
+	speedDisplayButton.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+	speedDisplayButton.BorderSizePixel = 0
+	speedDisplayButton.Position = UDim2.new(0.5, 33, 0, 0)
+	speedDisplayButton.Size = UDim2.new(1, -99, 1, 0)
+	speedDisplayButton.Font = Enum.Font.GothamBold
+	speedDisplayButton.Text = string.format("%.2fs", TWEEN_SPEED)
+	speedDisplayButton.TextColor3 = Color3.fromRGB(255, 170, 0)
+	speedDisplayButton.TextSize = 11
+	addCorner(speedDisplayButton, 5)
+
+	local speedUpButton = Instance.new("TextButton")
+	speedUpButton.Name = "SpeedUpButton"
+	speedUpButton.Parent = speedFrame
+	speedUpButton.BackgroundColor3 = Color3.fromRGB(60, 60, 75)
+	speedUpButton.BorderSizePixel = 0
+	speedUpButton.Position = UDim2.new(1, -28, 0, 0)
+	speedUpButton.Size = UDim2.new(0, 28, 1, 0)
+	speedUpButton.Font = Enum.Font.GothamBold
+	speedUpButton.Text = "+"
+	speedUpButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+	speedUpButton.TextSize = 14
+	addCorner(speedUpButton, 5)
+
 	local actionFrame = Instance.new("Frame")
 	actionFrame.Name = "ActionFrame"
 	actionFrame.Parent = contentFrame
 	actionFrame.BackgroundTransparency = 1
-	actionFrame.Position = UDim2.new(0, 0, 0, 44)
+	actionFrame.Position = UDim2.new(0, 0, 0, 78)
 	actionFrame.Size = UDim2.new(1, 0, 0, 80)
 
 	local autoButton = Instance.new("TextButton")
@@ -259,7 +345,6 @@ local function createTeleportGui()
 	autoButton.Parent = actionFrame
 	autoButton.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
 	autoButton.BorderSizePixel = 0
-	autoButton.Position = UDim2.new(0, 0, 0, 0)
 	autoButton.Size = UDim2.new(0.48, 0, 0, 34)
 	autoButton.Font = Enum.Font.GothamBold
 	autoButton.Text = "AUTO TELEPORT"
@@ -297,7 +382,7 @@ local function createTeleportGui()
 	fileFrame.Name = "FileFrame"
 	fileFrame.Parent = contentFrame
 	fileFrame.BackgroundTransparency = 1
-	fileFrame.Position = UDim2.new(0, 0, 0, 130)
+	fileFrame.Position = UDim2.new(0, 0, 0, 164)
 	fileFrame.Size = UDim2.new(1, 0, 0, 32)
 
 	local saveButton = Instance.new("TextButton")
@@ -305,12 +390,11 @@ local function createTeleportGui()
 	saveButton.Parent = fileFrame
 	saveButton.BackgroundColor3 = Color3.fromRGB(40, 140, 70)
 	saveButton.BorderSizePixel = 0
-	saveButton.Position = UDim2.new(0, 0, 0, 0)
-	saveButton.Size = UDim2.new(0.48, 0, 1, 0)
+	saveButton.Size = UDim2.new(0.32, 0, 1, 0)
 	saveButton.Font = Enum.Font.GothamBold
 	saveButton.Text = "💾 SAVE"
 	saveButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-	saveButton.TextSize = 12
+	saveButton.TextSize = 11
 	addCorner(saveButton, 6)
 
 	local loadButton = Instance.new("TextButton")
@@ -318,21 +402,34 @@ local function createTeleportGui()
 	loadButton.Parent = fileFrame
 	loadButton.BackgroundColor3 = Color3.fromRGB(30, 100, 180)
 	loadButton.BorderSizePixel = 0
-	loadButton.Position = UDim2.new(0.52, 0, 0, 0)
-	loadButton.Size = UDim2.new(0.48, 0, 1, 0)
+	loadButton.Position = UDim2.new(0.34, 0, 0, 0)
+	loadButton.Size = UDim2.new(0.32, 0, 1, 0)
 	loadButton.Font = Enum.Font.GothamBold
 	loadButton.Text = "📂 LOAD"
 	loadButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-	loadButton.TextSize = 12
+	loadButton.TextSize = 11
 	addCorner(loadButton, 6)
+
+	local fileSlotButton = Instance.new("TextButton")
+	fileSlotButton.Name = "FileSlotButton"
+	fileSlotButton.Parent = fileFrame
+	fileSlotButton.BackgroundColor3 = Color3.fromRGB(70, 70, 90)
+	fileSlotButton.BorderSizePixel = 0
+	fileSlotButton.Position = UDim2.new(0.68, 0, 0, 0)
+	fileSlotButton.Size = UDim2.new(0.32, 0, 1, 0)
+	fileSlotButton.Font = Enum.Font.GothamBold
+	fileSlotButton.Text = currentSaveFileName
+	fileSlotButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+	fileSlotButton.TextSize = 10
+	addCorner(fileSlotButton, 6)
 
 	local scrollingFrame = Instance.new("ScrollingFrame")
 	scrollingFrame.Name = "ScrollingFrame"
 	scrollingFrame.Parent = contentFrame
 	scrollingFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
 	scrollingFrame.BorderSizePixel = 0
-	scrollingFrame.Position = UDim2.new(0, 0, 0, 170)
-	scrollingFrame.Size = UDim2.new(1, 0, 1, -170)
+	scrollingFrame.Position = UDim2.new(0, 0, 0, 204)
+	scrollingFrame.Size = UDim2.new(1, 0, 1, -204)
 	scrollingFrame.ScrollBarThickness = 4
 	scrollingFrame.ScrollBarImageColor3 = Color3.fromRGB(100, 100, 120)
 	scrollingFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
@@ -372,6 +469,7 @@ local function createTeleportGui()
 
 	return {
 		ScreenGui = screenGui,
+		OpenButton = openButton,
 		MainFrame = mainFrame,
 		TitleBar = titleBar,
 		MinimizeButton = minimizeButton,
@@ -379,11 +477,15 @@ local function createTeleportGui()
 		ContentFrame = contentFrame,
 		SetLokasiButton = setLokasiButton,
 		TeleportButton = teleportButton,
+		SpeedDisplayButton = speedDisplayButton,
+		SpeedUpButton = speedUpButton,
+		SpeedDownButton = speedDownButton,
 		AutoTeleportButton = autoButton,
 		LoopButton = loopButton,
 		StopButton = stopButton,
 		SaveButton = saveButton,
 		LoadButton = loadButton,
+		FileSlotButton = fileSlotButton,
 		ScrollingFrame = scrollingFrame
 	}
 end
@@ -430,6 +532,10 @@ function updateUI()
 		guiElements.TeleportButton.BackgroundColor3 = Color3.fromRGB(220, 100, 0)
 	end
 
+	if guiElements.SpeedDisplayButton then
+		guiElements.SpeedDisplayButton.Text = string.format("%.2fs", TWEEN_SPEED)
+	end
+
 	if autoTeleport then
 		guiElements.AutoTeleportButton.BackgroundColor3 = Color3.fromRGB(40, 160, 70)
 		guiElements.AutoTeleportButton.Text = "AUTO: ON"
@@ -446,14 +552,15 @@ function updateUI()
 		guiElements.LoopButton.Text = "LOOP: OFF"
 	end
 
+	guiElements.FileSlotButton.Text = currentSaveFileName
+
 	for i = 1, MAX_CHECKPOINTS do
 		local cpButton = guiElements.ScrollingFrame:FindFirstChild("CP" .. i)
 		if cpButton then
 			local cpName = "CP" .. i
 			local checkpointData = checkpoints[cpName]
 			if checkpointData then
-				local x, y, z = checkpointData:GetComponents()
-				cpButton.Text = string.format("%s | X: %.1f  Y: %.1f  Z: %.1f", cpName, x, y, z)
+				cpButton.Text = cpName .. " (Tersimpan)"
 				cpButton.BackgroundColor3 = Color3.fromRGB(35, 120, 65)
 			else
 				if currentMode == "Set Lokasi" then
@@ -478,6 +585,7 @@ local function getLastCheckpoint()
 	return last
 end
 
+-- Tween Teleport berdasarkan TWEEN_SPEED yang disetel di UI
 local function teleportToCheckpoint(index, isLastPoint)
 	local character = player.Character
 	if not character then return false end
@@ -488,13 +596,15 @@ local function teleportToCheckpoint(index, isLastPoint)
 	local target = checkpoints["CP" .. index]
 	if not target then return false end
 
-	root.CFrame = target
+	local tweenInfo = TweenInfo.new(TWEEN_SPEED, Enum.EasingStyle.Linear, Enum.EasingDirection.Out)
+	local tween = TweenService:Create(root, tweenInfo, {CFrame = target})
+	tween:Play()
+	tween.Completed:Wait()
 
-	-- Jika BUKAN titik terakhir, buat pijakan invisible
 	if not isLastPoint then
 		createPlatform(target)
 	else
-		clearPlatform() -- Hapus pijakan jika berada di titik terakhir
+		clearPlatform()
 	end
 
 	return true
@@ -547,6 +657,10 @@ end
 guiElements = createTeleportGui()
 makeDraggable(guiElements.MainFrame, guiElements.TitleBar)
 
+guiElements.OpenButton.MouseButton1Click:Connect(function()
+	guiElements.MainFrame.Visible = not guiElements.MainFrame.Visible
+end)
+
 guiElements.SetLokasiButton.MouseButton1Click:Connect(function()
 	currentMode = "Set Lokasi"
 	updateUI()
@@ -554,6 +668,17 @@ end)
 
 guiElements.TeleportButton.MouseButton1Click:Connect(function()
 	currentMode = "Teleport"
+	updateUI()
+end)
+
+-- Kontrol Tombol Kecepatan Tween
+guiElements.SpeedUpButton.MouseButton1Click:Connect(function()
+	TWEEN_SPEED = math.clamp(TWEEN_SPEED + 0.05, 0.0, 2.0)
+	updateUI()
+end)
+
+guiElements.SpeedDownButton.MouseButton1Click:Connect(function()
+	TWEEN_SPEED = math.clamp(TWEEN_SPEED - 0.05, 0.0, 2.0)
 	updateUI()
 end)
 
@@ -579,8 +704,18 @@ guiElements.SaveButton.MouseButton1Click:Connect(function()
 	saveCheckpointsToFile()
 end)
 
+local slotOptions = {"TELEPORT 1", "TELEPORT 2", "TELEPORT 3"}
+local slotIndex = 1
+
+guiElements.FileSlotButton.MouseButton1Click:Connect(function()
+	slotIndex = slotIndex % #slotOptions + 1
+	currentSaveFileName = slotOptions[slotIndex]
+	updateUI()
+	notify("Slot aktif: " .. currentSaveFileName)
+end)
+
 guiElements.LoadButton.MouseButton1Click:Connect(function()
-	loadCheckpointsFromFile()
+	loadCheckpointsFromFile(currentSaveFileName)
 end)
 
 guiElements.MinimizeButton.MouseButton1Click:Connect(function()
@@ -593,7 +728,7 @@ guiElements.MinimizeButton.MouseButton1Click:Connect(function()
 	else
 		guiElements.MinimizeButton.Text = "−"
 		guiElements.ContentFrame.Visible = true
-		TweenService:Create(guiElements.MainFrame, tweenInfo, { Size = UDim2.new(0, 310, 0, 540) }):Play()
+		TweenService:Create(guiElements.MainFrame, tweenInfo, { Size = UDim2.new(0, 310, 0, 595) }):Play()
 	end
 end)
 
