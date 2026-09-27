@@ -2,14 +2,34 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 local HttpService = game:GetService("HttpService")
+local StarterGui = game:GetService("StarterGui")
+
+-- Fungsi Notifikasi
+local function Notify(pesanTeks)
+	task.spawn(function()
+		local success = false
+		while not success do
+			success = pcall(function()
+				StarterGui:SetCore("SendNotification", {
+					Title = "System Log",
+					Text = pesanTeks,
+					Duration = 5,
+					Button1 = "OK"
+				})
+			end)
+			if not success then task.wait(0.5) end
+		end
+	end)
+end
+
+Notify("Load script , 👑 VOID VAINLY STAR")
+print("D-PAD VOID VAINLY STAR ✅")
 
 local player = Players.LocalPlayer
 local camera = Workspace.CurrentCamera
 local playerGui = player:WaitForChild("PlayerGui")
 
 local SETTINGS_FILE = "JumpSettings.json"
-
--- SKALA UKURAN UMUM DI HP
 local SKALA_UKURAN = 2.0 
 
 -- Sembunyikan TouchGui bawaan Roblox
@@ -20,12 +40,29 @@ task.spawn(function()
 	end
 end)
 
+---------------------------------------------------------
+-- PENENTUAN PARENT KE CORE GUI / GETHUI
+---------------------------------------------------------
+local function getTargetParent()
+	if gethui then
+		return gethui()
+	end
+	local success, coreGui = pcall(function()
+		return game:GetService("CoreGui")
+	end)
+	if success and coreGui then
+		return coreGui
+	end
+	return playerGui
+end
+
 -- Buat ScreenGui Utama
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "CustomMobileControls"
 screenGui.ResetOnSpawn = false
 screenGui.IgnoreGuiInset = true
-screenGui.Parent = playerGui
+screenGui.DisplayOrder = 999999999 -- Memastikan render di paling atas semua GUI
+screenGui.Parent = getTargetParent()
 
 local uiScale = Instance.new("UIScale")
 uiScale.Scale = SKALA_UKURAN
@@ -90,7 +127,6 @@ local function loadSettingsFromFile()
 	end
 end
 
--- Muat data tersimpan saat skrip berjalan
 loadSettingsFromFile()
 
 ---------------------------------------------------------
@@ -245,7 +281,6 @@ local function createSettingRow(parent, yOffset, labelText, initialVal, onMinus,
 	return valLbl
 end
 
--- Row Setting Ukuran
 local lblSize = createSettingRow(mainFrame, 35, "Ukuran:", tempSize,
 	function(lbl)
 		tempSize = math.max(40, tempSize - 10)
@@ -259,7 +294,6 @@ local lblSize = createSettingRow(mainFrame, 35, "Ukuran:", tempSize,
 	end
 )
 
--- Row Setting Posisi X
 local lblPosX = createSettingRow(mainFrame, 75, "Posisi X:", tempPosX,
 	function(lbl)
 		tempPosX = tempPosX - 10
@@ -273,7 +307,6 @@ local lblPosX = createSettingRow(mainFrame, 75, "Posisi X:", tempPosX,
 	end
 )
 
--- Row Setting Posisi Y
 local lblPosY = createSettingRow(mainFrame, 115, "Posisi Y:", tempPosY,
 	function(lbl)
 		tempPosY = tempPosY - 10
@@ -287,7 +320,6 @@ local lblPosY = createSettingRow(mainFrame, 115, "Posisi Y:", tempPosY,
 	end
 )
 
--- Tombol SAVE
 local btnSave = Instance.new("TextButton")
 btnSave.Name = "BtnSave"
 btnSave.Position = UDim2.new(0, 10, 0, 160)
@@ -303,7 +335,6 @@ local saveCorner = Instance.new("UICorner")
 saveCorner.CornerRadius = UDim.new(0, 6)
 saveCorner.Parent = btnSave
 
--- Handler Open Menu
 btnOpenMenu.Activated:Connect(function()
 	tempSize = jumpSize
 	tempPosX = jumpPosX
@@ -314,7 +345,6 @@ btnOpenMenu.Activated:Connect(function()
 	mainFrame.Visible = not mainFrame.Visible
 end)
 
--- Handler Save Settings (Menulis ke file)
 btnSave.Activated:Connect(function()
 	jumpSize = tempSize
 	jumpPosX = tempPosX
@@ -322,7 +352,6 @@ btnSave.Activated:Connect(function()
 	btnJump.Size = UDim2.new(0, jumpSize, 0, jumpSize)
 	btnJump.Position = UDim2.new(1, jumpPosX, 1, jumpPosY)
 	
-	-- Tulis pengaturan ke penyimpanan lokal
 	if writefile then
 		local dataToSave = {
 			Size = jumpSize,
