@@ -11,7 +11,7 @@ local function getSafeGui()
 end
 
 ---------------------------------------------------------
--- [1] LOGIKA EMOTE (EKSTRAK ASET & OVERRIDE ANIMASI)
+-- LOGIKA EMOTE DIRECT LOAD & CHECKER
 ---------------------------------------------------------
 local currentTrack = nil
 local moveConnection = nil
@@ -26,27 +26,20 @@ local function stopCurrentEmote()
     if jumpConnection then jumpConnection:Disconnect() jumpConnection = nil end
 end
 
-local function getAnimationObject(assetId)
-    local success, objects = pcall(function()
-        return game:GetObjects("rbxassetid://" .. assetId)
-    end)
-    if success and objects then
-        for _, v in ipairs(objects) do
-            if v:IsA("Animation") then return v end
-            local anim = v:FindFirstChildOfClass("Animation", true)
-            if anim then return anim end
-        end
-    end
-    local directAnim = Instance.new("Animation")
-    directAnim.AnimationId = "rbxassetid://" .. assetId
-    return directAnim
-end
-
-local function playEmote(assetId)
+local function playEmote(assetId, emoteName)
+    -- Clean ID dari karakter non-angka (seperti tanda tanya ?)
+    local cleanId = tostring(assetId):gsub("%D", "")
+    
     local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
     local humanoid = character:FindFirstChildOfClass("Humanoid")
     if not humanoid then return end
-    
+
+    -- Cek Rig Type (R6 vs R15)
+    if humanoid.RigType ~= Enum.HumanoidRigType.R15 then
+        warn("[VOID VAINLY STAR]: Karakter kamu adalah R6. Emote ini membutuhkan R15!")
+        return
+    end
+
     local animator = humanoid:FindFirstChildOfClass("Animator")
     if not animator then
         animator = Instance.new("Animator")
@@ -54,26 +47,43 @@ local function playEmote(assetId)
     end
 
     stopCurrentEmote()
-    local animObject = getAnimationObject(assetId)
-    if not animObject then return end
 
-    local success, track = pcall(function() return animator:LoadAnimation(animObject) end)
-    if success and track then
-        currentTrack = track
-        currentTrack.Priority = Enum.AnimationPriority.Action4
-        currentTrack:Play()
+    task.spawn(function()
+        -- Direct Animation Object Creation
+        local animObject = Instance.new("Animation")
+        animObject.AnimationId = "rbxassetid://" .. cleanId
 
-        moveConnection = humanoid:GetPropertyChangedSignal("MoveDirection"):Connect(function()
-            if humanoid.MoveDirection.Magnitude > 0 then stopCurrentEmote() end
+        local success, track = pcall(function()
+            return animator:LoadAnimation(animObject)
         end)
-        jumpConnection = humanoid.StateChanged:Connect(function(_, state)
-            if state == Enum.HumanoidStateType.Jumping then stopCurrentEmote() end
-        end)
-    end
+
+        if success and track then
+            currentTrack = track
+            currentTrack.Priority = Enum.AnimationPriority.Action4
+            
+            -- Test play
+            local playSuccess = pcall(function()
+                currentTrack:Play()
+            end)
+
+            if playSuccess then
+                moveConnection = humanoid:GetPropertyChangedSignal("MoveDirection"):Connect(function()
+                    if humanoid.MoveDirection.Magnitude > 0 then stopCurrentEmote() end
+                end)
+                jumpConnection = humanoid.StateChanged:Connect(function(_, state)
+                    if state == Enum.HumanoidStateType.Jumping then stopCurrentEmote() end
+                end)
+            else
+                warn("[VOID VAINLY STAR]: ID " .. cleanId .. " diblokir oleh privasi game ini.")
+            end
+        else
+            warn("[VOID VAINLY STAR]: Gagal memuat ID " .. cleanId .. " (" .. emoteName .. ")")
+        end
+    end)
 end
 
 ---------------------------------------------------------
--- [2] PEMBUATAN UI (GAYA 1709.PNG - DELTA STYLE)
+-- DESAIN GUI DELTA STYLE
 ---------------------------------------------------------
 local GuiParent = getSafeGui()
 if GuiParent:FindFirstChild("VoidVainlyStar_AldoVVS") then
@@ -85,50 +95,52 @@ ScreenGui.Name = "VoidVainlyStar_AldoVVS"
 ScreenGui.Parent = GuiParent
 ScreenGui.ResetOnSpawn = false
 
--- Warna Tema
-local ColorBlack = Color3.fromRGB(5, 5, 5)
-local ColorMagenta = Color3.fromRGB(255, 0, 255)
-local ColorCyan = Color3.fromRGB(0, 255, 255)
-local ColorWhite = Color3.fromRGB(255, 255, 255)
+local function applyBorderOnlyGradient(frameObject, thickness)
+    local stroke = Instance.new("UIStroke")
+    stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border 
+    stroke.Thickness = thickness or 2
+    stroke.Color = Color3.fromRGB(255, 255, 255)
+    stroke.Parent = frameObject
 
--- [OPEN BUTTON] Bulat dengan Crown dan Border Magenta
+    local gradient = Instance.new("UIGradient")
+    gradient.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 255, 255)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(128, 0, 128))
+    })
+    gradient.Parent = stroke
+end
+
+-- Open Button
 local OpenButton = Instance.new("TextButton")
-OpenButton.Size = UDim2.new(0, 45, 0, 45)
-OpenButton.Position = UDim2.new(0, 15, 1, -60)
-OpenButton.BackgroundColor3 = ColorBlack
+OpenButton.Size = UDim2.new(0, 48, 0, 48)
+OpenButton.Position = UDim2.new(0, 15, 1, -65)
+OpenButton.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
 OpenButton.Text = "👑"
-OpenButton.TextSize = 20
+OpenButton.TextSize = 22
+OpenButton.TextStrokeTransparency = 1
 OpenButton.Parent = ScreenGui
 
 local OpenCorner = Instance.new("UICorner")
 OpenCorner.CornerRadius = UDim.new(1, 0)
 OpenCorner.Parent = OpenButton
+applyBorderOnlyGradient(OpenButton, 2.5)
 
-local OpenStroke = Instance.new("UIStroke")
-OpenStroke.Color = ColorMagenta
-OpenStroke.Thickness = 2.5
-OpenStroke.Parent = OpenButton
-
--- [MAIN FRAME] Latar Hitam
+-- Main Frame
 local MainFrame = Instance.new("Frame")
 MainFrame.Size = UDim2.new(0, 520, 0, 280)
 MainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
 MainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
-MainFrame.BackgroundColor3 = ColorBlack
+MainFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
 MainFrame.Visible = false
 MainFrame.ClipsDescendants = true
 MainFrame.Parent = ScreenGui
 
--- Responsif untuk layar HP kecil
-local SizeConstraint = Instance.new("UISizeConstraint")
-SizeConstraint.MaxSize = Vector2.new(600, 350)
-SizeConstraint.Parent = MainFrame
-
 local MainCorner = Instance.new("UICorner")
 MainCorner.CornerRadius = UDim.new(0, 12)
 MainCorner.Parent = MainFrame
+applyBorderOnlyGradient(MainFrame, 2.5)
 
--- [HEADER AREA]
+-- Header
 local Header = Instance.new("Frame")
 Header.Size = UDim2.new(1, 0, 0, 40)
 Header.BackgroundTransparency = 1
@@ -139,95 +151,116 @@ MenuTitle.Size = UDim2.new(0, 100, 1, 0)
 MenuTitle.Position = UDim2.new(0, 15, 0, 0)
 MenuTitle.BackgroundTransparency = 1
 MenuTitle.Text = "MENU"
-MenuTitle.TextColor3 = ColorWhite
+MenuTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
 MenuTitle.Font = Enum.Font.GothamBold
-MenuTitle.TextSize = 16
+MenuTitle.TextSize = 15
 MenuTitle.TextXAlignment = Enum.TextXAlignment.Left
+MenuTitle.TextStrokeTransparency = 1
 MenuTitle.Parent = Header
 
 local MainTitle = Instance.new("TextLabel")
-MainTitle.Size = UDim2.new(1, -120, 1, 0)
+MainTitle.Size = UDim2.new(1, -160, 1, 0)
 MainTitle.Position = UDim2.new(0, 100, 0, 0)
 MainTitle.BackgroundTransparency = 1
-MainTitle.Text = "👑 VOID VAINLY STAR"
-MainTitle.TextColor3 = ColorWhite
-MainTitle.Font = Enum.Font.Gotham
-MainTitle.TextSize = 16
+MainTitle.Text = "👑VOID VAINLY STAR"
+MainTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+MainTitle.Font = Enum.Font.GothamBold
+MainTitle.TextSize = 15
 MainTitle.TextXAlignment = Enum.TextXAlignment.Center
+MainTitle.TextStrokeTransparency = 1
 MainTitle.Parent = Header
 
--- Tombol Close X transparan di ujung kanan
-local CloseBtn = Instance.new("TextButton")
-CloseBtn.Size = UDim2.new(0, 40, 1, 0)
-CloseBtn.Position = UDim2.new(1, -40, 0, 0)
-CloseBtn.BackgroundTransparency = 1
-CloseBtn.Text = ""
-CloseBtn.Parent = Header
+local CloseButton = Instance.new("TextButton")
+CloseButton.Size = UDim2.new(0, 28, 0, 28)
+CloseButton.Position = UDim2.new(1, -38, 0, 6)
+CloseButton.BackgroundColor3 = Color3.fromRGB(220, 40, 40)
+CloseButton.Text = "X"
+CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+CloseButton.Font = Enum.Font.GothamBold
+CloseButton.TextSize = 14
+CloseButton.TextStrokeTransparency = 1
+CloseButton.Parent = Header
 
--- [GARIS PEMISAH MAGENTA]
+local CloseCorner = Instance.new("UICorner")
+CloseCorner.CornerRadius = UDim.new(0, 6)
+CloseCorner.Parent = CloseButton
+
+-- Lines
 local H_Line = Instance.new("Frame")
-H_Line.Size = UDim2.new(1, 0, 0, 4)
+H_Line.Size = UDim2.new(1, 0, 0, 3)
 H_Line.Position = UDim2.new(0, 0, 0, 40)
-H_Line.BackgroundColor3 = ColorMagenta
+H_Line.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 H_Line.BorderSizePixel = 0
 H_Line.Parent = MainFrame
 
+local H_Gradient = Instance.new("UIGradient")
+H_Gradient.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 255, 255)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(128, 0, 128))
+})
+H_Gradient.Parent = H_Line
+
 local V_Line = Instance.new("Frame")
-V_Line.Size = UDim2.new(0, 4, 1, -44)
-V_Line.Position = UDim2.new(0, 120, 0, 44)
-V_Line.BackgroundColor3 = ColorMagenta
+V_Line.Size = UDim2.new(0, 3, 1, -43)
+V_Line.Position = UDim2.new(0, 120, 0, 43)
+V_Line.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 V_Line.BorderSizePixel = 0
 V_Line.Parent = MainFrame
 
--- [SIDEBAR KIRI]
+local V_Gradient = H_Gradient:Clone()
+V_Gradient.Parent = V_Line
+
+-- Sidebar
 local Sidebar = Instance.new("Frame")
-Sidebar.Size = UDim2.new(0, 120, 1, -44)
-Sidebar.Position = UDim2.new(0, 0, 0, 44)
+Sidebar.Size = UDim2.new(0, 120, 1, -43)
+Sidebar.Position = UDim2.new(0, 0, 0, 43)
 Sidebar.BackgroundTransparency = 1
 Sidebar.Parent = MainFrame
 
 local function createSidebarButton(text, yPos)
     local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(1, -20, 0, 26)
+    btn.Size = UDim2.new(1, -20, 0, 28)
     btn.Position = UDim2.new(0, 10, 0, yPos)
-    btn.BackgroundColor3 = ColorMagenta
+    btn.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
     btn.Text = text
-    btn.TextColor3 = ColorCyan
+    btn.TextColor3 = Color3.fromRGB(0, 255, 255)
     btn.Font = Enum.Font.GothamBold
-    btn.TextSize = 13
+    btn.TextSize = 12
+    btn.TextStrokeTransparency = 1
     btn.Parent = Sidebar
     
     local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 4)
+    corner.CornerRadius = UDim.new(0, 6)
     corner.Parent = btn
     
+    applyBorderOnlyGradient(btn, 1.5)
     return btn
 end
 
-local BtnEmote = createSidebarButton("EMOTE", 15)
-local BtnMain = createSidebarButton("MAIN", 50)
-local BtnControl = createSidebarButton("CONTROL", 85)
+createSidebarButton("EMOTE", 15)
+createSidebarButton("MAIN", 50)
+createSidebarButton("CONTROL", 85)
 
--- [KONTEN UTAMA KANAN]
+-- Content
 local ContentFrame = Instance.new("ScrollingFrame")
-ContentFrame.Size = UDim2.new(1, -134, 1, -44)
-ContentFrame.Position = UDim2.new(0, 134, 0, 44)
+ContentFrame.Size = UDim2.new(1, -134, 1, -43)
+ContentFrame.Position = UDim2.new(0, 134, 0, 43)
 ContentFrame.BackgroundTransparency = 1
-ContentFrame.ScrollBarThickness = 0
+ContentFrame.ScrollBarThickness = 3
 ContentFrame.Parent = MainFrame
 
 local TitleList = Instance.new("TextLabel")
-TitleList.Size = UDim2.new(1, 0, 0, 30)
+TitleList.Size = UDim2.new(1, 0, 0, 25)
 TitleList.Position = UDim2.new(0, 0, 0, 5)
 TitleList.BackgroundTransparency = 1
 TitleList.Text = "List Emote"
-TitleList.TextColor3 = ColorWhite
+TitleList.TextColor3 = Color3.fromRGB(255, 255, 255)
 TitleList.Font = Enum.Font.GothamBold
-TitleList.TextSize = 16
+TitleList.TextSize = 15
 TitleList.TextXAlignment = Enum.TextXAlignment.Left
+TitleList.TextStrokeTransparency = 1
 TitleList.Parent = ContentFrame
 
--- Data Emote
 local emotes = {
     {Name = "1. Emote jalan snoop", Id = "110614921871084"},
     {Name = "2. Tertawa", Id = "122240620529815"},
@@ -238,42 +271,43 @@ local emotes = {
     {Name = "7. POSE ANIME TREND", Id = "111491675811633"}
 }
 
--- Generate List Teks Emote (Tanpa Background)
-local yOffset = 40
+local yOffset = 35
 for _, emote in ipairs(emotes) do
     local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(1, 0, 0, 22)
+    btn.Size = UDim2.new(1, -10, 0, 24)
     btn.Position = UDim2.new(0, 0, 0, yOffset)
     btn.BackgroundTransparency = 1
     btn.Text = emote.Name
-    btn.TextColor3 = ColorWhite
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
     btn.Font = Enum.Font.GothamBold
-    btn.TextSize = 14
+    btn.TextSize = 13
     btn.TextXAlignment = Enum.TextXAlignment.Left
+    btn.TextStrokeTransparency = 1
     btn.Parent = ContentFrame
 
     btn.MouseButton1Click:Connect(function()
-        playEmote(emote.Id)
+        playEmote(emote.Id, emote.Name)
     end)
     
-    yOffset = yOffset + 22
+    yOffset = yOffset + 24
 end
 
-ContentFrame.CanvasSize = UDim2.new(0, 0, 0, yOffset + 20)
+ContentFrame.CanvasSize = UDim2.new(0, 0, 0, yOffset + 15)
 
--- [FOOTER] by AldoVVS
+-- Footer
 local FooterLabel = Instance.new("TextLabel")
 FooterLabel.Size = UDim2.new(0, 100, 0, 20)
-FooterLabel.Position = UDim2.new(1, -110, 1, -25)
+FooterLabel.Position = UDim2.new(1, -110, 1, -22)
 FooterLabel.BackgroundTransparency = 1
 FooterLabel.Text = "by AldoVVS"
-FooterLabel.TextColor3 = ColorWhite
+FooterLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
 FooterLabel.Font = Enum.Font.Gotham
-FooterLabel.TextSize = 12
+FooterLabel.TextSize = 11
 FooterLabel.TextXAlignment = Enum.TextXAlignment.Right
+FooterLabel.TextStrokeTransparency = 1
 FooterLabel.Parent = MainFrame
 
--- [TOGGLE LOGIC]
+-- Toggle UI
 local isVisible = false
 local function ToggleUI()
     isVisible = not isVisible
@@ -282,4 +316,4 @@ local function ToggleUI()
 end
 
 OpenButton.MouseButton1Click:Connect(ToggleUI)
-CloseBtn.MouseButton1Click:Connect(ToggleUI) -- Bisa tutup dengan klik pojok kanan atas Header
+CloseButton.MouseButton1Click:Connect(ToggleUI)
