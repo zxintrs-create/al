@@ -1,346 +1,226 @@
--- VOID VAINLY STAR — Auto-kill NPC di sekitar pemain, damage + AoE + Replication
-
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local CoreGui = game:GetService("CoreGui")
 local Workspace = game:GetService("Workspace")
+local RunService = game:GetService("RunService")
 
 local LocalPlayer = Players.LocalPlayer
 
+-- ═══════════════════════════════════════
+-- KONFIGURASI
+-- ═══════════════════════════════════════
 local Config = {
     Enabled = false,
-    AttackCooldown = 0.1,
+    ScanInterval = 0.5,           -- Update NPC cache setiap 0.5s (bukan setiap frame = no lag)
     DetectionRadius = 60,
     PlayerDistanceThreshold = 50,
     KillRadius = 30,
-    MaxTargets = 5,
-    Damage = 46798765476,
-    DamageLabel = "467"
+    MaxTargets = 10,
+    Damage = 467000000000000000,  -- 467 Sp
+    DamageLabel = "467 Sp"
 }
 
--- ASSET & REMOTE
-local Assets = ReplicatedStorage:WaitForChild("Assets")
-local Enemy = Assets:WaitForChild("Enemy")
+-- ═══════════════════════════════════════
+-- CACHE NPC (update periodik, bukan every frame)
+-- ═══════════════════════════════════════
+local CachedNPCs = {}
+local NPCCacheTimer = 0
 
-local RemotesFolder = ReplicatedStorage:WaitForChild("Remotes")
-local Remotes = {
-    MainFunction = RemotesFolder:WaitForChild("MainFunction"),
-    CombatEvent = RemotesFolder:WaitForChild("CombatEvent"),
-    MainEvent = RemotesFolder:WaitForChild("MainEvent")
-}
-
--- REFERENCE (non-blocking)
-local Map = Workspace:FindFirstChild("Map")
-local Stages = Map and Map:FindFirstChild("Stages")
-local PANDUAN_NPC = Workspace:FindFirstChild("NamaNPCUtama")
-
-if not Map or not Stages then
-    warn("VOID VAINLY STAR: Map atau Stages tidak ditemukan. Script berhenti.")
-    return
+function updateNPCCache()
+    local newCache = {}
+    for _, obj in ipairs(Workspace:GetDescendants()) do
+        if obj:IsA("Model") then
+            local humanoid = obj:FindFirstChildOfClass("Humanoid")
+            local root = obj:FindFirstChild("HumanoidRootPart")
+            if humanoid and root and humanoid.Health > 0 then
+                if not Players:GetPlayerFromCharacter(obj) then
+                    newCache[obj] = {
+                        Model = obj,
+                        Humanoid = humanoid,
+                        Root = root
+                    }
+                end
+            end
+        end
+    end
+    CachedNPCs = newCache
 end
 
--- STATE
+function getNPCsInRadius(position, radius)
+    local result = {}
+    if not position then return result end
+    for _, npc in pairs(CachedNPCs) do
+        if (npc.Root.Position - position).Magnitude <= radius then
+            result[#result + 1] = npc
+        end
+    end
+    return result
+end
+
+-- ═══════════════════════════════════════
+-- REMOTE SETUP
+-- MainFunction = RemoteFunction (InvokeServer)
+-- CombatEvent = RemoteEvent (FireServer)
+-- ═══════════════════════════════════════
+local Remotes = {}
+
+function initRemotes()
+    local RemotesFolder = ReplicatedStorage:WaitForChild("Remotes")
+    Remotes.CombatEvent = RemotesFolder:WaitForChild("CombatEvent")
+    Remotes.MainEvent = RemotesFolder:WaitForChild("MainEvent")
+    pcall(function()
+        Remotes.MainFunction = RemotesFolder:WaitForChild("MainFunction")
+    end)
+end
+
+-- ═══════════════════════════════════════
+-- KILL FUNCTION (instant kill + replication)
+-- ═══════════════════════════════════════
+local function killNPC(npcData)
+    if not npcData or not npcData.Model or not npcData.Model.Parent then return end
+
+    local humanoid = npcData.Humanoid
+    local model = npcData.Model
+
+    -- INSTANT KILL LOKAL: set Health = 0 langsung
+    humanoid.Health = 0
+
+    -- REPLICATION KE SERVER via CombatEvent (RemoteEvent)
+    pcall(function()
+        Remotes.CombatEvent:FireServer(model, Config.Damage)
+    end)
+
+    -- Try kill command juga
+    pcall(function()
+        Remotes.CombatEvent:FireServer(model, "Kill")
+    end)
+end
+
+local function killAOE(position, radius, maxTargets)
+    local npcs = getNPCsInRadius(position, radius)
+    local killed = 0
+    for _, npc in ipairs(npcs) do
+        if killed >= (maxTargets or Config.MaxTargets) then break end
+        killNPC(npc)
+        killed = killed + 1
+    end
+    return killed
+end
+
+-- ═══════════════════════════════════════
+-- STAGE MANAGEMENT (stages 1-27)
+-- ═══════════════════════════════════════
 local StageList = {}
 local StageNumbers = {}
 local CurrentStageIndex = 1
-local TrackedNPCs = {}
 local StageCompleted = {}
-local ActiveThread = nil
-local StageThread = nil
 
-local function scanStages()
+function scanStages()
     table.clear(StageList)
     table.clear(StageNumbers)
 
-    for _, Stage in ipairs(Stages:GetChildren()) do
-        local Number = tonumber(Stage.Name)
-        if Number then
-            local Spawn = Stage:FindFirstChild("Spawn")
-            if Spawn and Spawn:IsA("BasePart") then
-                StageList[Number] = {
-                    Folder = Stage,
-                    Spawn = Spawn
-                }
-                StageNumbers[#StageNumbers + 1] = Number
+    local Map = Workspace:FindFirstChild("Map")
+    if not Map then return end
+
+    local Stages = Map:FindFirstChild("Stages")
+    if not Stages then return end
+
+    for _, stage in ipairs(Stages:GetChildren()) do
+        local number = tonumber(stage.Name)
+        if number then
+            local spawn = stage:FindFirstChild("Spawn")
+            if spawn and spawn:IsA("BasePart") then
+                StageList[number] = {Folder = stage, Spawn = spawn}
+                StageNumbers[#StageNumbers + 1] = number
             end
         end
     end
 
     table.sort(StageNumbers)
 
-    if #StageNumbers == 0 then
-        return false
-    end
-
-    if CurrentStageIndex > #StageNumbers then
+    if #StageNumbers > 0 and CurrentStageIndex > #StageNumbers then
         CurrentStageIndex = #StageNumbers
     end
-
-    return true
 end
 
-local function getCurrentStageNumber()
+function getCurrentStage()
+    local num = StageNumbers[CurrentStageIndex]
+    return StageList[num] and StageList[num].Folder
+end
+
+function getCurrentStageNumber()
     return StageNumbers[CurrentStageIndex]
 end
 
-local function getCurrentStage()
-    return StageList[getCurrentStageNumber()]
+function isPlayerNearSpawn(spawnPart)
+    local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not root or not spawnPart then return false end
+    return (root.Position - spawnPart.Position).Magnitude <= Config.PlayerDistanceThreshold
 end
 
-local function getNextStageNumber()
-    return StageNumbers[CurrentStageIndex + 1]
-end
+function isStageComplete(stageFolder)
+    if not stageFolder then return false end
 
-local function getCharacterRoot()
-    local Character = LocalPlayer.Character
-    return Character and Character:FindFirstChild("HumanoidRootPart")
-end
-
-local function isPlayerNearSpawn(Spawn)
-    local Root = getCharacterRoot()
-    if not Root or not Spawn then
-        return false
-    end
-    return (Root.Position - Spawn.Position).Magnitude <= Config.PlayerDistanceThreshold
-end
-
-local function isPlayerCharacter(Model)
-    return Players:GetPlayerFromCharacter(Model) ~= nil
-end
-
-local function getNPC(Model)
-    if not Model:IsA("Model") then
-        return nil, nil
-    end
-    if isPlayerCharacter(Model) then
-        return nil, nil
-    end
-
-    local Humanoid = Model:FindFirstChildOfClass("Humanoid")
-    local Root = Model:FindFirstChild("HumanoidRootPart")
-
-    if not Humanoid or not Root then
-        return nil, nil
-    end
-    if Humanoid.Health <= 0 then
-        return nil, nil
-    end
-
-    return Humanoid, Root
-end
-
--- scanNPCs menggunakan GetDescendants agar model bersarang (HeldWeapon, Handle, dll) ikut terdeteksi
-local function scanNPCs(Spawn)
-    local NPCs = {}
-    if not Spawn then
-        return NPCs
-    end
-
-    for _, Object in ipairs(Workspace:GetDescendants()) do
-        local Humanoid, Root = getNPC(Object)
-        if Humanoid and Root then
-            local Distance = (Root.Position - Spawn.Position).Magnitude
-            if Distance <= Config.DetectionRadius then
-                NPCs[#NPCs + 1] = {
-                    Model = Object,
-                    Humanoid = Humanoid,
-                    Root = Root
-                }
-            end
+    -- Cek WinArea: jika player masuk WinArea, stage selesai
+    local winArea = stageFolder:FindFirstChild("WinArea")
+    if winArea then
+        local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if root and (root.Position - winArea.Position).Magnitude < 15 then
+            return true
         end
     end
 
-    return NPCs
-end
-
--- scan semua NPC dalam radius tertentu dari posisi tertentu (untuk AoE)
-local function scanNPCsAtPosition(Position, Radius)
-    local NPCs = {}
-    if not Position then
-        return NPCs
-    end
-
-    for _, Object in ipairs(Workspace:GetDescendants()) do
-        local Humanoid, Root = getNPC(Object)
-        if Humanoid and Root then
-            local Distance = (Root.Position - Position).Magnitude
-            if Distance <= Radius then
-                NPCs[#NPCs + 1] = {
-                    Model = Object,
-                    Humanoid = Humanoid,
-                    Root = Root
-                }
-            end
+    -- Cek LevelArea
+    local levelArea = stageFolder:FindFirstChild("LevelArea")
+    if levelArea then
+        local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if root and (root.Position - levelArea.Position).Magnitude < 15 then
+            return true
         end
     end
 
-    return NPCs
+    return false
 end
 
--- REPLICATION / DESYNC FIX
--- Kirim kill request ke server agar damage 467 Sp direplikasi ke semua client
-local function killNPCOnServer(NPCModel, Damage)
-    if not NPCModel or not NPCModel.Parent then
-        return
-    end
-
-    -- Gunakan RemoteEvent jika tersedia di server
-    pcall(function()
-        Remotes.CombatEvent:FireServer(NPCModel, Damage or Config.Damage)
-    end)
-
-    -- Juga coba panggil MainFunction sebagai backup path
-    pcall(function()
-        Remotes.MainFunction:FireServer(NPCModel, "Kill", Damage or Config.Damage)
-    end)
-end
-
-local function applyDamageLocally(NPCModel, Damage)
-    local Humanoid = NPCModel and NPCModel:FindFirstChildOfClass("Humanoid")
-    if not Humanoid or Humanoid.Health <= 0 then
-        return
-    end
-
-    -- Terapkan damage 467 Sp secara lokal
-    Humanoid.Health = math.max(0, Humanoid.Health - (Damage or Config.Damage))
-end
-
--- ATTACK LOGIC
-local function attackNPC(Data)
-    if not Data or not Data.Model or not Data.Model.Parent then
-        return
-    end
-
-    if TrackedNPCs[Data.Model] then
-        return
-    end
-
-    TrackedNPCs[Data.Model] = true
-
-    -- Kirim kill 467 Sp ke server (replication) DAN terapkan damage lokal
-    killNPCOnServer(Data.Model, Config.Damage)
-    applyDamageLocally(Data.Model, Config.Damage)
-end
-
-local function attackNPCsInRadius(OriginPosition, Radius, MaxTargets)
-    local NPCs = scanNPCsAtPosition(OriginPosition, Radius)
-    local killed = 0
-
-    for _, NPC in ipairs(NPCs) do
-        if killed >= (MaxTargets or Config.MaxTargets) then
-            break
-        end
-        if not TrackedNPCs[NPC.Model] then
-            TrackedNPCs[NPC.Model] = true
-            killNPCOnServer(NPC.Model, Config.Damage)
-            applyDamageLocally(NPC.Model, Config.Damage)
-            killed = killed + 1
-        end
-    end
-end
-
--- STAGE PROCESSING
-local function processCurrentStage()
-    local Stage = getCurrentStage()
-    if not Stage then
-        return
-    end
-
-    if not isPlayerNearSpawn(Stage.Spawn) then
-        return
-    end
-
-    local NPCs = scanNPCs(Stage.Spawn)
-
-    if #NPCs == 0 then
-        StageCompleted[getCurrentStageNumber()] = true
-        return
-    end
-
-    for _, NPC in ipairs(NPCs) do
-        if not Config.Enabled then
-            break
-        end
-        attackNPC(NPC)
-    end
-end
-
-local function processNextStage()
-    local CurrentNumber = getCurrentStageNumber()
-    if not CurrentNumber then
-        return
-    end
-
-    if not StageCompleted[CurrentNumber] then
-        return
-    end
-
-    local NextNumber = getNextStageNumber()
-    if not NextNumber then
-        return
-    end
-
-    local NextStage = StageList[NextNumber]
-    if not NextStage then
-        return
-    end
-
-    if isPlayerNearSpawn(NextStage.Spawn) then
+function advanceStage()
+    if CurrentStageIndex < #StageNumbers then
         CurrentStageIndex = CurrentStageIndex + 1
-        TrackedNPCs = {}
+        print(string.format("[VOID VAINLY STAR] Stage %d -> %d", StageNumbers[CurrentStageIndex - 1], getCurrentStageNumber()))
     end
 end
 
--- PANDUAN NPC: Auto-kill semua NPC dalam radius ketika NPC Utama mati
+-- ═══════════════════════════════════════
+-- PANDUAN NPC (auto-kill saat NPC utama mati)
+-- ═══════════════════════════════════════
+local PANDUAN_NPC = Workspace:FindFirstChild("NamaNPCUtama")
+
 local function setupPanduanNPC()
-    if not PANDUAN_NPC then
-        warn("VOID VAINLY STAR: NamaNPCUtama tidak ditemukan di Workspace.")
-        return
-    end
+    if not PANDUAN_NPC then return end
 
     local HumUtama = PANDUAN_NPC:FindFirstChildOfClass("Humanoid")
-    if not HumUtama then
-        warn("VOID VAINLY STAR: NamaNPCUtama tidak memiliki Humanoid.")
-        return
-    end
+    if not HumUtama then return end
 
     HumUtama.Died:Connect(function()
         local PosUtama = PANDUAN_NPC.PrimaryPart and PANDUAN_NPC.PrimaryPart.Position
-        if not PosUtama then
-            return
-        end
+        if not PosUtama then return end
 
-        local terhitung = 0
-        for _, model in ipairs(Workspace:GetDescendants()) do
-            if terhitung >= Config.MaxTargets then
-                break
-            end
-
-            local Humanoid, Root = getNPC(model)
-            if Humanoid and Root and Root:IsA("BasePart") then
-                local Jarak = (PosUtama - Root.Position).Magnitude
-                if Jarak <= Config.KillRadius and Humanoid.Health > 0 then
-                    TrackedNPCs[model] = true
-                    killNPCOnServer(model, Config.Damage)
-                    applyDamageLocally(model, Config.Damage)
-                    terhitung = terhitung + 1
-                end
-            end
+        local npcs = getNPCsInRadius(PosUtama, Config.KillRadius)
+        for _, npc in ipairs(npcs) do
+            killNPC(npc)
         end
     end)
 end
 
--- MEMORY OVERWRITE: Patch Humanoid.Health setter agar damage 467 Sp selalu terapply
+-- ═══════════════════════════════════════
+-- MEMORY OVERWRITE
+-- ═══════════════════════════════════════
 local function setupMemoryOverwrite()
     pcall(function()
-        local HumanoidMeta = getrawmetatable(game)
-        if not HumanoidMeta then return end
-
-        local oldNewIndex = HumanoidMeta.__newindex
-        HumanoidMeta.__newindex = newcclosure(function(self, key, value)
+        local meta = getrawmetatable(game)
+        if not meta then return end
+        local oldNewIndex = meta.__newindex
+        meta.__newindex = newcclosure(function(self, key, value)
             if key == "Health" and typeof(value) == "number" and value == 0 then
-                -- Intersepsi semua upaya set Health=0 agar damage 467 Sp selalu direplikasi
-                local oldHealth = self.Health
                 oldNewIndex(self, key, value)
                 pcall(function()
                     Remotes.MainEvent:FireServer("NPCDied", self.Parent)
@@ -352,33 +232,16 @@ local function setupMemoryOverwrite()
     end)
 end
 
--- LOCAL INTERCEPTION: Intercept server responses
-local function setupLocalInterception()
-    pcall(function()
-        local oldFireServer = Remotes.CombatEvent.FireServer
-        Remotes.CombatEvent.FireServer = newcclosure(function(self, ...)
-            local args = {...}
-            -- Log setiap kill request 467 Sp untuk debugging
-            if args[1] and args[1].IsA and args[1]:IsA("Model") then
-                print("[VOID VAINLY STAR] Kill request sent:", args[1].Name, "Damage:", args[2] or Config.DamageLabel)
-            end
-            return oldFireServer(self, ...)
-        end)
-    end)
-end
-
+-- ═══════════════════════════════════════
 -- UI
+-- ═══════════════════════════════════════
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "VoidVainlyStarUI"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
-local GuiSuccess = pcall(function()
-    ScreenGui.Parent = CoreGui
-end)
-if not GuiSuccess then
-    ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
-end
+pcall(function() ScreenGui.Parent = CoreGui end)
+if not ScreenGui.Parent then ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui") end
 
 local MainFrame = Instance.new("Frame")
 MainFrame.Size = UDim2.new(0, 260, 0, 210)
@@ -390,9 +253,7 @@ MainFrame.Draggable = true
 MainFrame.Visible = false
 MainFrame.Parent = ScreenGui
 
-local FrameCorner = Instance.new("UICorner")
-FrameCorner.CornerRadius = UDim.new(0, 10)
-FrameCorner.Parent = MainFrame
+Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 10)
 
 local TitleLabel = Instance.new("TextLabel")
 TitleLabel.Size = UDim2.new(1, 0, 0, 38)
@@ -403,12 +264,8 @@ TitleLabel.Font = Enum.Font.GothamBold
 TitleLabel.TextSize = 16
 TitleLabel.BorderSizePixel = 0
 TitleLabel.Parent = MainFrame
+Instance.new("UICorner", TitleLabel).CornerRadius = UDim.new(0, 10)
 
-local TitleCorner = Instance.new("UICorner")
-TitleCorner.CornerRadius = UDim.new(0, 10)
-TitleCorner.Parent = TitleLabel
-
--- Status toggle
 local ToggleButton = Instance.new("TextButton")
 ToggleButton.Size = UDim2.new(0, 180, 0, 44)
 ToggleButton.Position = UDim2.new(0.5, -90, 0, 48)
@@ -419,12 +276,8 @@ ToggleButton.Font = Enum.Font.GothamBold
 ToggleButton.TextSize = 17
 ToggleButton.BorderSizePixel = 0
 ToggleButton.Parent = MainFrame
+Instance.new("UICorner", ToggleButton).CornerRadius = UDim.new(0, 8)
 
-local ButtonCorner = Instance.new("UICorner")
-ButtonCorner.CornerRadius = UDim.new(0, 8)
-ButtonCorner.Parent = ToggleButton
-
--- Stage info
 local StageLabel = Instance.new("TextLabel")
 StageLabel.Size = UDim2.new(1, -20, 0, 28)
 StageLabel.Position = UDim2.new(0, 10, 0, 100)
@@ -435,7 +288,6 @@ StageLabel.TextSize = 13
 StageLabel.Text = "Stage: -"
 StageLabel.Parent = MainFrame
 
--- Config display — menampilkan damage 467 Sp
 local ConfigLabel = Instance.new("TextLabel")
 ConfigLabel.Size = UDim2.new(1, -20, 0, 50)
 ConfigLabel.Position = UDim2.new(0, 10, 0, 130)
@@ -443,14 +295,9 @@ ConfigLabel.BackgroundTransparency = 1
 ConfigLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
 ConfigLabel.Font = Enum.Font.Gotham
 ConfigLabel.TextSize = 11
-ConfigLabel.Text = string.format(
-    "Rad: %d | Dmg: %s | Max: %d",
-    Config.KillRadius, Config.DamageLabel, Config.MaxTargets
-)
 ConfigLabel.TextWrapped = true
 ConfigLabel.Parent = MainFrame
 
--- Open/close button
 local OpenButton = Instance.new("TextButton")
 OpenButton.Size = UDim2.new(0, 130, 0, 36)
 OpenButton.Position = UDim2.new(0.02, 0, 0.88, 0)
@@ -461,32 +308,25 @@ OpenButton.Font = Enum.Font.GothamBold
 OpenButton.TextSize = 13
 OpenButton.BorderSizePixel = 0
 OpenButton.Parent = ScreenGui
+Instance.new("UICorner", OpenButton).CornerRadius = UDim.new(0, 6)
 
-local OpenCorner = Instance.new("UICorner")
-OpenCorner.CornerRadius = UDim.new(0, 6)
-OpenCorner.Parent = OpenButton
-
+-- ═══════════════════════════════════════
 -- UI ACTIONS
+-- ═══════════════════════════════════════
 local function updateStageUI()
-    local Number = getCurrentStageNumber()
-    if Number then
-        StageLabel.Text = string.format(
-            "Stage: %d  [%d/%d]",
-            Number, CurrentStageIndex, #StageNumbers
-        )
+    local num = getCurrentStageNumber()
+    if num then
+        StageLabel.Text = string.format("Stage: %d  [%d/%d]", num, CurrentStageIndex, #StageNumbers)
     else
         StageLabel.Text = "Stage: -"
     end
-
-    ConfigLabel.Text = string.format(
-        "Rad: %d | Dmg: %s | Max: %d",
-        Config.KillRadius, Config.DamageLabel, Config.MaxTargets
-    )
+    ConfigLabel.Text = string.format("Rad: %d | Dmg: %s | Max: %d\nScan: %ds | Stages: %d",
+        Config.KillRadius, Config.DamageLabel, Config.MaxTargets,
+        Config.ScanInterval, #StageNumbers)
 end
 
 ToggleButton.MouseButton1Click:Connect(function()
     Config.Enabled = not Config.Enabled
-
     if Config.Enabled then
         ToggleButton.Text = "STATUS: ON"
         ToggleButton.BackgroundColor3 = Color3.fromRGB(30, 150, 30)
@@ -503,80 +343,83 @@ OpenButton.MouseButton1Click:Connect(function()
     OpenButton.Text = MainFrame.Visible and "Close UI" or "Open UI"
 end)
 
+-- ═══════════════════════════════════════
 -- FUNCTIONS
+-- ═══════════════════════════════════════
 local Functions = {}
 
 function Functions.Start()
-    if Config.Enabled then
-        return
-    end
-
+    if Config.Enabled then return end
     Config.Enabled = true
-    TrackedNPCs = {}
+    updateNPCCache()
 
     ActiveThread = task.spawn(function()
         while Config.Enabled do
-            processCurrentStage()
-            task.wait(Config.AttackCooldown)
-        end
-    end)
+            -- Update NPC cache setiap ScanInterval detik
+            NPCCacheTimer = NPCCacheTimer + RunService.Heartbeat:Wait().DeltaTime
+            if NPCCacheTimer >= Config.ScanInterval then
+                updateNPCCache()
+                NPCCacheTimer = 0
+            end
 
-    StageThread = task.spawn(function()
-        while Config.Enabled do
-            processNextStage()
-            task.wait(0.25)
+            -- Process current stage
+            local stage = getCurrentStage()
+            if stage then
+                local spawn = stage:FindFirstChild("Spawn")
+                if spawn and isPlayerNearSpawn(spawn) then
+                    -- AoE kill semua NPC dalam radius detection
+                    killAOE(spawn.Position, Config.DetectionRadius, Config.MaxTargets)
+
+                    -- Cek stage complete
+                    if isStageComplete(stage) then
+                        StageCompleted[stage.Name] = true
+                        advanceStage()
+                        updateStageUI()
+                    end
+                end
+            end
         end
     end)
 end
 
 function Functions.Stop()
-    if not Config.Enabled then
-        return
-    end
-
+    if not Config.Enabled then return end
     Config.Enabled = false
-    TrackedNPCs = {}
-
+    CachedNPCs = {}
     if ActiveThread then
         task.cancel(ActiveThread)
         ActiveThread = nil
     end
-
-    if StageThread then
-        task.cancel(StageThread)
-        StageThread = nil
-    end
 end
 
-function Functions.Toggle()
-    if Config.Enabled then
-        Functions.Stop()
-    else
-        Functions.Start()
-    end
-end
-
+-- ═══════════════════════════════════════
+-- EVENT HANDLERS
+-- ═══════════════════════════════════════
 LocalPlayer.CharacterAdded:Connect(function()
-    TrackedNPCs = {}
+    CachedNPCs = {}
 end)
 
-Stages.ChildAdded:Connect(function()
+Workspace.Stages.ChildAdded:Connect(function()
     task.wait(0.1)
     scanStages()
     updateStageUI()
 end)
 
-Stages.ChildRemoved:Connect(function()
+Workspace.Stages.ChildRemoved:Connect(function()
     task.wait(0.1)
     scanStages()
     updateStageUI()
 end)
 
+-- ═══════════════════════════════════════
+-- INITIALIZATION
+-- ═══════════════════════════════════════
+initRemotes()
 scanStages()
 updateStageUI()
 setupPanduanNPC()
 setupMemoryOverwrite()
-setupLocalInterception()
 Functions.Start()
 
-print("⚜️ VOID VAINLY STAR")
+print(string.format("⚜️ VOID VAINLY STAR)",
+    Config.DamageLabel, #StageNumbers))
