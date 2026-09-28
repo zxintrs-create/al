@@ -1,9 +1,8 @@
-task.wait(1) -- Memberi waktu Delta untuk memuat environment sepenuhnya
+task.wait(1)
 
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 
--- Menggunakan gethui() sebagai alternatif CoreGui yang lebih aman di Executor
 local function getSafeGui()
     if gethui then 
         return gethui() 
@@ -17,7 +16,6 @@ end
 
 local GuiParent = getSafeGui()
 
--- Hapus GUI lama jika script dijalankan ulang
 if GuiParent:FindFirstChild("VoidVainlyStarGUI") then
     GuiParent.VoidVainlyStarGUI:Destroy()
 end
@@ -38,7 +36,6 @@ ScreenGui.Name = "VoidVainlyStarGUI"
 ScreenGui.Parent = GuiParent
 ScreenGui.ResetOnSpawn = false
 
--- Tombol Open (Bulat, Pojok Kiri Bawah)
 local OpenButton = Instance.new("TextButton")
 OpenButton.Size = UDim2.new(0, 50, 0, 50)
 OpenButton.Position = UDim2.new(0, 15, 1, -65)
@@ -51,7 +48,6 @@ local OpenCorner = Instance.new("UICorner")
 OpenCorner.CornerRadius = UDim.new(1, 0)
 OpenCorner.Parent = OpenButton
 
--- Frame Utama
 local MainFrame = Instance.new("Frame")
 MainFrame.Size = UDim2.new(0.8, 0, 0.6, 0)
 MainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -68,7 +64,6 @@ local MainCorner = Instance.new("UICorner")
 MainCorner.CornerRadius = UDim.new(0, 12)
 MainCorner.Parent = MainFrame
 
--- Border Gradient (Cyan ke Ungu)
 local function applyBorderGradient(parent)
     local UIStroke = Instance.new("UIStroke")
     UIStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
@@ -86,7 +81,6 @@ end
 applyBorderGradient(MainFrame)
 applyBorderGradient(OpenButton)
 
--- Header / Label Judul Lengkap
 local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -40, 0, 40)
 Title.Position = UDim2.new(0, 10, 0, 0)
@@ -98,7 +92,6 @@ Title.TextSize = 15
 Title.TextXAlignment = Enum.TextXAlignment.Left
 Title.Parent = MainFrame
 
--- Tombol Close
 local CloseButton = Instance.new("TextButton")
 CloseButton.Size = UDim2.new(0, 40, 0, 40)
 CloseButton.Position = UDim2.new(1, -40, 0, 0)
@@ -109,7 +102,6 @@ CloseButton.Font = Enum.Font.GothamBold
 CloseButton.TextSize = 18
 CloseButton.Parent = MainFrame
 
--- Frame List Scroll
 local ScrollFrame = Instance.new("ScrollingFrame")
 ScrollFrame.Size = UDim2.new(1, -20, 1, -50)
 ScrollFrame.Position = UDim2.new(0, 10, 0, 45)
@@ -122,7 +114,7 @@ UIListLayout.Padding = UDim.new(0, 8)
 UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
 UIListLayout.Parent = ScrollFrame
 
--- [2] LOGIKA ANIMASI & INTERUPSI
+-- [2] LOGIKA ANIMASI DENGAN DEKOMPOSISI ASSET
 local currentTrack = nil
 local moveConnection = nil
 local jumpConnection = nil
@@ -149,24 +141,49 @@ local function playEmote(animId)
 
     stopCurrentEmote()
 
-    local animation = Instance.new("Animation")
-    animation.AnimationId = "rbxassetid://" .. animId
+    local animationObject = nil
 
-    currentTrack = animator:LoadAnimation(animation)
-    currentTrack.Priority = Enum.AnimationPriority.Action
-    currentTrack:Play()
-
-    moveConnection = humanoid:GetPropertyChangedSignal("MoveDirection"):Connect(function()
-        if humanoid.MoveDirection.Magnitude > 0 then
-            stopCurrentEmote()
-        end
+    -- Mencoba mengekstrak objek Animation dari ID Marketplace
+    local success, assetObjects = pcall(function()
+        return game:GetObjects("rbxassetid://" .. animId)
     end)
 
-    jumpConnection = humanoid.StateChanged:Connect(function(_, state)
-        if state == Enum.HumanoidStateType.Jumping then
-            stopCurrentEmote()
+    if success and assetObjects and #assetObjects > 0 then
+        local mainObj = assetObjects[1]
+        if mainObj:IsA("Animation") then
+            animationObject = mainObj
+        else
+            animationObject = mainObj:FindFirstChildOfClass("Animation", true)
         end
+    end
+
+    -- Fallback jika ID merupakan Direct Animation ID
+    if not animationObject then
+        animationObject = Instance.new("Animation")
+        animationObject.AnimationId = "rbxassetid://" .. animId
+    end
+
+    local playSuccess, track = pcall(function()
+        return animator:LoadAnimation(animationObject)
     end)
+
+    if playSuccess and track then
+        currentTrack = track
+        currentTrack.Priority = Enum.AnimationPriority.Action
+        currentTrack:Play()
+
+        moveConnection = humanoid:GetPropertyChangedSignal("MoveDirection"):Connect(function()
+            if humanoid.MoveDirection.Magnitude > 0 then
+                stopCurrentEmote()
+            end
+        end)
+
+        jumpConnection = humanoid.StateChanged:Connect(function(_, state)
+            if state == Enum.HumanoidStateType.Jumping then
+                stopCurrentEmote()
+            end
+        end)
+    end
 end
 
 -- [3] LIST TOMBOL EMOTE
