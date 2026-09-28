@@ -7,9 +7,6 @@ local Workspace = game:GetService("Workspace")
 
 local LocalPlayer = Players.LocalPlayer
 
--- ═══════════════════════════════════════
--- KONFIGURASI LOKAL (ubah sesuai kebutuhan)
--- ═══════════════════════════════════════
 local Config = {
     Enabled = false,
     AttackCooldown = 0.1,
@@ -17,13 +14,11 @@ local Config = {
     PlayerDistanceThreshold = 50,
     KillRadius = 30,
     MaxTargets = 5,
-    Damage = 467000000000000000,  -- 467 diikuti 17 nol (467 Sp)
+    Damage = 46798765476,
     DamageLabel = "467"
 }
 
--- ═══════════════════════════════════════
 -- ASSET & REMOTE
--- ═══════════════════════════════════════
 local Assets = ReplicatedStorage:WaitForChild("Assets")
 local Enemy = Assets:WaitForChild("Enemy")
 
@@ -34,9 +29,7 @@ local Remotes = {
     MainEvent = RemotesFolder:WaitForChild("MainEvent")
 }
 
--- ═══════════════════════════════════════
 -- REFERENCE (non-blocking)
--- ═══════════════════════════════════════
 local Map = Workspace:FindFirstChild("Map")
 local Stages = Map and Map:FindFirstChild("Stages")
 local PANDUAN_NPC = Workspace:FindFirstChild("NamaNPCUtama")
@@ -46,9 +39,7 @@ if not Map or not Stages then
     return
 end
 
--- ═══════════════════════════════════════
 -- STATE
--- ═══════════════════════════════════════
 local StageList = {}
 local StageNumbers = {}
 local CurrentStageIndex = 1
@@ -57,9 +48,6 @@ local StageCompleted = {}
 local ActiveThread = nil
 local StageThread = nil
 
--- ═══════════════════════════════════════
--- FUNGSI UTILITAS
--- ═══════════════════════════════════════
 local function scanStages()
     table.clear(StageList)
     table.clear(StageNumbers)
@@ -189,10 +177,8 @@ local function scanNPCsAtPosition(Position, Radius)
     return NPCs
 end
 
--- ═══════════════════════════════════════
 -- REPLICATION / DESYNC FIX
 -- Kirim kill request ke server agar damage 467 Sp direplikasi ke semua client
--- ═══════════════════════════════════════
 local function killNPCOnServer(NPCModel, Damage)
     if not NPCModel or not NPCModel.Parent then
         return
@@ -219,9 +205,7 @@ local function applyDamageLocally(NPCModel, Damage)
     Humanoid.Health = math.max(0, Humanoid.Health - (Damage or Config.Damage))
 end
 
--- ═══════════════════════════════════════
 -- ATTACK LOGIC
--- ═══════════════════════════════════════
 local function attackNPC(Data)
     if not Data or not Data.Model or not Data.Model.Parent then
         return
@@ -255,9 +239,7 @@ local function attackNPCsInRadius(OriginPosition, Radius, MaxTargets)
     end
 end
 
--- ═══════════════════════════════════════
 -- STAGE PROCESSING
--- ═══════════════════════════════════════
 local function processCurrentStage()
     local Stage = getCurrentStage()
     if not Stage then
@@ -309,9 +291,7 @@ local function processNextStage()
     end
 end
 
--- ═══════════════════════════════════════
 -- PANDUAN NPC: Auto-kill semua NPC dalam radius ketika NPC Utama mati
--- ═══════════════════════════════════════
 local function setupPanduanNPC()
     if not PANDUAN_NPC then
         warn("VOID VAINLY STAR: NamaNPCUtama tidak ditemukan di Workspace.")
@@ -350,9 +330,7 @@ local function setupPanduanNPC()
     end)
 end
 
--- ═══════════════════════════════════════
 -- MEMORY OVERWRITE: Patch Humanoid.Health setter agar damage 467 Sp selalu terapply
--- ═══════════════════════════════════════
 local function setupMemoryOverwrite()
     pcall(function()
         local HumanoidMeta = getrawmetatable(game)
@@ -374,9 +352,7 @@ local function setupMemoryOverwrite()
     end)
 end
 
--- ═══════════════════════════════════════
 -- LOCAL INTERCEPTION: Intercept server responses
--- ═══════════════════════════════════════
 local function setupLocalInterception()
     pcall(function()
         local oldFireServer = Remotes.CombatEvent.FireServer
@@ -391,9 +367,7 @@ local function setupLocalInterception()
     end)
 end
 
--- ═══════════════════════════════════════
 -- UI
--- ═══════════════════════════════════════
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "VoidVainlyStarUI"
 ScreenGui.ResetOnSpawn = false
@@ -492,9 +466,7 @@ local OpenCorner = Instance.new("UICorner")
 OpenCorner.CornerRadius = UDim.new(0, 6)
 OpenCorner.Parent = OpenButton
 
--- ═══════════════════════════════════════
 -- UI ACTIONS
--- ═══════════════════════════════════════
 local function updateStageUI()
     local Number = getCurrentStageNumber()
     if Number then
@@ -531,9 +503,7 @@ OpenButton.MouseButton1Click:Connect(function()
     OpenButton.Text = MainFrame.Visible and "Close UI" or "Open UI"
 end)
 
--- ═══════════════════════════════════════
 -- FUNCTIONS
--- ═══════════════════════════════════════
 local Functions = {}
 
 function Functions.Start()
@@ -586,9 +556,6 @@ function Functions.Toggle()
     end
 end
 
--- ═══════════════════════════════════════
--- EVENT HANDLERS
--- ═══════════════════════════════════════
 LocalPlayer.CharacterAdded:Connect(function()
     TrackedNPCs = {}
 end)
@@ -605,9 +572,6 @@ Stages.ChildRemoved:Connect(function()
     updateStageUI()
 end)
 
--- ═══════════════════════════════════════
--- INITIALIZATION
--- ═══════════════════════════════════════
 scanStages()
 updateStageUI()
 setupPanduanNPC()
