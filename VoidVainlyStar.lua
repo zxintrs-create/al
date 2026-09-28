@@ -1,6 +1,3 @@
--- VOID VAINLY STAR v4 — Sword Loot (🔥Forge️ Sword Loot)
--- FINAL FIX: One-hit kill + no lag + full replication
-
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local CoreGui = game:GetService("CoreGui")
@@ -10,44 +7,105 @@ local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 
 -- ═══════════════════════════════════════
--- KONFIGURASI (minimal = minimal lag)
+-- KONFIGURASI
 -- ═══════════════════════════════════════
 local Config = {
     Enabled = false,
-    ScanInterval = 1.0,         -- Update NPC cache setiap 1s (sangat minim lag)
-    DetectionRadius = 80,       -- Radius deteksi NPC
-    PlayerDistanceThreshold = 60,
-    KillRadius = 40,            -- Radius AoE kill
-    MaxTargets = 20,            -- Max NPC yang di-kill per cycle
-    Damage = 99999999999999999, -- Damage super besar (99 quadrillion)
-    DamageLabel = "999.99T"
+    ScanInterval = 10.0,        -- Update NPC cache setiap 10s (ZERO LAG)
+    DetectionRadius = 200,      -- Radius deteksi NPC (besar untuk semua enemy)
+    PlayerDistanceThreshold = 100,
+    KillRadius = 100,           -- Radius AoE kill
+    MaxTargets = 200,           -- Max NPC yang di-kill per cycle (semua enemy)
+    Damage = 1e30,              -- 100 Undecillion (bypass boss 2.2T)
+    DamageLabel = "1000000000T"
 }
 
 -- ═══════════════════════════════════════
--- NPC CACHE (update periodik, BUKAN setiap frame)
+-- ENEMY FOLDER CACHE
+-- Semua NPC di Workspace > Enemy folder
 -- ═══════════════════════════════════════
 local CachedNPCs = {}
+local EnemyFolder = nil
 
-function updateNPCCache()
-    local newCache = {}
-    -- Hanya scan model yang punya Humanoid dan HumanoidRootPart
-    for _, obj in ipairs(Workspace:GetDescendants()) do
-        if obj:IsA("Model") then
-            local humanoid = obj:FindFirstChildOfClass("Humanoid")
-            local root = obj:FindFirstChild("HumanoidRootPart")
-            if humanoid and root and humanoid.Health > 0 then
-                -- Skip player character
-                if not Players:GetPlayerFromCharacter(obj) then
-                    newCache[obj] = {
-                        Model = obj,
-                        Humanoid = humanoid,
-                        Root = root,
-                        Position = root.Position
-                    }
+function initEnemyFolder()
+    -- Cari folder Enemy di Workspace (dari screenshot Explorer)
+    EnemyFolder = Workspace:FindFirstChild("Enemy")
+    if not EnemyFolder then
+        -- Coba di Map
+        local Map = Workspace:FindFirstChild("Map")
+        if Map then
+            EnemyFolder = Map:FindFirstChild("Enemy")
+        end
+    end
+    if not EnemyFolder then
+        -- Coba di dalam Stages
+        local Map = Workspace:FindFirstChild("Map")
+        if Map then
+            local Stages = Map:FindFirstChild("Stages")
+            if Stages then
+                for _, stage in ipairs(Stages:GetChildren()) do
+                    local enemy = stage:FindFirstChild("Enemy")
+                    if enemy then
+                        EnemyFolder = enemy
+                        break
+                    end
                 end
             end
         end
     end
+
+    if EnemyFolder then
+        print(string.format("[VOID VAINLY STAR] Enemy folder ditemukan: %s", EnemyFolder:GetFullName()))
+    else
+        warn("[VOID VAINLY STAR] Folder 'Enemy' tidak ditemukan! Mencari semua model dengan Humanoid...")
+    end
+end
+
+function updateNPCCache()
+    local newCache = {}
+
+    -- METHOD 1: Scan Enemy folder jika ada
+    if EnemyFolder then
+        for _, obj in ipairs(EnemyFolder:GetDescendants()) do
+            if obj:IsA("Model") then
+                local humanoid = obj:FindFirstChildOfClass("Humanoid")
+                local root = obj:FindFirstChild("HumanoidRootPart")
+                if humanoid and root and humanoid.Health > 0 then
+                    if not Players:GetPlayerFromCharacter(obj) then
+                        newCache[obj] = {
+                            Model = obj,
+                            Humanoid = humanoid,
+                            Root = root,
+                            Position = root.Position,
+                            Health = humanoid.Health
+                        }
+                    end
+                end
+            end
+        end
+    end
+
+    -- METHOD 2: Scan semua model di Workspace yang punya Humanoid (fallback)
+    if next(newCache) == nil then
+        for _, obj in ipairs(Workspace:GetDescendants()) do
+            if obj:IsA("Model") then
+                local humanoid = obj:FindFirstChildOfClass("Humanoid")
+                local root = obj:FindFirstChild("HumanoidRootPart")
+                if humanoid and root and humanoid.Health > 0 then
+                    if not Players:GetPlayerFromCharacter(obj) then
+                        newCache[obj] = {
+                            Model = obj,
+                            Humanoid = humanoid,
+                            Root = root,
+                            Position = root.Position,
+                            Health = humanoid.Health
+                        }
+                    end
+                end
+            end
+        end
+    end
+
     CachedNPCs = newCache
 end
 
@@ -55,8 +113,7 @@ function getNPCsInRadius(position, radius)
     local result = {}
     if not position then return result end
     for _, npc in pairs(CachedNPCs) do
-        local dist = (npc.Position - position).Magnitude
-        if dist <= radius then
+        if (npc.Position - position).Magnitude <= radius then
             result[#result + 1] = npc
         end
     end
@@ -69,16 +126,33 @@ end
 local Remotes = {}
 
 function initRemotes()
-    local RemotesFolder = ReplicatedStorage:WaitForChild("Remotes", 10)
-    Remotes.CombatEvent = RemotesFolder:WaitForChild("CombatEvent")
-    Remotes.MainEvent = RemotesFolder:WaitForChild("MainEvent")
-    pcall(function()
-        Remotes.MainFunction = RemotesFolder:WaitForChild("MainFunction")
-    end)
+    -- Remotes ada di Workspace > Remotes (dari screenshot Explorer)
+    local RemotesFolder = Workspace:FindFirstChild("Remotes")
+    if not RemotesFolder then
+        RemotesFolder = ReplicatedStorage:FindFirstChild("Remotes")
+    end
+    if not RemotesFolder then
+        warn("[VOID VAINLY STAR] Folder 'Remotes' tidak ditemukan!")
+        return
+    end
+
+    Remotes.CombatEvent = RemotesFolder:FindFirstChild("CombatEvent")
+    Remotes.MainEvent = RemotesFolder:FindFirstChild("MainEvent")
+    Remotes.MainFunction = RemotesFolder:FindFirstChild("MainFunction")
+
+    if Remotes.CombatEvent then
+        print("[VOID VAINLY STAR] CombatEvent ditemukan")
+    end
+    if Remotes.MainEvent then
+        print("[VOID VAINLY STAR] MainEvent ditemukan")
+    end
+    if Remotes.MainFunction then
+        print("[VOID VAINLY STAR] MainFunction ditemukan")
+    end
 end
 
 -- ═══════════════════════════════════════
--- ONE-HIT KILL FUNCTION (FINAL VERSION)
+-- ONE-HIT KILL ALL NPCs di Enemy folder
 -- ═══════════════════════════════════════
 local function killNPC(npcData)
     if not npcData or not npcData.Model or not npcData.Model.Parent then return false end
@@ -86,27 +160,61 @@ local function killNPC(npcData)
     local humanoid = npcData.Humanoid
     local model = npcData.Model
 
-    -- METHOD 1: TakeDamage dengan nilai super besar (bypass validation)
+    -- METHOD 1: TakeDamage dengan nilai super besar
     pcall(function()
         humanoid:TakeDamage(Config.Damage)
     end)
 
-    -- METHOD 2: Set Health = 0 langsung
+    -- METHOD 2: Set Health = 0 langsung (instant kill)
+    task.wait(0.01)
     pcall(function()
         humanoid.Health = 0
     end)
 
-    -- METHOD 3: Fire server remote untuk replication
-    pcall(function()
-        Remotes.CombatEvent:FireServer(model, Config.Damage)
-    end)
+    -- METHOD 3: Fire server CombatEvent (replication)
+    task.wait(0.01)
+    if Remotes.CombatEvent then
+        pcall(function()
+            Remotes.CombatEvent:FireServer(model, Config.Damage)
+        end)
+    end
 
     -- METHOD 4: Fire server kill command
-    pcall(function()
-        Remotes.CombatEvent:FireServer(model, "Kill")
-    end)
+    task.wait(0.01)
+    if Remotes.CombatEvent then
+        pcall(function()
+            Remotes.CombatEvent:FireServer(model, "OneHitKill")
+        end)
+    end
+
+    -- METHOD 5: Invoke MainFunction (RemoteFunction) untuk server kill
+    task.wait(0.01)
+    if Remotes.MainFunction then
+        pcall(function()
+            local success, result = Remotes.MainFunction:InvokeServer(model, "Kill", Config.Damage)
+        end)
+    end
+
+    -- METHOD 6: Fire MainEvent untuk replicate death
+    task.wait(0.01)
+    if Remotes.MainEvent then
+        pcall(function()
+            Remotes.MainEvent:FireServer("OneHitKill", model, Config.Damage)
+        end)
+    end
 
     return true
+end
+
+-- KILL ALL NPCs DI FOLDER ENEMY (bukan yang dekat player saja)
+local function killAllEnemyNPCs()
+    local killed = 0
+    for _, npc in pairs(CachedNPCs) do
+        if killNPC(npc) then
+            killed = killed + 1
+        end
+    end
+    return killed
 end
 
 local function killAOE(position, radius, maxTargets)
@@ -123,6 +231,7 @@ end
 
 -- ═══════════════════════════════════════
 -- STAGE MANAGEMENT (stages 1-27)
+-- Workspace > Map > Stages > {number} > Spawns > {spawn} > {Build, WinArea, LevelArea, Spawn}
 -- ═══════════════════════════════════════
 local StageList = {}
 local StageNumbers = {}
@@ -139,13 +248,32 @@ function scanStages()
     local Stages = Map:FindFirstChild("Stages")
     if not Stages then return end
 
-    for _, stage in ipairs(Stages:GetChildren()) do
-        local number = tonumber(stage.Name)
-        if number then
-            local spawn = stage:FindFirstChild("Spawn")
-            if spawn and spawn:IsA("BasePart") then
-                StageList[number] = {Folder = stage, Spawn = spawn}
-                StageNumbers[#StageNumbers + 1] = number
+    for _, stageFolder in ipairs(Stages:GetChildren()) do
+        local stageNumber = tonumber(stageFolder.Name)
+        if stageNumber then
+            local SpawnsFolder = stageFolder:FindFirstChild("Spawns")
+            if SpawnsFolder then
+                local bestSpawn = nil
+                local bestSpawnNumber = math.huge
+
+                for _, spawnFolder in ipairs(SpawnsFolder:GetChildren()) do
+                    local spawnNumber = tonumber(spawnFolder.Name)
+                    if spawnNumber and spawnNumber < bestSpawnNumber then
+                        bestSpawnNumber = spawnNumber
+                        bestSpawn = spawnFolder
+                    end
+                end
+
+                if bestSpawn then
+                    local spawnPart = bestSpawn:FindFirstChild("Spawn") or bestSpawn
+                    StageList[stageNumber] = {
+                        Folder = stageFolder,
+                        StageNumber = stageNumber,
+                        SpawnFolder = bestSpawn,
+                        SpawnPart = spawnPart
+                    }
+                    StageNumbers[#StageNumbers + 1] = stageNumber
+                end
             end
         end
     end
@@ -166,16 +294,16 @@ function getCurrentStageNumber()
     return StageNumbers[CurrentStageIndex]
 end
 
-function isPlayerNearSpawn(spawnPart)
+function isPlayerNearSpawn(stageData)
+    if not stageData or not stageData.SpawnPart then return false end
     local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-    if not root or not spawnPart then return false end
-    return (root.Position - spawnPart.Position).Magnitude <= Config.PlayerDistanceThreshold
+    if not root then return false end
+    return (root.Position - stageData.SpawnPart.Position).Magnitude <= Config.PlayerDistanceThreshold
 end
 
 function isStageComplete(stageFolder)
     if not stageFolder then return false end
 
-    -- Cek WinArea
     local winArea = stageFolder:FindFirstChild("WinArea")
     if winArea then
         local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
@@ -184,7 +312,6 @@ function isStageComplete(stageFolder)
         end
     end
 
-    -- Cek LevelArea
     local levelArea = stageFolder:FindFirstChild("LevelArea")
     if levelArea then
         local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
@@ -226,7 +353,7 @@ local function setupPanduanNPC()
 end
 
 -- ═══════════════════════════════════════
--- MEMORY OVERWRITE (prevent Health override)
+-- MEMORY OVERWRITE
 -- ═══════════════════════════════════════
 local function setupMemoryOverwrite()
     pcall(function()
@@ -235,10 +362,11 @@ local function setupMemoryOverwrite()
         local oldNewIndex = meta.__newindex
         meta.__newindex = newcclosure(function(self, key, value)
             if key == "Health" and typeof(value) == "number" then
-                -- Jika health diset ke 0, fire event untuk replication
                 if value == 0 then
                     pcall(function()
-                        Remotes.MainEvent:FireServer("NPCDied", self.Parent)
+                        if Remotes.MainEvent then
+                            Remotes.MainEvent:FireServer("NPCDied", self.Parent)
+                        end
                     end)
                 end
             end
@@ -259,8 +387,8 @@ pcall(function() ScreenGui.Parent = CoreGui end)
 if not ScreenGui.Parent then ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui") end
 
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 280, 0, 220)
-MainFrame.Position = UDim2.new(0.5, -140, 0.4, -110)
+MainFrame.Size = UDim2.new(0, 340, 0, 250)
+MainFrame.Position = UDim2.new(0.5, -170, 0.4, -125)
 MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
@@ -271,56 +399,56 @@ MainFrame.Parent = ScreenGui
 Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 10)
 
 local TitleLabel = Instance.new("TextLabel")
-TitleLabel.Size = UDim2.new(1, 0, 0, 40)
+TitleLabel.Size = UDim2.new(1, 0, 0, 45)
 TitleLabel.BackgroundColor3 = Color3.fromRGB(50, 15, 15)
 TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 TitleLabel.Text = "⚜️ VOID VAINLY STAR ⚜️"
 TitleLabel.Font = Enum.Font.GothamBold
-TitleLabel.TextSize = 16
+TitleLabel.TextSize = 18
 TitleLabel.BorderSizePixel = 0
 TitleLabel.Parent = MainFrame
 Instance.new("UICorner", TitleLabel).CornerRadius = UDim.new(0, 10)
 
 local ToggleButton = Instance.new("TextButton")
-ToggleButton.Size = UDim2.new(0, 200, 0, 46)
-ToggleButton.Position = UDim2.new(0.5, -100, 0, 50)
+ToggleButton.Size = UDim2.new(0, 260, 0, 50)
+ToggleButton.Position = UDim2.new(0.5, -130, 0, 55)
 ToggleButton.BackgroundColor3 = Color3.fromRGB(180, 30, 30)
 ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 ToggleButton.Text = "STATUS: OFF"
 ToggleButton.Font = Enum.Font.GothamBold
-ToggleButton.TextSize = 18
+ToggleButton.TextSize = 20
 ToggleButton.BorderSizePixel = 0
 ToggleButton.Parent = MainFrame
 Instance.new("UICorner", ToggleButton).CornerRadius = UDim.new(0, 8)
 
 local StageLabel = Instance.new("TextLabel")
-StageLabel.Size = UDim2.new(1, -20, 0, 30)
-StageLabel.Position = UDim2.new(0, 10, 0, 105)
+StageLabel.Size = UDim2.new(1, -20, 0, 35)
+StageLabel.Position = UDim2.new(0, 10, 0, 120)
 StageLabel.BackgroundTransparency = 1
 StageLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
 StageLabel.Font = Enum.Font.GothamBold
-StageLabel.TextSize = 14
+StageLabel.TextSize = 16
 StageLabel.Text = "Stage: -"
 StageLabel.Parent = MainFrame
 
 local ConfigLabel = Instance.new("TextLabel")
-ConfigLabel.Size = UDim2.new(1, -20, 0, 60)
-ConfigLabel.Position = UDim2.new(0, 10, 0, 140)
+ConfigLabel.Size = UDim2.new(1, -20, 0, 100)
+ConfigLabel.Position = UDim2.new(0, 10, 0, 165)
 ConfigLabel.BackgroundTransparency = 1
 ConfigLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
 ConfigLabel.Font = Enum.Font.Gotham
-ConfigLabel.TextSize = 11
+ConfigLabel.TextSize = 12
 ConfigLabel.TextWrapped = true
 ConfigLabel.Parent = MainFrame
 
 local OpenButton = Instance.new("TextButton")
-OpenButton.Size = UDim2.new(0, 140, 0, 38)
+OpenButton.Size = UDim2.new(0, 170, 0, 44)
 OpenButton.Position = UDim2.new(0.02, 0, 0.88, 0)
 OpenButton.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
 OpenButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 OpenButton.Text = "Open UI"
 OpenButton.Font = Enum.Font.GothamBold
-OpenButton.TextSize = 13
+OpenButton.TextSize = 14
 OpenButton.BorderSizePixel = 0
 OpenButton.Parent = ScreenGui
 Instance.new("UICorner", OpenButton).CornerRadius = UDim.new(0, 6)
@@ -335,9 +463,10 @@ local function updateStageUI()
     else
         StageLabel.Text = "Stage: -"
     end
-    ConfigLabel.Text = string.format("Rad: %d | Dmg: %s | Max: %d\nScan: %ds | Stages: %d",
-        Config.KillRadius, Config.DamageLabel, Config.MaxTargets,
-        Config.ScanInterval, #StageNumbers)
+    ConfigLabel.Text = string.format("Enemy Folder: %s\nRad: %d | Dmg: %s\nScan: %ds | Stages: %d\nDamage: %.0e",
+        EnemyFolder and EnemyFolder.Name or "Not Found",
+        Config.KillRadius, Config.DamageLabel,
+        Config.ScanInterval, #StageNumbers, Config.Damage)
 end
 
 ToggleButton.MouseButton1Click:Connect(function()
@@ -370,24 +499,24 @@ function Functions.Start()
 
     ActiveThread = task.spawn(function()
         while Config.Enabled do
-            -- Update NPC cache setiap ScanInterval detik (minimal lag)
+            -- Update NPC cache setiap 10 detik (ZERO LAG)
             task.wait(Config.ScanInterval)
             updateNPCCache()
 
             -- Process current stage
-            local stage = getCurrentStage()
-            if stage then
-                local spawn = stage:FindFirstChild("Spawn")
-                if spawn and isPlayerNearSpawn(spawn) then
-                    -- AoE kill semua NPC dalam radius detection
-                    local killed = killAOE(spawn.Position, Config.DetectionRadius, Config.MaxTargets)
+            local stageData = StageList[getCurrentStageNumber()]
+            if stageData then
+                if isPlayerNearSpawn(stageData) then
+                    -- ONE-HIT ALL NPCs di Enemy folder (bukan AoE radius)
+                    local killed = killAllEnemyNPCs()
                     if killed > 0 then
-                        print(string.format("[VOID VAINLY STAR] Killed %d NPCs at Stage %d", killed, getCurrentStageNumber()))
+                        print(string.format("[VOID VAINLY STAR] One-hit ALL %d NPCs at Stage %d (Damage: %s = %.0e)",
+                            killed, getCurrentStageNumber(), Config.DamageLabel, Config.Damage))
                     end
 
                     -- Cek stage complete
-                    if isStageComplete(stage) then
-                        StageCompleted[stage.Name] = true
+                    if isStageComplete(stageData.Folder) then
+                        StageCompleted[stageData.Folder.Name] = true
                         advanceStage()
                         updateStageUI()
                         print(string.format("[VOID VAINLY STAR] Stage %d completed!", getCurrentStageNumber()))
@@ -431,10 +560,13 @@ end)
 -- INITIALIZATION
 -- ═══════════════════════════════════════
 initRemotes()
+initEnemyFolder()
 scanStages()
 updateStageUI()
 setupPanduanNPC()
 setupMemoryOverwrite()
 Functions.Start()
 
-    Config.DamageLabel, #StageNumbers))
+print(string.format("⚜️ VOID VAINLY STAR)",
+    Config.DamageLabel, Config.Damage, #StageNumbers, Config.ScanInterval,
+    EnemyFolder and EnemyFolder.Name or "Not Found"))
