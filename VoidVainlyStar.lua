@@ -1,10 +1,25 @@
-local CoreGui = game:GetService("CoreGui")
+task.wait(1) -- Memberi waktu Delta untuk memuat environment sepenuhnya
+
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 
--- Hapus GUI lama jika script dieksekusi ulang
-if CoreGui:FindFirstChild("VoidVainlyStarGUI") then
-    CoreGui.VoidVainlyStarGUI:Destroy()
+-- Menggunakan gethui() sebagai alternatif CoreGui yang lebih aman di Executor
+local function getSafeGui()
+    if gethui then 
+        return gethui() 
+    end
+    local success, coreGui = pcall(function() return game:GetService("CoreGui") end)
+    if success and coreGui then 
+        return coreGui 
+    end
+    return LocalPlayer:WaitForChild("PlayerGui")
+end
+
+local GuiParent = getSafeGui()
+
+-- Hapus GUI lama jika script dijalankan ulang
+if GuiParent:FindFirstChild("VoidVainlyStarGUI") then
+    GuiParent.VoidVainlyStarGUI:Destroy()
 end
 
 local emotes = {
@@ -20,7 +35,7 @@ local emotes = {
 -- [1] PEMBUATAN UI UTAMA
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "VoidVainlyStarGUI"
-ScreenGui.Parent = CoreGui
+ScreenGui.Parent = GuiParent
 ScreenGui.ResetOnSpawn = false
 
 -- Tombol Open (Bulat, Pojok Kiri Bawah)
