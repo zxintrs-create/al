@@ -1,10 +1,6 @@
-
-
-
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
-local PathfindingService = game:GetService("PathfindingService")
 local StarterGui = game:GetService("StarterGui")
 
 local player = Players.LocalPlayer
@@ -1032,51 +1028,6 @@ local function openLoadWindow()
 end
 
 guiElements = createTeleportGui()
-
--- RESTORE WARNA TELEPORT: tidak mengubah Walk atau Main
-local function restoreTeleportColors()
-    local g = guiElements
-    if not g then return end
-
-    local bg = {
-        MainFrame = Color3.fromRGB(24, 24, 28),
-        TitleBar = Color3.fromRGB(35, 35, 42),
-        SetLokasiButton = COLOR_ACTIVE_GREEN,
-        TeleportButton = COLOR_INACTIVE_GRAY,
-        UndoButton = COLOR_INACTIVE_GRAY,
-        RedoButton = COLOR_INACTIVE_GRAY,
-        MethodToggleBtn = COLOR_INACTIVE_GRAY,
-        SpeedDownBtn = COLOR_INACTIVE_GRAY,
-        SpeedDisplay = Color3.fromRGB(35, 35, 45),
-        SpeedUpBtn = COLOR_INACTIVE_GRAY,
-        AutoTeleportButton = COLOR_INACTIVE_GRAY,
-        LoopButton = COLOR_INACTIVE_GRAY,
-        StopButton = COLOR_RED_OFF,
-        SaveButton = COLOR_ACTIVE_GREEN,
-        LoadButton = COLOR_CP_TELEPORT,
-        ScrollingFrame = Color3.fromRGB(18, 18, 22),
-        OpenButton = Color3.fromRGB(24, 24, 28),
-    }
-
-    for name, color in pairs(bg) do
-        local obj = g[name]
-        if obj then
-            obj.BackgroundTransparency = 0
-            obj.BackgroundColor3 = color
-        end
-    end
-
-    if g.OpenButton then
-        g.OpenButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-        g.OpenButton.TextTransparency = 0
-    end
-    if g.TitleBar then g.TitleBar.BackgroundTransparency = 0 end
-    if g.MainFrame then g.MainFrame.BackgroundTransparency = 0 end
-
-    updateUI()
-end
-
-restoreTeleportColors()
 guiElements.ScreenGui.Enabled = false
 guiElements.MainFrame.Visible = false
 
@@ -1514,6 +1465,7 @@ local SAVE_FOLDER = "autowalk_saves/"
 local currentSaveFileName = "AutoWalk 1"
 
 local currentMode = "Set Lokasi"
+local walkSpeed = 16
 local isMinimized = false
 local guiElements = {}
 local checkpoints = {}
@@ -1524,9 +1476,7 @@ local MAX_HISTORY_STEPS = 20
 
 local autoWalk = false
 local loopEnabled = false
-local WALK_REACHED_DISTANCE = 4
-local WAYPOINT_REACHED_DISTANCE = 3
-local MOVE_REFRESH = 0.35
+local WALK_DELAY = 0.2
 
 -- Warna Tema
 local CYAN = Color3.fromRGB(0, 255, 255)
@@ -1880,7 +1830,7 @@ local function createAutoWalkGui()
 	speedDisplay.Position = UDim2.new(0, 40, 0, 0)
 	speedDisplay.Size = UDim2.new(1, -80, 1, 0)
 	speedDisplay.Font = Enum.Font.GothamBold
-	speedDisplay.Text = "Map Speed"
+	speedDisplay.Text = string.format("Walk Speed: %d", walkSpeed)
 	speedDisplay.TextColor3 = Color3.fromRGB(255, 255, 255)
 	speedDisplay.TextSize = 11
 	addCorner(speedDisplay, 6)
@@ -2155,16 +2105,12 @@ end
 local function getLastCheckpoint()
 	local last = 0
 	for i = 1, MAX_CHECKPOINTS do
-		if checkpoints["CP" .. i] then
-			last = i
-		else
-			break
-		end
+		if checkpoints["CP" .. i] then last = i end
 	end
 	return last
 end
 
-local function getCharacter()
+local function getWalkCharacter()
 	local character = player.Character
 	if not character then return nil, nil, nil end
 	local humanoid = character:FindFirstChildOfClass("Humanoid")
@@ -2173,63 +2119,59 @@ local function getCharacter()
 	return character, humanoid, root
 end
 
+local function isCheckpointReached(root, targetPosition)
+	return root and (root.Position - targetPosition).Magnitude <= 5
+end
+
 local function walkToCheckpoint(index)
 	local target = checkpoints["CP" .. index]
 	if not target then
-		notify("CP" .. index .. " tidak ada. Auto Walk dihentikan agar tidak melewatkan set.")
+		notify("CP" .. index .. " tidak ada. Auto Walk berhenti agar tidak skip.")
 		return false
 	end
 
 	while autoWalk do
-		local character, humanoid, root = getCharacter()
-		if not character then task.wait(0.2); continue end
-		local targetPos = target.Position
-		if (root.Position - targetPos).Magnitude <= WALK_REACHED_DISTANCE then
+		local character, humanoid, root = getWalkCharacter()
+		if not character then
+			task.wait(0.2)
+			continue
+		end
+
+		local targetPosition = target.Position
+		if isCheckpointReached(root, targetPosition) then
 			humanoid:MoveTo(root.Position)
 			return true
 		end
 
-		local path = PathfindingService:CreatePath({AgentRadius=2, AgentHeight=5, AgentCanJump=true, AgentCanClimb=true, WaypointSpacing=3})
-		local ok = pcall(function() path:ComputeAsync(root.Position, targetPos) end)
-		local failed = not ok or path.Status ~= Enum.PathStatus.Success
+		-- Speed sengaja tidak disentuh. Humanoid.WalkSpeed tetap milik map/game.
+		humanoid:MoveTo(targetPosition)
 
-		if not failed then
-			for _, waypoint in ipairs(path:GetWaypoints()) do
-				if not autoWalk then return false end
-				character, humanoid, root = getCharacter()
-				if not character then failed=true; break end
-				if (root.Position-targetPos).Magnitude <= WALK_REACHED_DISTANCE then return true end
-				if waypoint.Action == Enum.PathWaypointAction.Jump then humanoid.Jump=true end
-				humanoid:MoveTo(waypoint.Position)
-				local t=tick()
-				while autoWalk do
-					character, humanoid, root = getCharacter()
-					if not character then failed=true; break end
-					if (root.Position-targetPos).Magnitude <= WALK_REACHED_DISTANCE then return true end
-					if (root.Position-waypoint.Position).Magnitude <= WAYPOINT_REACHED_DISTANCE then break end
-					if tick()-t >= 5 then failed=true; break end
-					task.wait(0.08)
-				end
-				if failed then break end
+		local moveStart = tick()
+		while autoWalk do
+			character, humanoid, root = getWalkCharacter()
+			if not character then break end
+
+			if isCheckpointReached(root, targetPosition) then
+				humanoid:MoveTo(root.Position)
+				return true
 			end
-			if not failed then
-				character, humanoid, root=getCharacter()
-				if character and (root.Position-targetPos).Magnitude <= WALK_REACHED_DISTANCE then return true end
+
+			-- Perbarui tujuan secara berkala tanpa mengubah speed.
+			if tick() - moveStart >= 1 then
+				humanoid:MoveTo(targetPosition)
+				moveStart = tick()
 			end
-		else
-			humanoid:MoveTo(targetPos)
-			task.wait(0.35)
+
+			task.wait(0.08)
 		end
-
-		-- Gagal/terhambat tidak dianggap selesai. Tetap ulangi CP yang sama.
-		task.wait(MOVE_REFRESH)
 	end
+
 	return false
 end
 
 local function stopAutoWalk(silent)
-	autoWalk=false
-	local _,humanoid,root=getCharacter()
+	autoWalk = false
+	local _, humanoid, root = getWalkCharacter()
 	if humanoid and root then humanoid:MoveTo(root.Position) end
 	updateUI()
 	if not silent then notify("Auto Walk dihentikan.") end
@@ -2237,29 +2179,59 @@ end
 
 local function startAutoWalk()
 	if autoWalk then return end
-	local lastCheckpoint=getLastCheckpoint()
-	if lastCheckpoint < 1 then notify("Belum ada CP yang disimpan."); return end
-	autoWalk=true
+
+	local lastCheckpoint = getLastCheckpoint()
+	if lastCheckpoint < 1 then
+		notify("Belum ada CP yang disimpan.")
+		return
+	end
+
+	autoWalk = true
 	updateUI()
-	notify("Auto Walk dimulai: CP1 → CP"..lastCheckpoint)
+	notify("Auto Walk dimulai: CP1 → CP" .. lastCheckpoint)
+
 	task.spawn(function()
 		while autoWalk do
-			local currentLast=getLastCheckpoint()
-			if currentLast < 1 then notify("CP1 belum ada."); break end
-			local completedAll=true
-			for i=1,currentLast do
-				if not autoWalk then completedAll=false; break end
-				if not checkpoints["CP"..i] then notify("CP"..i.." tidak ada. Auto Walk dihentikan agar tidak skip."); completedAll=false; break end
-				notify("Menuju CP"..i.."...")
-				if not walkToCheckpoint(i) then completedAll=false; break end
-				notify("CP"..i.." selesai.")
-				task.wait(0.15)
+			local currentLast = getLastCheckpoint()
+			if currentLast < 1 then
+				notify("CP1 belum ada.")
+				break
 			end
+
+			local completedAll = true
+
+			-- WAJIB berurutan: CP1 selesai dulu, baru CP2, dst.
+			for i = 1, currentLast do
+				if not autoWalk then
+					completedAll = false
+					break
+				end
+
+			if not checkpoints["CP" .. i] then
+				notify("CP" .. i .. " tidak ada. Auto Walk berhenti agar tidak skip.")
+				completedAll = false
+				break
+			end
+
+				notify("Menuju CP" .. i .. "...")
+				local reached = walkToCheckpoint(i)
+				if not reached then
+					completedAll = false
+					break
+				end
+
+				notify("CP" .. i .. " selesai.")
+				task.wait(WALK_DELAY)
+			end
+
 			if not completedAll or not loopEnabled then break end
+
+			-- Hanya setelah CP terakhir benar-benar selesai, kembali ke CP1.
 			notify("Semua CP selesai. Mengulang dari CP1.")
-			task.wait(0.25)
+			task.wait(WALK_DELAY)
 		end
-		autoWalk=false
+
+		autoWalk = false
 		updateUI()
 	end)
 end
@@ -2555,6 +2527,16 @@ guiElements.RedoButton.MouseButton1Click:Connect(function()
 	else
 		notify("Tidak ada riwayat untuk di-redo.")
 	end
+end)
+
+guiElements.SpeedUpBtn.MouseButton1Click:Connect(function()
+	updateUI()
+	notify("Speed mengikuti map/game.")
+end)
+
+guiElements.SpeedDownBtn.MouseButton1Click:Connect(function()
+	updateUI()
+	notify("Speed mengikuti map/game.")
 end)
 
 guiElements.AutoWalkButton.MouseButton1Click:Connect(function()
@@ -3179,8 +3161,13 @@ local WalkToggle = createToggleRow("🚶 Auto Walk", false, function(state)
     setWalkEnabled(state)
 end)
 
--- Auto Walk tidak mengubah WalkSpeed; speed mengikuti map/game.
-createInputRow("⚡ Map Speed", 0, "READ ONLY", function() end)
+-- WalkSpeed
+createInputRow("⚡ WalkSpeed", 16, "Set Speed", function(val)
+    local num = tonumber(val)
+    if num and LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") then
+        LocalPlayer.Character:FindFirstChildOfClass("Humanoid").WalkSpeed = num
+    end
+end)
 
 -- JumpPower
 createInputRow("🦘 JumpPower", 50, "Set Jump", function(val)
