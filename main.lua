@@ -5,6 +5,7 @@ local HttpService = game:GetService("HttpService")
 local StarterGui = game:GetService("StarterGui")
 local UserInputService = game:GetService("UserInputService")
 local VirtualInputManager = game:GetService("VirtualInputManager")
+local SoundService = game:GetService("SoundService")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -30,9 +31,21 @@ local function getTargetParent()
 	return playerGui
 end
 
--- Fungsi Notifikasi dengan ScreenGui khusus agar selalu di layer teratas (DisplayOrder max)
+-- Fungsi Notifikasi dengan ScreenGui khusus, DisplayOrder max, dan Efek Suara
 local function Notify(pesanTeks)
 	task.spawn(function()
+		-- Mainkan Suara Notifikasi
+		local successSound, errSound = pcall(function()
+			local sound = Instance.new("Sound")
+			sound.SoundId = "rbxassetid://79251980032695"
+			sound.Volume = 1.0
+			sound.Parent = SoundService
+			sound:Play()
+			sound.Ended:Connect(function()
+				sound:Destroy()
+			end)
+		end)
+
 		-- Buat ScreenGui khusus notifikasi di atas segalanya
 		local notifyGui = Instance.new("ScreenGui")
 		notifyGui.Name = "ZydexTopNotify"
@@ -103,8 +116,8 @@ local function Notify(pesanTeks)
 	end)
 end
 
-Notify("Load script , 👑 VOID VAINLY STAR [Notif]")
-print("D-PAD VOID VAINLY STAR (Fixed) ✅")
+Notify("Load script , 👑 VOID VAINLY STAR [Notify]")
+print("D-PAD VOID VAINLY STAR (Fix Native Jump) ✅")
 
 local camera = Workspace.CurrentCamera
 local SETTINGS_FILE = "MobileControlsNativeJump.json"
