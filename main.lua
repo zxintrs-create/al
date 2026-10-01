@@ -4,7 +4,6 @@ local Workspace = game:GetService("Workspace")
 local HttpService = game:GetService("HttpService")
 local StarterGui = game:GetService("StarterGui")
 local UserInputService = game:GetService("UserInputService")
-local VirtualInputManager = game:GetService("VirtualInputManager")
 
 -- Fungsi Notifikasi
 local function Notify(pesanTeks)
@@ -24,23 +23,44 @@ local function Notify(pesanTeks)
 	end)
 end
 
-Notify("Load script , 👑 VOID VAINLY STAR (Jump Fixed Space)")
-print("D-PAD VOID VAINLY STAR ✅")
+Notify("Load script , 👑 VOID VAINLY STAR (Native Roblox Jump)")
+print("D-PAD VOID VAINLY STAR (Native Roblox Jump) ✅")
 
 local player = Players.LocalPlayer
 local camera = Workspace.CurrentCamera
 local playerGui = player:WaitForChild("PlayerGui")
 
-local SETTINGS_FILE = "MobileControlsFullLayout.json"
+local SETTINGS_FILE = "MobileControlsNativeJump.json"
 local SKALA_UKURAN = 2.0 
 
--- Sembunyikan TouchGui bawaan Roblox
+-- Sembunyikan TouchGui bawaan Roblox tapi biarkan sistem kontrol internalnya berjalan
 task.spawn(function()
 	local touchGui = playerGui:WaitForChild("TouchGui", 5)
 	if touchGui then
 		touchGui.Enabled = false
 	end
 end)
+
+---------------------------------------------------------
+-- MENGAMBIL MODUL KONTROL BAWAAN ROBLOX (UNTUK JUMP NATIVE)
+---------------------------------------------------------
+local function getPlayerController()
+	local success, playerScripts = pcall(function()
+		return player:WaitForChild("PlayerScripts", 3)
+	end)
+	if success and playerScripts then
+		local modules = playerScripts:FindFirstChild("PlayerModule")
+		if modules then
+			local requireSuccess, playerModule = pcall(require, modules)
+			if requireSuccess and playerModule then
+				pcall(function()
+					return playerModule:GetControls()
+				end)
+			end
+		end
+	end
+	return nil
+end
 
 ---------------------------------------------------------
 -- PENENTUAN PARENT KE CORE GUI / GETHUI
@@ -71,19 +91,25 @@ uiScale.Scale = SKALA_UKURAN
 uiScale.Parent = screenGui
 
 local moveInputs = {Forward = false, Backward = false, Left = false, Right = false}
+local holdingJump = false
 local shiftLockEnabled = false
 
+-- Fungsi untuk mereset seluruh input agar tidak "nyangkut" (jalan sendiri)
+local function resetAllInputs()
+	moveInputs.Forward = false
+	moveInputs.Backward = false
+	moveInputs.Left = false
+	moveInputs.Right = false
+	holdingJump = false
+end
+
 ---------------------------------------------------------
--- PENGATURAN DEFAULT & LOAD / SAVE FILE (LENGKAP X & Y)
+-- PENGATURAN DEFAULT & LOAD / SAVE FILE
 ---------------------------------------------------------
 local layoutConfig = {
-	-- D-Pad Kiri
 	DpadPosX = 15, DpadPosY = -15, DpadSize = 180,
-	-- Tombol Jump Kanan
 	JumpPosX = -15, JumpPosY = -15, JumpSize = 120,
-	-- Tombol Aksi (Q,E,R,F)
 	ActionPosX = -160, ActionPosY = -15, ActionSize = 45,
-	-- Tombol Shift Lock
 	ShiftPosX = -20, ShiftPosY = -150
 }
 
@@ -103,7 +129,7 @@ end
 loadSettingsFromFile()
 
 ---------------------------------------------------------
--- FUNGSI ANTI-SLIP (MENGECEK APAKAH JARI DI DALAM TOMBOL)
+-- FUNGSI ANTI-SLIP
 ---------------------------------------------------------
 local function isInputInsideGui(guiObject, inputPos)
 	local absPos = guiObject.AbsolutePosition
@@ -115,7 +141,7 @@ local function isInputInsideGui(guiObject, inputPos)
 end
 
 ---------------------------------------------------------
--- D-PAD KIRI (WASD) DENGAN ANTI-SLIP
+-- D-PAD KIRI (WASD) DENGAN PENGAMAN Kematian/Reset
 ---------------------------------------------------------
 local dpadContainer = Instance.new("Frame")
 dpadContainer.Name = "DPadContainer"
@@ -180,7 +206,7 @@ bindDpadAntiSlip(btnA, "Left")
 bindDpadAntiSlip(btnD, "Right")
 
 ---------------------------------------------------------
--- TOMBOL JUMP (DISIMULASIKAN SEPERTI TOMBOL SPASI)
+-- TOMBOL JUMP NATIVE (MENGGUNAKAN FUNGSI BAWAAN ROBLOX)
 ---------------------------------------------------------
 local btnJump = Instance.new("ImageButton")
 btnJump.Name = "BtnJump"
@@ -211,35 +237,51 @@ local activeJumpInput = nil
 btnJump.InputBegan:Connect(function(input)
 	if (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1) and not activeJumpInput then
 		activeJumpInput = input
+		holdingJump = true
 		btnJump.BackgroundColor3 = Color3.fromRGB(0, 180, 255)
-		pcall(function()
-			VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Space, false, game)
-		end)
+		
+		-- Memicu fungsi jump bawaan Roblox melalui kontroler player jika tersedia
+		local controls = getPlayerController()
+		if controls and type(controls.MoveJump) == "function" then
+			pcall(function()
+				controls:MoveJump(true)
+			end)
+		end
 	end
 end)
 
 UserInputService.InputChanged:Connect(function(input)
 	if input == activeJumpInput and not isInputInsideGui(btnJump, input.Position) then
-		pcall(function()
-			VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Space, false, game)
-		end)
-		activeJumpInput = nil
+		holdingJump = false
 		btnJump.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+		activeJumpInput = nil
+		
+		local controls = getPlayerController()
+		if controls and type(controls.MoveJump) == "function" then
+			pcall(function()
+				controls:MoveJump(false)
+			end)
+		end
 	end
 end)
 
 btnJump.InputEnded:Connect(function(input)
 	if input == activeJumpInput then
-		pcall(function()
-			VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Space, false, game)
-		end)
-		activeJumpInput = nil
+		holdingJump = false
 		btnJump.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+		activeJumpInput = nil
+		
+		local controls = getPlayerController()
+		if controls and type(controls.MoveJump) == "function" then
+			pcall(function()
+				controls:MoveJump(false)
+			end)
+		end
 	end
 end)
 
 ---------------------------------------------------------
--- TOMBOL AKSI (Q, E, R, F) DENGAN ANTI-SLIP
+-- TOMBOL AKSI (Q, E, R, F)
 ---------------------------------------------------------
 local actionContainer = Instance.new("Frame")
 actionContainer.Name = "ActionContainer"
@@ -270,12 +312,14 @@ local function createActionBtn(name, text, pos, keyCode, color)
 	btn.InputBegan:Connect(function(input)
 		if (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1) and not activeActionInput then
 			activeActionInput = input
+			local VirtualInputManager = game:GetService("VirtualInputManager")
 			pcall(function() VirtualInputManager:SendKeyEvent(true, keyCode, false, game) end)
 			btn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 		end
 	end)
 	UserInputService.InputChanged:Connect(function(input)
 		if input == activeActionInput and not isInputInsideGui(btn, input.Position) then
+			local VirtualInputManager = game:GetService("VirtualInputManager")
 			pcall(function() VirtualInputManager:SendKeyEvent(false, keyCode, false, game) end)
 			activeActionInput = nil
 			btn.BackgroundColor3 = color
@@ -283,6 +327,7 @@ local function createActionBtn(name, text, pos, keyCode, color)
 	end)
 	btn.InputEnded:Connect(function(input)
 		if input == activeActionInput then
+			local VirtualInputManager = game:GetService("VirtualInputManager")
 			pcall(function() VirtualInputManager:SendKeyEvent(false, keyCode, false, game) end)
 			activeActionInput = nil
 			btn.BackgroundColor3 = color
@@ -324,7 +369,7 @@ btnShift.InputBegan:Connect(function(input)
 end)
 
 ---------------------------------------------------------
--- MENU PENGATURAN UI LENGKAP (X & Y TERSEDIA)
+-- MENU PENGATURAN UI LENGKAP
 ---------------------------------------------------------
 local btnOpenMenu = Instance.new("TextButton")
 btnOpenMenu.Name = "BtnOpenMenu"
@@ -361,7 +406,7 @@ mainCorner.Parent = mainFrame
 local titleLabel = Instance.new("TextLabel")
 titleLabel.Size = UDim2.new(1, 0, 0, 35)
 titleLabel.BackgroundTransparency = 1
-titleLabel.Text = "LAYOUT SETTINGS (X & Y)"
+titleLabel.Text = "LAYOUT SETTINGS (NATIVE)"
 titleLabel.TextColor3 = Color3.fromRGB(255, 215, 0)
 titleLabel.TextSize = 15
 titleLabel.Font = Enum.Font.SourceSansBold
@@ -498,14 +543,35 @@ btnSave.Activated:Connect(function()
 end)
 
 ---------------------------------------------------------
--- LOOP UTAMA (GERAKAN & SHIFT LOCK)
+-- LOOP UTAMA DENGAN PENGAMAN KEMATIAN & RESET OTOMATIS
 ---------------------------------------------------------
 RunService.RenderStepped:Connect(function()
 	local char = player.Character
-	if not char then return end
+	if not char then 
+		resetAllInputs()
+		return 
+	end
+	
 	local hum = char:FindFirstChildOfClass("Humanoid")
 	local hrp = char:FindFirstChild("HumanoidRootPart")
-	if not hum or not hrp then return end
+	
+	if not hum or not hrp or hum.Health <= 0 then
+		resetAllInputs()
+		return
+	end
+
+	-- Jika tombol jump kustom sedang ditahan, terus panggil fungsi native
+	if holdingJump then
+		local controls = getPlayerController()
+		if controls and type(controls.MoveJump) == "function" then
+			pcall(function()
+				controls:MoveJump(true)
+			end)
+		else
+			-- Fallback pengaman jika modul kontrol tidak terambil
+			hum.Jump = true
+		end
+	end
 
 	local z = (moveInputs.Forward and -1 or 0) + (moveInputs.Backward and 1 or 0)
 	local x = (moveInputs.Left and -1 or 0) + (moveInputs.Right and 1 or 0)
