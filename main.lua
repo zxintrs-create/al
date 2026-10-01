@@ -103,7 +103,7 @@ local function Notify(pesanTeks)
 	end)
 end
 
-Notify("Load script , 👑 VOID VAINLY STAR (Top Notify Fixed)")
+Notify("Load script , 👑 VOID VAINLY STAR [Notif]")
 print("D-PAD VOID VAINLY STAR (Fixed) ✅")
 
 local camera = Workspace.CurrentCamera
