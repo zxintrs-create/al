@@ -24,8 +24,8 @@ local function Notify(pesanTeks)
 	end)
 end
 
-Notify("Load script , 👑 VOID VAINLY STAR (Full X & Y Layout)")
-print("D-PAD ✅")
+Notify("Load script , 👑 VOID VAINLY STAR (Jump Fixed Space)")
+print("D-PAD VOID VAINLY STAR ✅")
 
 local player = Players.LocalPlayer
 local camera = Workspace.CurrentCamera
@@ -71,7 +71,6 @@ uiScale.Scale = SKALA_UKURAN
 uiScale.Parent = screenGui
 
 local moveInputs = {Forward = false, Backward = false, Left = false, Right = false}
-local holdingJump = false
 local shiftLockEnabled = false
 
 ---------------------------------------------------------
@@ -181,7 +180,7 @@ bindDpadAntiSlip(btnA, "Left")
 bindDpadAntiSlip(btnD, "Right")
 
 ---------------------------------------------------------
--- TOMBOL JUMP DENGAN ANTI-SLIP
+-- TOMBOL JUMP (DISIMULASIKAN SEPERTI TOMBOL SPASI)
 ---------------------------------------------------------
 local btnJump = Instance.new("ImageButton")
 btnJump.Name = "BtnJump"
@@ -212,19 +211,30 @@ local activeJumpInput = nil
 btnJump.InputBegan:Connect(function(input)
 	if (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1) and not activeJumpInput then
 		activeJumpInput = input
-		holdingJump = true
+		btnJump.BackgroundColor3 = Color3.fromRGB(0, 180, 255)
+		pcall(function()
+			VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Space, false, game)
+		end)
 	end
 end)
+
 UserInputService.InputChanged:Connect(function(input)
 	if input == activeJumpInput and not isInputInsideGui(btnJump, input.Position) then
-		holdingJump = false
+		pcall(function()
+			VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Space, false, game)
+		end)
 		activeJumpInput = nil
+		btnJump.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
 	end
 end)
+
 btnJump.InputEnded:Connect(function(input)
 	if input == activeJumpInput then
-		holdingJump = false
+		pcall(function()
+			VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Space, false, game)
+		end)
 		activeJumpInput = nil
+		btnJump.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
 	end
 end)
 
@@ -357,7 +367,6 @@ titleLabel.TextSize = 15
 titleLabel.Font = Enum.Font.SourceSansBold
 titleLabel.Parent = mainFrame
 
--- Variabel Sementara untuk Pengaturan
 local tempConfig = {}
 for k, v in pairs(layoutConfig) do tempConfig[k] = v end
 
@@ -419,7 +428,6 @@ local function createSettingRow(parent, yOffset, labelText, keyVal, minVal, maxV
 	return valLbl
 end
 
--- Baris Pengaturan Lengkap X, Y, dan Ukuran di Menu
 local yPos = 40
 local spacing = 40
 
@@ -467,7 +475,6 @@ end)
 btnSave.Activated:Connect(function()
 	for k, v in pairs(tempConfig) do layoutConfig[k] = v end
 	
-	-- Terapkan Perubahan Permanen
 	dpadContainer.Size = UDim2.new(0, layoutConfig.DpadSize, 0, layoutConfig.DpadSize)
 	dpadContainer.Position = UDim2.new(0, layoutConfig.DpadPosX, 1, layoutConfig.DpadPosY)
 	
@@ -491,7 +498,7 @@ btnSave.Activated:Connect(function()
 end)
 
 ---------------------------------------------------------
--- LOOP UTAMA
+-- LOOP UTAMA (GERAKAN & SHIFT LOCK)
 ---------------------------------------------------------
 RunService.RenderStepped:Connect(function()
 	local char = player.Character
@@ -499,10 +506,6 @@ RunService.RenderStepped:Connect(function()
 	local hum = char:FindFirstChildOfClass("Humanoid")
 	local hrp = char:FindFirstChild("HumanoidRootPart")
 	if not hum or not hrp then return end
-
-	if holdingJump then
-		hum.Jump = true
-	end
 
 	local z = (moveInputs.Forward and -1 or 0) + (moveInputs.Backward and 1 or 0)
 	local x = (moveInputs.Left and -1 or 0) + (moveInputs.Right and 1 or 0)
