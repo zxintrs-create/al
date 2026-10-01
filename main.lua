@@ -1,10 +1,9 @@
--- LocalScript: AutoParryVoidVainlyStar (Ultra-Fast, Zero Delay, Ping & Lag Compensated)
--- UPDATE: 1 TOMBOL UNTUK AUTO PARRY & AUTO CLICK BERSAMAAN (NO COOLDOWN)
+-- LocalScript: AutoParryVoidVainlyStar (PURE DISTANCE TRIGGER & ZERO COOLDOWN)
+-- UPDATE: AREA ADALAH BATAS MUTLAK & HAPUS TOTAL COOLDOWN
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
-local Stats = game:GetService("Stats")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local success, vim = pcall(function() return game:GetService("VirtualInputManager") end)
@@ -14,8 +13,7 @@ local player = Players.LocalPlayer
 
 ---
 -- PENGATURAN / CONFIGURATION
-local BASE_PARRY_DISTANCE = 6      -- Radius jarak minimal (studs)
-local REACTION_BUFFER = 0.035      -- Buffer kompensasi FPS/Lag (35ms)
+local BASE_PARRY_DISTANCE = 6      -- Radius jarak mutlak (studs). Area visual = batas trigger.
 
 -- WARNA TEMA: LAZY CYAN & PURPLE MOON
 local COLOR_CYAN = Color3.fromRGB(0, 240, 255)
@@ -23,41 +21,28 @@ local COLOR_PURPLE = Color3.fromRGB(170, 60, 255)
 local COLOR_DEEP_MOON = Color3.fromRGB(18, 12, 35)
 local PARRY_FLASH_COLOR = Color3.fromRGB(255, 80, 180)
 
--- STATE TUNGGAL (Mengontrol Parry & Click sekaligus)
+-- STATE TUNGGAL
 local isFeatureEnabled = false 
-local flashResetTime = 0
 local visualAuraPart = nil
 local cachedBall = nil
 
 ---
--- HELPER & PING COMPENSATION FUNCTIONS
+-- HELPER FUNCTIONS
 local function isAlive(obj)
     return obj and typeof(obj) == "Instance" and obj:IsDescendantOf(game)
-end
-
-local function getPlayerPing()
-    local ping = 0.05 -- Default fallback (50ms)
-    pcall(function()
-        ping = Stats.Network.ServerStatsItem["Data Ping"]:GetValue() / 1000
-    end)
-    return ping
 end
 
 local function isBallInWorkspace(ball)
     if not isAlive(ball) then return false end
     local inWorkspace = false
-    pcall(function()
-        inWorkspace = ball:IsDescendantOf(Workspace)
-    end)
+    pcall(function() inWorkspace = ball:IsDescendantOf(Workspace) end)
     return inWorkspace
 end
 
 local function safeGetPosition(part)
     if not isBallInWorkspace(part) then return nil end
     local pos
-    local successPos = pcall(function()
-        pos = part.Position
-    end)
+    local successPos = pcall(function() pos = part.Position end)
     return successPos and pos or nil
 end
 
@@ -69,10 +54,7 @@ local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "AutoParryControlGui"
 screenGui.ResetOnSpawn = false
 screenGui.IgnoreGuiInset = true
-
-pcall(function()
-    screenGui.Parent = playerGui
-end)
+pcall(function() screenGui.Parent = playerGui end)
 
 -- Tombol Open Menu
 local openMenuBtn = Instance.new("TextButton")
@@ -86,7 +68,6 @@ openMenuBtn.Text = "🌙 VOID MOON"
 openMenuBtn.Font = Enum.Font.GothamBold
 openMenuBtn.TextSize = 14
 openMenuBtn.ZIndex = 5
-openMenuBtn.Draggable = false
 openMenuBtn.Parent = screenGui
 
 local openCorner = Instance.new("UICorner")
@@ -147,7 +128,6 @@ frameGradient.Parent = mainFrame
 
 -- Label Title
 local titleLabel = Instance.new("TextLabel")
-titleLabel.Name = "TitleLabel"
 titleLabel.Size = UDim2.new(1, 0, 0, 36)
 titleLabel.Position = UDim2.new(0, 0, 0, 6)
 titleLabel.BackgroundTransparency = 1
@@ -166,7 +146,6 @@ titleTextStroke.Parent = titleLabel
 
 -- Label Status
 local statusLabel = Instance.new("TextLabel")
-statusLabel.Name = "StatusLabel"
 statusLabel.Size = UDim2.new(1, 0, 0, 25)
 statusLabel.Position = UDim2.new(0, 0, 0, 42)
 statusLabel.BackgroundTransparency = 1
@@ -185,12 +164,11 @@ statusTextStroke.Parent = statusLabel
 
 -- Label Info
 local infoLabel = Instance.new("TextLabel")
-infoLabel.Name = "InfoLabel"
 infoLabel.Size = UDim2.new(1, 0, 0, 20)
 infoLabel.Position = UDim2.new(0, 0, 0, 70)
 infoLabel.BackgroundTransparency = 1
 infoLabel.TextColor3 = Color3.fromRGB(220, 220, 255)
-infoLabel.Text = "Parry & Click Bersamaan | Zero Delay"
+infoLabel.Text = "Pure Distance Trigger | 0 Cooldown"
 infoLabel.Font = Enum.Font.Gotham
 infoLabel.TextSize = 12
 infoLabel.ZIndex = 3
@@ -202,7 +180,7 @@ infoTextStroke.Thickness = 1.2
 infoTextStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
 infoTextStroke.Parent = infoLabel
 
--- Tombol Toggle Tunggal (Mengontrol Parry & Click)
+-- Tombol Toggle
 local toggleBtn = Instance.new("TextButton")
 toggleBtn.Name = "ToggleButton"
 toggleBtn.Size = UDim2.new(0.88, 0, 0, 45)
@@ -213,7 +191,6 @@ toggleBtn.Text = "AUTO PARRY + CLICK: OFF"
 toggleBtn.Font = Enum.Font.GothamBold
 toggleBtn.TextSize = 15
 toggleBtn.ZIndex = 3
-toggleBtn.Draggable = false
 toggleBtn.Parent = mainFrame
 
 local btnCorner = Instance.new("UICorner")
@@ -255,16 +232,10 @@ local function updateVisualAura()
     end
 
     local character = player.Character  
-    if not isAlive(character) then  
-        destroyVisualAura()  
-        return  
-    end  
+    if not isAlive(character) then destroyVisualAura() return end  
 
     local hrp = character:FindFirstChild("HumanoidRootPart")  
-    if not isAlive(hrp) then  
-        destroyVisualAura()  
-        return  
-    end  
+    if not isAlive(hrp) then destroyVisualAura() return end  
 
     local diameter = BASE_PARRY_DISTANCE * 2  
 
@@ -307,117 +278,66 @@ toggleBtn.MouseButton1Click:Connect(function()
     isFeatureEnabled = not isFeatureEnabled
 
     if isFeatureEnabled then  
-        if isAlive(btnGradient) then  
-            btnGradient.Color = ColorSequence.new({  
-                ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 220, 240)),  
-                ColorSequenceKeypoint.new(1, Color3.fromRGB(150, 40, 240))  
-            })  
-        end  
-        if isAlive(toggleBtn) then toggleBtn.Text = "AUTO PARRY + CLICK: ON" end  
-        if isAlive(statusLabel) then  
-            statusLabel.Text = "Status: AKTIF (Parry & Click)"  
-            statusLabel.TextColor3 = COLOR_CYAN  
-        end  
+        btnGradient.Color = ColorSequence.new({  
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 220, 240)),  
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(150, 40, 240))  
+        })  
+        toggleBtn.Text = "AUTO PARRY + CLICK: ON"  
+        statusLabel.Text = "Status: AKTIF (Pure Distance)"  
+        statusLabel.TextColor3 = COLOR_CYAN  
         updateVisualAura()  
     else  
-        if isAlive(btnGradient) then  
-            btnGradient.Color = ColorSequence.new({  
-                ColorSequenceKeypoint.new(0, Color3.fromRGB(140, 30, 80)),  
-                ColorSequenceKeypoint.new(1, Color3.fromRGB(60, 15, 90))  
-            })  
-        end  
-        if isAlive(toggleBtn) then toggleBtn.Text = "AUTO PARRY + CLICK: OFF" end  
-        if isAlive(statusLabel) then  
-            statusLabel.Text = "Status: NONAKTIF"  
-            statusLabel.TextColor3 = Color3.fromRGB(255, 90, 140)  
-        end  
+        btnGradient.Color = ColorSequence.new({  
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(140, 30, 80)),  
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(60, 15, 90))  
+        })  
+        toggleBtn.Text = "AUTO PARRY + CLICK: OFF"  
+        statusLabel.Text = "Status: NONAKTIF"  
+        statusLabel.TextColor3 = Color3.fromRGB(255, 90, 140)  
         destroyVisualAura()  
     end
 end)
 
 ---
--- 3. DETEKSI BOLA (BLADE BALL & DEATH BALL COMPATIBLE)
+-- 3. DETEKSI BOLA
 local function isBallPart(obj)
     if not isBallInWorkspace(obj) then return nil end
 
     local targetPart = nil  
-    if obj:IsA("BasePart") then  
-        targetPart = obj  
-    elseif obj:IsA("Model") then  
-        targetPart = obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")  
-    end  
+    if obj:IsA("BasePart") then targetPart = obj  
+    elseif obj:IsA("Model") then targetPart = obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart") end  
 
     if not isBallInWorkspace(targetPart) then return nil end  
 
     local isShapeBall = false  
-    pcall(function()  
-        if targetPart:IsA("Part") and targetPart.Shape == Enum.PartType.Ball then  
-            isShapeBall = true  
-        end  
-    end)  
-
+    pcall(function() if targetPart:IsA("Part") and targetPart.Shape == Enum.PartType.Ball then isShapeBall = true end end)  
     if isShapeBall then return targetPart end  
 
     local nameLower = obj.Name:lower()  
-    if nameLower == "ball" or nameLower:find("ball") or nameLower:find("blade") or nameLower:find("realball") then  
-        return targetPart  
-    end  
+    if nameLower == "ball" or nameLower:find("ball") or nameLower:find("blade") or nameLower:find("realball") then return targetPart end  
 
     return nil
 end
 
 local function getWorkspaceBall()
-    if isBallInWorkspace(cachedBall) then
-        return cachedBall
-    end
-
+    if isBallInWorkspace(cachedBall) then return cachedBall end
     cachedBall = nil  
 
     local ballsFolder = Workspace:FindFirstChild("Balls") or Workspace:FindFirstChild("BallFolder")  
     if isAlive(ballsFolder) then  
         for _, child in ipairs(ballsFolder:GetChildren()) do  
             local valid = isBallPart(child)  
-            if valid and child:GetAttribute("realBall") ~= false then  
-                cachedBall = valid  
-                return cachedBall  
-            end  
-        end  
-    end  
-
-    local directPart = Workspace:FindFirstChild("Part") or Workspace:FindFirstChild("Ball")  
-    if isBallInWorkspace(directPart) then  
-        local valid = isBallPart(directPart)  
-        if valid then  
-            cachedBall = valid  
-            return cachedBall  
-        end  
-    end  
-
-    local activeMap = Workspace:FindFirstChild("ActiveMap")  
-    if isAlive(activeMap) then  
-        local ballSpawns = activeMap:FindFirstChild("BallSpawns", true)  
-        if isAlive(ballSpawns) then  
-            for _, child in ipairs(ballSpawns:GetChildren()) do  
-                local valid = isBallPart(child)  
-                if valid then  
-                    cachedBall = valid  
-                    return cachedBall  
-                end  
-            end  
+            if valid and child:GetAttribute("realBall") ~= false then cachedBall = valid return cachedBall end  
         end  
     end  
 
     for _, child in ipairs(Workspace:GetChildren()) do  
         if isAlive(child) and child ~= Workspace.CurrentCamera and not child:IsA("Accessory") then  
             local valid = isBallPart(child)  
-            if valid then  
-                cachedBall = valid  
-                return cachedBall  
-            end  
+            if valid then cachedBall = valid return cachedBall end  
         end  
     end  
 
-    cachedBall = nil  
     return nil
 end
 
@@ -426,9 +346,7 @@ local function isBallTargetingMe(ball)
 
     local targetAttr = ball:GetAttribute("Target") or ball:GetAttribute("target")  
     if targetAttr then  
-        if targetAttr == player.Name or targetAttr == player.Character.Name or targetAttr == player.Character then   
-            return true   
-        end  
+        if targetAttr == player.Name or targetAttr == player.Character.Name or targetAttr == player.Character then return true end  
     end  
 
     local targetVal = ball:FindFirstChild("Target") or ball:FindFirstChild("target")  
@@ -443,12 +361,9 @@ local function isBallTargetingMe(ball)
         if vel.Magnitude > 2 then  
             local dirToPlayer = (hrp.Position - ball.Position).Unit  
             local ballDir = vel.Unit  
-            if ballDir:Dot(dirToPlayer) > 0.55 then  
-                return true  
-            end  
+            if ballDir:Dot(dirToPlayer) > 0.55 then return true end  
         end  
     end  
-
     return false
 end
 
@@ -466,9 +381,7 @@ Workspace.DescendantRemoving:Connect(function(descendant)
 end)
 
 ---
--- 4. FUNGSI EKSEKUSI (AUTO PARRY & AUTO CLICK)
-
--- Fungsi 1: Direct Remote (Auto Parry)
+-- 4. FUNGSI EKSEKUSI (NO COOLDOWN)
 local function fireGameParryRemotes()
     pcall(function()
         local remotes = ReplicatedStorage:FindFirstChild("Remotes") or ReplicatedStorage:FindFirstChild("Net")
@@ -483,33 +396,21 @@ local function fireGameParryRemotes()
     end)
 end
 
--- Fungsi Helper untuk Klik UI
 local function clickGuiObject(btn)
     if not isAlive(btn) then return end
-
     if typeof(firesignal) == "function" then  
         pcall(function() firesignal(btn.Activated) end)  
         pcall(function() firesignal(btn.MouseButton1Click) end)  
-        pcall(function() firesignal(btn.MouseButton1Down) end)  
     end  
-
     if typeof(getconnections) == "function" then  
         pcall(function()  
             for _, connection in ipairs(getconnections(btn.Activated)) do  
-                if connection and connection.Function then  
-                    pcall(function() connection:Fire() end)  
-                end  
-            end  
-            for _, connection in ipairs(getconnections(btn.MouseButton1Click)) do  
-                if connection and connection.Function then  
-                    pcall(function() connection:Fire() end)  
-                end  
+                if connection and connection.Function then pcall(function() connection:Fire() end) end  
             end  
         end)  
     end
 end
 
--- Fungsi 2: Simulasi Klik & Input (Auto Click)
 local function executeAutoClick()
     if VirtualInputManager then  
         pcall(function()  
@@ -534,20 +435,16 @@ local function executeAutoClick()
 end
 
 ---
--- 5. MAIN LOOP (PRE-RENDER ZERO LAG / PING COMPENSATED)
+-- 5. MAIN LOOP (PURE DISTANCE & ZERO COOLDOWN)
 player.CharacterAdded:Connect(function()
     task.wait(0.2)
-    if isFeatureEnabled then
-        updateVisualAura()
-    end
+    if isFeatureEnabled then updateVisualAura() end
 end)
 
 RunService.PreRender:Connect(function()
     local now = tick()
 
-    ----------------------------------------------------------------------------  
-    -- ANIMASI TEMA  
-    ----------------------------------------------------------------------------  
+    -- ANIMASI TEMA UI
     local slowTime = now * 1.5  
     local rotAngle = (now * 25) % 360  
     local sineWave = (math.sin(slowTime) + 1) / 2  
@@ -556,23 +453,11 @@ RunService.PreRender:Connect(function()
     if isAlive(frameGradient) then frameGradient.Rotation = rotAngle end  
     if isAlive(openGradient) then openGradient.Rotation = -rotAngle end  
     if isAlive(btnGradient) then btnGradient.Rotation = rotAngle end  
-
     if isAlive(frameStroke) then frameStroke.Color = pulsedColor end  
     if isAlive(openStroke) then openStroke.Color = COLOR_PURPLE:Lerp(COLOR_CYAN, sineWave) end  
     if isAlive(btnStroke) then btnStroke.Color = pulsedColor end  
 
-    if isAlive(visualAuraPart) then  
-        if flashResetTime > 0 and now >= flashResetTime then  
-            flashResetTime = 0  
-            visualAuraPart.Color = pulsedColor  
-        elseif flashResetTime == 0 then  
-            visualAuraPart.Color = pulsedColor  
-        end  
-    end  
-
-    ----------------------------------------------------------------------------  
-    -- LOGIKA PARRY ZERO DELAY & PING COMPENSATED  
-    ----------------------------------------------------------------------------  
+    -- LOGIKA PARRY & CLICK
     if not isFeatureEnabled then return end  
 
     local character = player.Character  
@@ -581,38 +466,36 @@ RunService.PreRender:Connect(function()
     local hrp = character:FindFirstChild("HumanoidRootPart")  
     if not isAlive(hrp) then return end  
 
-    if not isAlive(visualAuraPart) then  
-        updateVisualAura()  
-    end  
+    if not isAlive(visualAuraPart) then updateVisualAura() end  
 
     local ball = getWorkspaceBall()  
     if not isBallInWorkspace(ball) then return end  
-
     if not isBallTargetingMe(ball) then return end  
 
     local ballPos = safeGetPosition(ball)  
     local hrpPos = safeGetPosition(hrp)  
     if not ballPos or not hrpPos then return end  
 
+    -- 🔥 HITUNG JARAK FISIK MURNI (TANPA PREDIKSI PING) 🔥
     local distance = (ballPos - hrpPos).Magnitude  
-    local ballSpeed = ball.AssemblyLinearVelocity.Magnitude  
-    local ping = getPlayerPing()  
 
-    local timeToReach = distance / math.max(ballSpeed, 1)  
-    local pingThreshold = ping + REACTION_BUFFER  
-
-    local dynamicDistance = math.max(BASE_PARRY_DISTANCE, (ballSpeed * pingThreshold) + BASE_PARRY_DISTANCE)  
-
-    -- KONDISI PARRY: BOLA BERADA DALAM WAKTU TEMPUH PING ATAU MASUK RADIUS  
-    if timeToReach <= pingThreshold or distance <= dynamicDistance then  
+    -- 🔥 TRIGGER MURNI: HANYA AKTIF JIKA BOLA MENYENTUH/MASUK AREA 🔥
+    if distance <= BASE_PARRY_DISTANCE then  
+        
+        -- Visual Flash (Warna aura berubah instan saat tersentuh)
         if isAlive(visualAuraPart) then  
             visualAuraPart.Color = PARRY_FLASH_COLOR  
-            flashResetTime = now + 0.04  
         end  
 
-        -- 🔥 EKSEKUSI BERSAMAAN (NO COOLDOWN) 🔥
-        -- Menembak Remote & Klik UI secara simultan dalam 1 frame
+        -- 🔥 EKSEKUSI LANGSUNG TANPA COOLDOWN SAMA SEKALI 🔥
+        -- Dipanggil setiap frame (60+ kali/detik) selama bola ada di dalam area
         fireGameParryRemotes()
         executeAutoClick()
+        
+    else
+        -- Kembalikan warna aura jika bola keluar area
+        if isAlive(visualAuraPart) then
+            visualAuraPart.Color = pulsedColor
+        end
     end
 end)
