@@ -4,87 +4,133 @@ local Workspace = game:GetService("Workspace")
 local HttpService = game:GetService("HttpService")
 local StarterGui = game:GetService("StarterGui")
 local UserInputService = game:GetService("UserInputService")
-
--- Fungsi Notifikasi
-local function Notify(pesanTeks)
-	task.spawn(function()
-		local success = false
-		while not success do
-			success = pcall(function()
-				StarterGui:SetCore("SendNotification", {
-					Title = "Zydex notify 999",
-					Text = pesanTeks,
-					Duration = 5,
-					Button1 = "OK"
-				})
-			end)
-			if not success then task.wait(0.5) end
-		end
-	end)
-end
-
-Notify("Load script , 👑 VOID VAINLY STAR (FIX NATIVE JUMP)")
-print("D-PAD VOID VAINLY STAR (Fix Native Jump) ✅")
+local VirtualInputManager = game:GetService("VirtualInputManager")
 
 local player = Players.LocalPlayer
-local camera = Workspace.CurrentCamera
 local playerGui = player:WaitForChild("PlayerGui")
 
-local SETTINGS_FILE = "MobileControlsNativeJump.json"
-local SKALA_UKURAN = 2.0 
-
--- Sembunyikan TouchGui bawaan Roblox tapi biarkan sistem kontrol internalnya berjalan
-task.spawn(function()
-	local touchGui = playerGui:WaitForChild("TouchGui", 5)
-	if touchGui then
-		touchGui.Enabled = false
-	end
-end)
-
 ---------------------------------------------------------
--- MENGAMBIL MODUL KONTROL BAWAAN ROBLOX (UNTUK JUMP NATIVE)
----------------------------------------------------------
-local function getPlayerController()
-	local success, playerScripts = pcall(function()
-		return player:WaitForChild("PlayerScripts", 3)
-	end)
-	if success and playerScripts then
-		local modules = playerScripts:FindFirstChild("PlayerModule")
-		if modules then
-			local requireSuccess, playerModule = pcall(require, modules)
-			if requireSuccess and playerModule then
-				pcall(function()
-					return playerModule:GetControls()
-				end)
-			end
-		end
-	end
-	return nil
-end
-
----------------------------------------------------------
--- PENENTUAN PARENT KE CORE GUI / GETHUI
+-- TARGET PARENT AMAN (CoreGui / gethui / PlayerGui)
 ---------------------------------------------------------
 local function getTargetParent()
-	if gethui then
-		return gethui()
+	local successGetHui, hui = pcall(function()
+		return gethui and gethui()
+	end)
+	if successGetHui and hui then
+		return hui
 	end
-	local success, coreGui = pcall(function()
+
+	local successCore, coreGui = pcall(function()
 		return game:GetService("CoreGui")
 	end)
-	if success and coreGui then
+	if successCore and coreGui then
 		return coreGui
 	end
+
 	return playerGui
 end
 
--- Buat ScreenGui Utama
+-- Fungsi Notifikasi dengan ScreenGui khusus agar selalu di layer teratas (DisplayOrder max)
+local function Notify(pesanTeks)
+	task.spawn(function()
+		-- Buat ScreenGui khusus notifikasi di atas segalanya
+		local notifyGui = Instance.new("ScreenGui")
+		notifyGui.Name = "ZydexTopNotify"
+		notifyGui.ResetOnSpawn = false
+		notifyGui.IgnoreGuiInset = true
+		notifyGui.DisplayOrder = 2147483647 -- Nilai tertinggi agar selalu di atas UI lain
+		
+		local successParent = pcall(function()
+			notifyGui.Parent = getTargetParent()
+		end)
+		if not successParent then
+			notifyGui.Parent = playerGui
+		end
+
+		-- Buat Frame / Tampilan Notifikasi Custom yang Elegan
+		local frame = Instance.new("Frame")
+		frame.Size = UDim2.new(0, 300, 0, 60)
+		frame.Position = UDim2.new(0.5, -150, 0, -80) -- Mulai dari atas (off-screen)
+		frame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+		frame.BackgroundTransparency = 0.1
+		frame.BorderSizePixel = 0
+		frame.Parent = notifyGui
+
+		local corner = Instance.new("UICorner")
+		corner.CornerRadius = UDim.new(0, 10)
+		corner.Parent = frame
+
+		local stroke = Instance.new("UIStroke")
+		stroke.Color = Color3.fromRGB(0, 180, 255)
+		stroke.Thickness = 2
+		stroke.Parent = frame
+
+		local title = Instance.new("TextLabel")
+		title.Size = UDim2.new(1, -20, 0, 20)
+		title.Position = UDim2.new(0, 10, 0, 5)
+		title.BackgroundTransparency = 1
+		title.Text = "👑 Zydex notify 999"
+		title.TextColor3 = Color3.fromRGB(255, 215, 0)
+		title.TextSize = 13
+		title.Font = Enum.Font.SourceSansBold
+		title.TextXAlignment = Enum.TextXAlignment.Left
+		title.Parent = frame
+
+		local text = Instance.new("TextLabel")
+		text.Size = UDim2.new(1, -20, 0, 25)
+		text.Position = UDim2.new(0, 10, 0, 25)
+		text.BackgroundTransparency = 1
+		text.Text = pesanTeks
+		text.TextColor3 = Color3.fromRGB(255, 255, 255)
+		text.TextSize = 12
+		text.Font = Enum.Font.SourceSans
+		text.TextXAlignment = Enum.TextXAlignment.Left
+		text.TextWrapped = true
+		text.Parent = frame
+
+		-- Animasi Masuk (Tween turun ke bawah)
+		local TweenService = game:GetService("TweenService")
+		local tweenIn = TweenService:Create(frame, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Position = UDim2.new(0.5, -150, 0, 20)})
+		tweenIn:Play()
+
+		-- Tunggu beberapa detik lalu animasi keluar
+		task.wait(4.5)
+		local tweenOut = TweenService:Create(frame, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Position = UDim2.new(0.5, -150, 0, -80)})
+		tweenOut:Play()
+		tweenOut.Completed:Wait()
+		
+		notifyGui:Destroy()
+	end)
+end
+
+Notify("Load script , 👑 VOID VAINLY STAR (Top Notify Fixed)")
+print("D-PAD VOID VAINLY STAR (Fixed) ✅")
+
+local camera = Workspace.CurrentCamera
+local SETTINGS_FILE = "MobileControlsNativeJump.json"
+local SKALA_UKURAN = 2.0 
+
+-- Sembunyikan TouchGui bawaan Roblox
+task.spawn(function()
+	local success, err = pcall(function()
+		local touchGui = playerGui:WaitForChild("TouchGui", 3)
+		if touchGui then touchGui.Enabled = false end
+	end)
+end)
+
+-- Buat ScreenGui Utama Kontrol
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "CustomMobileControls"
 screenGui.ResetOnSpawn = false
 screenGui.IgnoreGuiInset = true
 screenGui.DisplayOrder = 999999999
-screenGui.Parent = getTargetParent()
+
+local successParent, errParent = pcall(function()
+	screenGui.Parent = getTargetParent()
+end)
+if not successParent then
+	screenGui.Parent = playerGui
+end
 
 local uiScale = Instance.new("UIScale")
 uiScale.Scale = SKALA_UKURAN
@@ -94,7 +140,6 @@ local moveInputs = {Forward = false, Backward = false, Left = false, Right = fal
 local holdingJump = false
 local shiftLockEnabled = false
 
--- Fungsi untuk mereset seluruh input agar tidak "nyangkut" (jalan sendiri)
 local function resetAllInputs()
 	moveInputs.Forward = false
 	moveInputs.Backward = false
@@ -104,7 +149,7 @@ local function resetAllInputs()
 end
 
 ---------------------------------------------------------
--- PENGATURAN DEFAULT & LOAD / SAVE FILE
+-- PENGATURAN DEFAULT & LOAD / SAVE FILE JSON
 ---------------------------------------------------------
 local layoutConfig = {
 	DpadPosX = 15, DpadPosY = -15, DpadSize = 180,
@@ -129,7 +174,7 @@ end
 loadSettingsFromFile()
 
 ---------------------------------------------------------
--- D-PAD KIRI (WASD) AMAN DARI GESERAN KAMERA
+-- D-PAD KIRI (WASD)
 ---------------------------------------------------------
 local dpadContainer = Instance.new("Frame")
 dpadContainer.Name = "DPadContainer"
@@ -183,7 +228,6 @@ local function bindDpadSafe(btn, dir)
 	end
 	
 	btn.InputEnded:Connect(releaseDpad)
-	btn.InputStopped:Connect(releaseDpad)
 end
 
 bindDpadSafe(btnW, "Forward")
@@ -192,7 +236,7 @@ bindDpadSafe(btnA, "Left")
 bindDpadSafe(btnD, "Right")
 
 ---------------------------------------------------------
--- TOMBOL JUMP NATIVE AMAN
+-- TOMBOL JUMP AMAN
 ---------------------------------------------------------
 local btnJump = Instance.new("ImageButton")
 btnJump.Name = "BtnJump"
@@ -226,13 +270,6 @@ btnJump.InputBegan:Connect(function(input)
 		activeJumpInput = input
 		holdingJump = true
 		btnJump.BackgroundColor3 = Color3.fromRGB(0, 180, 255)
-		
-		local controls = getPlayerController()
-		if controls and type(controls.MoveJump) == "function" then
-			pcall(function()
-				controls:MoveJump(true)
-			end)
-		end
 	end
 end)
 
@@ -241,21 +278,13 @@ local function releaseJump(input)
 		holdingJump = false
 		btnJump.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
 		activeJumpInput = nil
-		
-		local controls = getPlayerController()
-		if controls and type(controls.MoveJump) == "function" then
-			pcall(function()
-				controls:MoveJump(false)
-			end)
-		end
 	end
 end
 
 btnJump.InputEnded:Connect(releaseJump)
-btnJump.InputStopped:Connect(releaseJump)
 
 ---------------------------------------------------------
--- TOMBOL AKSI (Q, E, R, F) AMAN
+-- TOMBOL AKSI (Q, E, R, F)
 ---------------------------------------------------------
 local actionContainer = Instance.new("Frame")
 actionContainer.Name = "ActionContainer"
@@ -287,7 +316,6 @@ local function createActionBtn(name, text, pos, keyCode, color)
 	btn.InputBegan:Connect(function(input)
 		if (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1) and not activeActionInput then
 			activeActionInput = input
-			local VirtualInputManager = game:GetService("VirtualInputManager")
 			pcall(function() VirtualInputManager:SendKeyEvent(true, keyCode, false, game) end)
 			btn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 		end
@@ -295,7 +323,6 @@ local function createActionBtn(name, text, pos, keyCode, color)
 	
 	local function releaseAction(input)
 		if input == activeActionInput then
-			local VirtualInputManager = game:GetService("VirtualInputManager")
 			pcall(function() VirtualInputManager:SendKeyEvent(false, keyCode, false, game) end)
 			activeActionInput = nil
 			btn.BackgroundColor3 = color
@@ -303,7 +330,6 @@ local function createActionBtn(name, text, pos, keyCode, color)
 	end
 	
 	btn.InputEnded:Connect(releaseAction)
-	btn.InputStopped:Connect(releaseAction)
 	
 	return btn
 end
@@ -378,7 +404,7 @@ mainCorner.Parent = mainFrame
 local titleLabel = Instance.new("TextLabel")
 titleLabel.Size = UDim2.new(1, 0, 0, 35)
 titleLabel.BackgroundTransparency = 1
-titleLabel.Text = "LAYOUT SETTINGS (NATIVE)"
+titleLabel.Text = "LAYOUT SETTINGS"
 titleLabel.TextColor3 = Color3.fromRGB(255, 215, 0)
 titleLabel.TextSize = 15
 titleLabel.Font = Enum.Font.SourceSansBold
@@ -515,7 +541,7 @@ btnSave.Activated:Connect(function()
 end)
 
 ---------------------------------------------------------
--- LOOP UTAMA DENGAN PENGAMAN KEMATIAN & RESET OTOMATIS
+-- LOOP UTAMA (GERAKAN, LOMPAT, & SHIFT LOCK)
 ---------------------------------------------------------
 RunService.RenderStepped:Connect(function()
 	local char = player.Character
@@ -533,21 +559,21 @@ RunService.RenderStepped:Connect(function()
 	end
 
 	if holdingJump then
-		local controls = getPlayerController()
-		if controls and type(controls.MoveJump) == "function" then
-			pcall(function()
-				controls:MoveJump(true)
-			end)
-		else
-			hum.Jump = true
-		end
+		hum.Jump = true
 	end
 
 	local z = (moveInputs.Forward and -1 or 0) + (moveInputs.Backward and 1 or 0)
 	local x = (moveInputs.Left and -1 or 0) + (moveInputs.Right and 1 or 0)
 
 	if x ~= 0 or z ~= 0 then
-		hum:Move(Vector3.new(x, 0, z), true)
+		local camCF = camera.CFrame
+		local lookVector = Vector3.new(camCF.LookVector.X, 0, camCF.LookVector.Z).Unit
+		local rightVector = Vector3.new(camCF.RightVector.X, 0, camCF.RightVector.Z).Unit
+		
+		local moveDir = (lookVector * -z) + (rightVector * x)
+		if moveDir.Magnitude > 0 then
+			hum:Move(moveDir.Unit, false)
+		end
 	end
 
 	if shiftLockEnabled then
