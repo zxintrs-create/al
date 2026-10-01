@@ -18,9 +18,7 @@ end
 local GUI_NAME = "VainlyStarAutoParry"
 
 local old = PlayerGui:FindFirstChild(GUI_NAME)
-if old then
-	old:Destroy()
-end
+if old then old:Destroy() end
 
 local COLOR_CYAN = Color3.fromRGB(0,240,255)
 local COLOR_PURPLE = Color3.fromRGB(170,60,255)
@@ -35,7 +33,6 @@ local flashUntil = 0
 local BASE_AURA = 10
 local SPEED_AURA_FACTOR = 0.055
 local MAX_AURA = 70
-
 local INNER_AURA = 7
 local CLASH_AURA = 3.5
 
@@ -51,7 +48,7 @@ openButton.Size = UDim2.fromOffset(160,36)
 openButton.Position = UDim2.new(0.5,-80,0,0)
 openButton.BackgroundColor3 = COLOR_DARK
 openButton.TextColor3 = COLOR_CYAN
-openButton.Text = "🌙 VOID MOON"
+openButton.Text = "👑VOID VAINLY STAR"
 openButton.Font = Enum.Font.GothamBold
 openButton.TextSize = 14
 openButton.Parent = gui
@@ -143,7 +140,7 @@ speedLabel.Font = Enum.Font.GothamBold
 speedLabel.TextSize = 13
 speedLabel.TextXAlignment = Enum.TextXAlignment.Left
 speedLabel.TextYAlignment = Enum.TextYAlignment.Center
-speedLabel.Text = "PART SPEED: 0\nSTATUS: IDLE\nDISTANCE: 0\nAURA: 0"
+speedLabel.Text = "PART SPEED: 0\nSTATUS: WAITING\nDISTANCE: --\nAURA: 0"
 speedLabel.ZIndex = 20
 speedLabel.Parent = gui
 
@@ -156,37 +153,57 @@ speedStroke.Thickness = 1.5
 speedStroke.Color = COLOR_CYAN
 speedStroke.Parent = speedLabel
 
+speedLabel:SetAttribute("PartSpeed",0)
+
 local function getCharacter()
 	local character = player.Character
-	if not character then
-		return nil,nil
-	end
+	if not character then return nil,nil end
 
 	local hrp = character:FindFirstChild("HumanoidRootPart")
-	if not hrp then
-		return nil,nil
-	end
+	if not hrp then return nil,nil end
 
 	return character,hrp
 end
 
-local function getBallSpawns()
-	local result = {}
+local function getActiveMap()
 	local activeMap = Workspace:FindFirstChild("ActiveMap")
+	if not activeMap then return nil end
+	return activeMap
+end
+
+local function getBallSpawnObjects()
+	local result = {}
+	local activeMap = getActiveMap()
 
 	if not activeMap then
 		return result
 	end
 
-	for _,obj in ipairs(activeMap:GetDescendants()) do
-		if obj.Name == "BallSpawns" then
-			if obj:IsA("BasePart") then
-				result[#result+1] = obj
-			else
-				for _,p in ipairs(obj:GetDescendants()) do
-					if p:IsA("BasePart") then
-						result[#result+1] = p
-					end
+	for _,mapObject in ipairs(activeMap:GetChildren()) do
+		for _,obj in ipairs(mapObject:GetDescendants()) do
+			if obj.Name == "BallSpawns" then
+				table.insert(result,obj)
+			end
+		end
+
+		if mapObject.Name == "BallSpawns" then
+			table.insert(result,mapObject)
+		end
+	end
+
+	return result
+end
+
+local function getSpawnParts()
+	local result = {}
+
+	for _,spawnObject in ipairs(getBallSpawnObjects()) do
+		if spawnObject:IsA("BasePart") then
+			table.insert(result,spawnObject)
+		else
+			for _,obj in ipairs(spawnObject:GetDescendants()) do
+				if obj:IsA("BasePart") then
+					table.insert(result,obj)
 				end
 			end
 		end
@@ -195,39 +212,12 @@ local function getBallSpawns()
 	return result
 end
 
-local function isNearSpawn(part)
-	local spawns = getBallSpawns()
-
-	if #spawns == 0 then
-		return false
-	end
-
-	for _,spawn in ipairs(spawns) do
-		if spawn:IsDescendantOf(Workspace) then
-			if (part.Position-spawn.Position).Magnitude <= 30 then
-				return true
-			end
-		end
-	end
-
-	return false
-end
-
 local function isValidBall(part)
-	if not part then
-		return false
-	end
-
-	if not part:IsDescendantOf(Workspace) then
-		return false
-	end
-
-	if not part:IsA("BasePart") then
-		return false
-	end
+	if not part then return false end
+	if not part:IsA("BasePart") then return false end
+	if not part:IsDescendantOf(Workspace) then return false end
 
 	local character = player.Character
-
 	if character and part:IsDescendantOf(character) then
 		return false
 	end
@@ -235,8 +225,25 @@ local function isValidBall(part)
 	return true
 end
 
-local function findInitialBall()
-	local spawns = getBallSpawns()
+local function distanceToSpawn(part)
+	local nearest = math.huge
+	local spawns = getSpawnParts()
+
+	for _,spawn in ipairs(spawns) do
+		if spawn:IsDescendantOf(Workspace) then
+			local distance = (part.Position-spawn.Position).Magnitude
+
+			if distance < nearest then
+				nearest = distance
+			end
+		end
+	end
+
+	return nearest
+end
+
+local function findNewBall()
+	local spawns = getSpawnParts()
 
 	if #spawns == 0 then
 		return nil
@@ -246,16 +253,12 @@ local function findInitialBall()
 	local bestDistance = math.huge
 
 	for _,obj in ipairs(Workspace:GetChildren()) do
-		if obj:IsA("BasePart") then
-			if not (player.Character and obj:IsDescendantOf(player.Character)) then
-				for _,spawn in ipairs(spawns) do
-					local distance = (obj.Position-spawn.Position).Magnitude
+		if obj:IsA("BasePart") and isValidBall(obj) then
+			local nearest = distanceToSpawn(obj)
 
-					if distance < 30 and distance < bestDistance then
-						best = obj
-						bestDistance = distance
-					end
-				end
+			if nearest <= 35 and nearest < bestDistance then
+				best = obj
+				bestDistance = nearest
 			end
 		end
 	end
@@ -263,39 +266,55 @@ local function findInitialBall()
 	return best
 end
 
-local function getBall()
-	if isValidBall(cachedBall) then
-		return cachedBall
-	end
-
-	cachedBall = findInitialBall()
-
-	return cachedBall
-end
-
-Workspace.ChildAdded:Connect(function(obj)
+local function updateBallFromSpawn(obj)
 	if not obj:IsA("BasePart") then
 		return
 	end
 
-	if player.Character and obj:IsDescendantOf(player.Character) then
+	if not isValidBall(obj) then
 		return
 	end
 
-	if isNearSpawn(obj) then
+	local nearest = distanceToSpawn(obj)
+
+	if nearest <= 35 then
 		cachedBall = obj
 	end
+end
+
+Workspace.DescendantAdded:Connect(function(obj)
+	if not obj:IsA("BasePart") then
+		return
+	end
+
+	task.defer(function()
+		if not obj:IsDescendantOf(Workspace) then
+			return
+		end
+
+		updateBallFromSpawn(obj)
+	end)
 end)
 
-Workspace.ChildRemoved:Connect(function(obj)
+Workspace.DescendantRemoving:Connect(function(obj)
 	if obj == cachedBall then
 		cachedBall = nil
 	end
 end)
 
+local function getBall()
+	if isValidBall(cachedBall) then
+		return cachedBall
+	end
+
+	cachedBall = nil
+
+	return findNewBall()
+end
+
 local function getAura(speed)
 	return math.clamp(
-		BASE_AURA + speed * SPEED_AURA_FACTOR,
+		BASE_AURA + speed*SPEED_AURA_FACTOR,
 		BASE_AURA,
 		MAX_AURA
 	)
@@ -343,8 +362,13 @@ local function updateAura(radius)
 		visualAuraPart.Parent = character
 	end
 
-	local diameter = radius * 2
-	visualAuraPart.Size = Vector3.new(diameter,diameter,diameter)
+	local diameter = radius*2
+
+	visualAuraPart.Size = Vector3.new(
+		diameter,
+		diameter,
+		diameter
+	)
 end
 
 local function clickDeflect()
@@ -361,10 +385,10 @@ local function updateSpeed(speed,state,distance,aura)
 	speedLabel:SetAttribute("PartSpeed",speed)
 
 	speedLabel.Text = string.format(
-		"PART SPEED: %.2f\nSTATUS: %s\nDISTANCE: %.2f\nAURA: %.2f",
+		"PART SPEED: %.2f\nSTATUS: %s\nDISTANCE: %s\nAURA: %.2f",
 		speed,
 		state,
-		distance or 0,
+		distance and string.format("%.2f",distance) or "--",
 		aura or 0
 	)
 end
@@ -403,42 +427,54 @@ RunService.PreRender:Connect(function()
 	local character,hrp = getCharacter()
 
 	if not character or not hrp then
-		updateSpeed(0,"IDLE",0,0)
+		updateSpeed(0,"WAITING",nil,0)
 		return
 	end
 
 	local ball = getBall()
 
+	if not ball then
+		updateSpeed(0,"WAITING FOR BALL",nil,BASE_AURA)
+		updateAura(BASE_AURA)
+		return
+	end
+
 	if not isValidBall(ball) then
-		updateSpeed(0,"IDLE",0,0)
+		cachedBall = nil
+		updateSpeed(0,"WAITING FOR BALL",nil,BASE_AURA)
+		updateAura(BASE_AURA)
 		return
 	end
 
 	local velocity = ball.AssemblyLinearVelocity
 	local speed = velocity.Magnitude
 
+	speedLabel:SetAttribute("PartSpeed",speed)
+
+	local ballPos = ball.Position
+	local playerPos = hrp.Position
+
+	local offset = playerPos-ballPos
+	local distance = offset.Magnitude
+
 	if speed <= 0.05 then
-		updateSpeed(0,"IDLE",(ball.Position-hrp.Position).Magnitude,BASE_AURA)
+		updateSpeed(
+			0,
+			"IDLE",
+			distance,
+			BASE_AURA
+		)
+
 		updateAura(BASE_AURA)
 		return
 	end
 
-	local distanceVector = hrp.Position-ball.Position
-	local distance = distanceVector.Magnitude
-
-	if distance <= 0.001 then
-		clickDeflect()
-		return
-	end
-
-	local directionToPlayer = distanceVector.Unit
+	local directionToPlayer = offset.Unit
 	local approachSpeed = velocity:Dot(directionToPlayer)
 
 	local aura = getAura(speed)
 
 	updateAura(aura)
-
-	speedLabel:SetAttribute("PartSpeed",speed)
 
 	if approachSpeed <= 0 then
 		updateSpeed(
@@ -454,19 +490,19 @@ RunService.PreRender:Connect(function()
 		ball.Size.X,
 		ball.Size.Y,
 		ball.Size.Z
-	) * 0.5
+	)*0.5
 
 	local detectionRadius =
-		aura + ballRadius + 2
+		aura+ballRadius+2
 
 	local innerRadius =
-		INNER_AURA + ballRadius + 2
+		INNER_AURA+ballRadius+2
 
 	local clashRadius =
-		CLASH_AURA + ballRadius + 2
+		CLASH_AURA+ballRadius+2
 
 	local timeToContact =
-		distance / math.max(approachSpeed,0.001)
+		distance/math.max(approachSpeed,0.001)
 
 	if distance <= clashRadius then
 
@@ -503,13 +539,11 @@ RunService.PreRender:Connect(function()
 			aura
 		)
 
-		-- Semakin cepat Part, semakin cepat masuk fase click.
-		local reactionTime =
-			math.clamp(
-				0.06 - speed * 0.00008,
-				0.008,
-				0.06
-			)
+		local reactionTime = math.clamp(
+			0.06-speed*0.00008,
+			0.008,
+			0.06
+		)
 
 		if timeToContact <= reactionTime then
 			flashUntil = os.clock()+0.035
@@ -530,9 +564,10 @@ RunService.PreRender:Connect(function()
 		if os.clock() < flashUntil then
 			visualAuraPart.Color = COLOR_FLASH
 		else
+			local t = (math.sin(os.clock()*2)+1)/2
 			visualAuraPart.Color = COLOR_CYAN:Lerp(
 				COLOR_PURPLE,
-				(math.sin(os.clock()*2)+1)/2
+				t
 			)
 		end
 	end
