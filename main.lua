@@ -24,7 +24,7 @@ local function Notify(pesanTeks)
 end
 
 Notify("Load script , 👑 VOID VAINLY STAR (Native Roblox Jump)")
-print("D-PAD VOID VAINLY STAR (Native Roblox Jump) ✅")
+print("D-PAD VOID VAINLY STAR (Native Jump Ori Roblox) ✅")
 
 local player = Players.LocalPlayer
 local camera = Workspace.CurrentCamera
