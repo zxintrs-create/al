@@ -12,7 +12,7 @@ local function Notify(pesanTeks)
 		while not success do
 			success = pcall(function()
 				StarterGui:SetCore("SendNotification", {
-					Title = "System Log",
+					Title = "Zydex notify 999",
 					Text = pesanTeks,
 					Duration = 5,
 					Button1 = "OK"
@@ -23,7 +23,7 @@ local function Notify(pesanTeks)
 	end)
 end
 
-Notify("Load script , 👑 VOID VAINLY STAR (Fix Camera Drag)")
+Notify("Load script , 👑 VOID VAINLY STAR (FIX NATIVE JUMP)")
 print("D-PAD VOID VAINLY STAR (Fix Native Jump) ✅")
 
 local player = Players.LocalPlayer
@@ -129,7 +129,7 @@ end
 loadSettingsFromFile()
 
 ---------------------------------------------------------
--- D-PAD KIRI (WASD) DENGAN PERBAIKAN SENTUHAN KAMERA
+-- D-PAD KIRI (WASD) AMAN DARI GESERAN KAMERA
 ---------------------------------------------------------
 local dpadContainer = Instance.new("Frame")
 dpadContainer.Name = "DPadContainer"
@@ -174,8 +174,7 @@ local function bindDpadSafe(btn, dir)
 		end
 	end)
 	
-	-- Menggunakan InputEnded khusus pada input spesifik tombol ini agar gesekan layar bebas tidak memutus tombol secara keliru
-	inputEndedConnection = function(input)
+	local function releaseDpad(input)
 		if input == activeInput then
 			moveInputs[dir] = false
 			activeInput = nil
@@ -183,8 +182,8 @@ local function bindDpadSafe(btn, dir)
 		end
 	end
 	
-	btn.InputEnded:Connect(inputEndedConnection)
-	btn.InputStopped:Connect(inputEndedConnection)
+	btn.InputEnded:Connect(releaseDpad)
+	btn.InputStopped:Connect(releaseDpad)
 end
 
 bindDpadSafe(btnW, "Forward")
@@ -193,7 +192,7 @@ bindDpadSafe(btnA, "Left")
 bindDpadSafe(btnD, "Right")
 
 ---------------------------------------------------------
--- TOMBOL JUMP NATIVE AMAN DARI GESERAN KAMERA
+-- TOMBOL JUMP NATIVE AMAN
 ---------------------------------------------------------
 local btnJump = Instance.new("ImageButton")
 btnJump.Name = "BtnJump"
@@ -548,16 +547,16 @@ RunService.RenderStepped:Connect(function()
 	local x = (moveInputs.Left and -1 or 0) + (moveInputs.Right and 1 or 0)
 
 	if x ~= 0 or z ~= 0 then
-		hum:Move(Vector3.new(x, 0, z), True)
-	End
+		hum:Move(Vector3.new(x, 0, z), true)
+	end
 
-	If shiftLockEnabled then
+	if shiftLockEnabled then
 		hum.AutoRotate = false
-		Local _, y, _ = camera.CFrame:ToOrientation()
-		Hrp.CFrame = CFrame.new(hrp.Position) * CFrame.Angles(0, y, 0)
-		Hum.CameraOffset = Vector3.new(1.75, 0, 0)
-	Else
-		Hum.AutoRotate = true
-		Hum.CameraOffset = Vector3.new(0, 0, 0)
-	End
+		local _, y, _ = camera.CFrame:ToOrientation()
+		hrp.CFrame = CFrame.new(hrp.Position) * CFrame.Angles(0, y, 0)
+		hum.CameraOffset = Vector3.new(1.75, 0, 0)
+	else
+		hum.AutoRotate = true
+		hum.CameraOffset = Vector3.new(0, 0, 0)
+	end
 end)
