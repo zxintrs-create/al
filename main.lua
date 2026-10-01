@@ -23,8 +23,8 @@ local function Notify(pesanTeks)
 	end)
 end
 
-Notify("Load script , 👑 VOID VAINLY STAR (Native Roblox Jump)")
-print("D-PAD VOID VAINLY STAR (Native Jump Ori Roblox) ✅")
+Notify("Load script , 👑 VOID VAINLY STAR (Fix Camera Drag)")
+print("D-PAD VOID VAINLY STAR (Fix Native Jump) ✅")
 
 local player = Players.LocalPlayer
 local camera = Workspace.CurrentCamera
@@ -129,19 +129,7 @@ end
 loadSettingsFromFile()
 
 ---------------------------------------------------------
--- FUNGSI ANTI-SLIP
----------------------------------------------------------
-local function isInputInsideGui(guiObject, inputPos)
-	local absPos = guiObject.AbsolutePosition
-	local absSize = guiObject.AbsoluteSize
-	return inputPos.X >= absPos.X 
-		and inputPos.X <= absPos.X + absSize.X 
-		and inputPos.Y >= absPos.Y 
-		and inputPos.Y <= absPos.Y + absSize.Y
-end
-
----------------------------------------------------------
--- D-PAD KIRI (WASD) DENGAN PENGAMAN Kematian/Reset
+-- D-PAD KIRI (WASD) DENGAN PERBAIKAN SENTUHAN KAMERA
 ---------------------------------------------------------
 local dpadContainer = Instance.new("Frame")
 dpadContainer.Name = "DPadContainer"
@@ -175,8 +163,9 @@ local btnS = createDpadBtn("BtnS", UDim2.new(0.33, 0, 0.66, 0), UDim2.new(0.34, 
 local btnA = createDpadBtn("BtnA", UDim2.new(0, 0, 0.33, 0), UDim2.new(0.34, 0, 0.34, 0), "◄")
 local btnD = createDpadBtn("BtnD", UDim2.new(0.66, 0, 0.33, 0), UDim2.new(0.34, 0, 0.34, 0), "►")
 
-local function bindDpadAntiSlip(btn, dir)
+local function bindDpadSafe(btn, dir)
 	local activeInput = nil
+	
 	btn.InputBegan:Connect(function(input)
 		if (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1) and not activeInput then
 			activeInput = input
@@ -184,29 +173,27 @@ local function bindDpadAntiSlip(btn, dir)
 			btn.BackgroundColor3 = Color3.fromRGB(0, 180, 255)
 		end
 	end)
-	UserInputService.InputChanged:Connect(function(input)
-		if input == activeInput and not isInputInsideGui(btn, input.Position) then
-			moveInputs[dir] = false
-			activeInput = nil
-			btn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
-		end
-	end)
-	btn.InputEnded:Connect(function(input)
+	
+	-- Menggunakan InputEnded khusus pada input spesifik tombol ini agar gesekan layar bebas tidak memutus tombol secara keliru
+	inputEndedConnection = function(input)
 		if input == activeInput then
 			moveInputs[dir] = false
 			activeInput = nil
 			btn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
 		end
-	end)
+	end
+	
+	btn.InputEnded:Connect(inputEndedConnection)
+	btn.InputStopped:Connect(inputEndedConnection)
 end
 
-bindDpadAntiSlip(btnW, "Forward")
-bindDpadAntiSlip(btnS, "Backward")
-bindDpadAntiSlip(btnA, "Left")
-bindDpadAntiSlip(btnD, "Right")
+bindDpadSafe(btnW, "Forward")
+bindDpadSafe(btnS, "Backward")
+bindDpadSafe(btnA, "Left")
+bindDpadSafe(btnD, "Right")
 
 ---------------------------------------------------------
--- TOMBOL JUMP NATIVE (MENGGUNAKAN FUNGSI BAWAAN ROBLOX)
+-- TOMBOL JUMP NATIVE AMAN DARI GESERAN KAMERA
 ---------------------------------------------------------
 local btnJump = Instance.new("ImageButton")
 btnJump.Name = "BtnJump"
@@ -234,13 +221,13 @@ jumpText.Font = Enum.Font.SourceSansBold
 jumpText.Parent = btnJump
 
 local activeJumpInput = nil
+
 btnJump.InputBegan:Connect(function(input)
 	if (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1) and not activeJumpInput then
 		activeJumpInput = input
 		holdingJump = true
 		btnJump.BackgroundColor3 = Color3.fromRGB(0, 180, 255)
 		
-		-- Memicu fungsi jump bawaan Roblox melalui kontroler player jika tersedia
 		local controls = getPlayerController()
 		if controls and type(controls.MoveJump) == "function" then
 			pcall(function()
@@ -250,22 +237,7 @@ btnJump.InputBegan:Connect(function(input)
 	end
 end)
 
-UserInputService.InputChanged:Connect(function(input)
-	if input == activeJumpInput and not isInputInsideGui(btnJump, input.Position) then
-		holdingJump = false
-		btnJump.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
-		activeJumpInput = nil
-		
-		local controls = getPlayerController()
-		if controls and type(controls.MoveJump) == "function" then
-			pcall(function()
-				controls:MoveJump(false)
-			end)
-		end
-	end
-end)
-
-btnJump.InputEnded:Connect(function(input)
+local function releaseJump(input)
 	if input == activeJumpInput then
 		holdingJump = false
 		btnJump.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
@@ -278,10 +250,13 @@ btnJump.InputEnded:Connect(function(input)
 			end)
 		end
 	end
-end)
+end
+
+btnJump.InputEnded:Connect(releaseJump)
+btnJump.InputStopped:Connect(releaseJump)
 
 ---------------------------------------------------------
--- TOMBOL AKSI (Q, E, R, F)
+-- TOMBOL AKSI (Q, E, R, F) AMAN
 ---------------------------------------------------------
 local actionContainer = Instance.new("Frame")
 actionContainer.Name = "ActionContainer"
@@ -309,6 +284,7 @@ local function createActionBtn(name, text, pos, keyCode, color)
 	corner.Parent = btn
 
 	local activeActionInput = nil
+	
 	btn.InputBegan:Connect(function(input)
 		if (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1) and not activeActionInput then
 			activeActionInput = input
@@ -317,22 +293,19 @@ local function createActionBtn(name, text, pos, keyCode, color)
 			btn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 		end
 	end)
-	UserInputService.InputChanged:Connect(function(input)
-		if input == activeActionInput and not isInputInsideGui(btn, input.Position) then
-			local VirtualInputManager = game:GetService("VirtualInputManager")
-			pcall(function() VirtualInputManager:SendKeyEvent(false, keyCode, false, game) end)
-			activeActionInput = nil
-			btn.BackgroundColor3 = color
-		end
-	end)
-	btn.InputEnded:Connect(function(input)
+	
+	local function releaseAction(input)
 		if input == activeActionInput then
 			local VirtualInputManager = game:GetService("VirtualInputManager")
 			pcall(function() VirtualInputManager:SendKeyEvent(false, keyCode, false, game) end)
 			activeActionInput = nil
 			btn.BackgroundColor3 = color
 		end
-	end)
+	end
+	
+	btn.InputEnded:Connect(releaseAction)
+	btn.InputStopped:Connect(releaseAction)
+	
 	return btn
 end
 
@@ -560,7 +533,6 @@ RunService.RenderStepped:Connect(function()
 		return
 	end
 
-	-- Jika tombol jump kustom sedang ditahan, terus panggil fungsi native
 	if holdingJump then
 		local controls = getPlayerController()
 		if controls and type(controls.MoveJump) == "function" then
@@ -568,7 +540,6 @@ RunService.RenderStepped:Connect(function()
 				controls:MoveJump(true)
 			end)
 		else
-			-- Fallback pengaman jika modul kontrol tidak terambil
 			hum.Jump = true
 		end
 	end
@@ -577,16 +548,16 @@ RunService.RenderStepped:Connect(function()
 	local x = (moveInputs.Left and -1 or 0) + (moveInputs.Right and 1 or 0)
 
 	if x ~= 0 or z ~= 0 then
-		hum:Move(Vector3.new(x, 0, z), true)
-	end
+		hum:Move(Vector3.new(x, 0, z), True)
+	End
 
-	if shiftLockEnabled then
+	If shiftLockEnabled then
 		hum.AutoRotate = false
-		local _, y, _ = camera.CFrame:ToOrientation()
-		hrp.CFrame = CFrame.new(hrp.Position) * CFrame.Angles(0, y, 0)
-		hum.CameraOffset = Vector3.new(1.75, 0, 0)
-	else
-		hum.AutoRotate = true
-		hum.CameraOffset = Vector3.new(0, 0, 0)
-	end
+		Local _, y, _ = camera.CFrame:ToOrientation()
+		Hrp.CFrame = CFrame.new(hrp.Position) * CFrame.Angles(0, y, 0)
+		Hum.CameraOffset = Vector3.new(1.75, 0, 0)
+	Else
+		Hum.AutoRotate = true
+		Hum.CameraOffset = Vector3.new(0, 0, 0)
+	End
 end)
