@@ -1,6 +1,5 @@
--- LocalScript: AutoParryVoidVainlyStar (ADVANCED VECTOR & CLASH SYNC)
--- ARSITEKTUR: Targeting Filter, Vector Prediction, Dynamic Hitbox, Clash Sync
--- OPTIMASI DEVICE: 80ms Ping, 30 FPS
+-- LocalScript: AutoParryVoidVainlyStar (STABLE & ROCK SOLID)
+-- FIX: KEMBALI KE FONDASI DASAR. DETEKSI BOLA AKURAT, TANPA MATEMATIKA RUMIT.
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -16,16 +15,10 @@ local humanoid = character:WaitForChild("Humanoid")
 local camera = Workspace.CurrentCamera
 
 ---
--- KONFIGURASI SPESIFIK DEVICE & GAME
-local CONFIG = {
-    PING_MS = 80,             -- Ping rata-rata user (80ms)
-    SAFETY_BUFFER = 3,        -- Buffer tambahan untuk hitbox dinamis
-    CLASH_BALL_DIST = 5,      -- Jarak bola ke player untuk masuk mode Clash
-    CLASH_PLAYER_DIST = 15,   -- Jarak player ke lawan untuk validasi Clash
-    MAX_CPS = 25,             -- Batas aman maksimal CPS (Anti-Kick)
-    MIN_CLASH_CPS = 15,       -- CPS minimal saat clash
-    CPS_COMPENSATION = 5,     -- Tambahan CPS untuk mengalahkan lawan
-}
+-- KONFIGURASI
+local BASE_RADIUS = 8          -- Radius dasar (studs)
+local SPEED_COMPENSATION = 0.05 -- Kompensasi kecepatan untuk 30 FPS / 80 Ping
+local MAX_RADIUS = 16          -- Batas maksimal radius agar tidak false-positive
 
 -- WARNA TEMA
 local COLOR_CYAN = Color3.fromRGB(0, 240, 255)
@@ -33,18 +26,12 @@ local COLOR_PURPLE = Color3.fromRGB(170, 60, 255)
 local COLOR_DEEP_MOON = Color3.fromRGB(18, 12, 35)
 local PARRY_FLASH_COLOR = Color3.fromRGB(255, 80, 180)
 
--- STATE TUNGGAL (DEFAULT OFF)
+-- STATE (DEFAULT OFF)
 local isParryEnabled = false 
 local isCameraEnabled = false
 local visualAuraPart = nil
 local cachedBall = nil
 local parriedBalls = {} 
-
--- CLASH ENGINE STATE
-local isClashSpamming = false
-local lastBallDir = nil
-local lastDeflectTime = 0
-local detectedOpponentCPS = 0
 
 -- Kamera Defaults
 local defaultMinZoom = 0.5
@@ -56,9 +43,9 @@ local defaultFOV = 70
 local function isAlive(obj) return obj and typeof(obj) == "Instance" and obj:IsDescendantOf(game) end
 local function isBallInWorkspace(ball)
     if not isAlive(ball) then return false end
-    local inWorkspace = false
-    pcall(function() inWorkspace = ball:IsDescendantOf(Workspace) end)
-    return inWorkspace
+    local inWS = false
+    pcall(function() inWS = ball:IsDescendantOf(Workspace) end)
+    return inWS
 end
 local function safeGetPosition(part)
     if not isBallInWorkspace(part) then return nil end
@@ -71,7 +58,7 @@ local function getCameraBall()
 end
 
 ---
--- 1. PEMBUATAN MENU UI (Diperbarui teksnya)
+-- 1. UI SETUP
 local playerGui = player:WaitForChild("PlayerGui")
 local screenGui = Instance.new("ScreenGui"); screenGui.Name = "AutoParryControlGui"; screenGui.ResetOnSpawn = false; screenGui.IgnoreGuiInset = true
 pcall(function() screenGui.Parent = playerGui end)
@@ -103,7 +90,7 @@ statusLabel.Font = Enum.Font.GothamMedium; statusLabel.TextSize = 15; statusLabe
 local statusTextStroke = Instance.new("UIStroke"); statusTextStroke.Color = Color3.fromRGB(0, 0, 0); statusTextStroke.Thickness = 1.5; statusTextStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual; statusTextStroke.Parent = statusLabel
 
 local infoLabel = Instance.new("TextLabel"); infoLabel.Size = UDim2.new(1, 0, 0, 20); infoLabel.Position = UDim2.new(0, 0, 0, 70)
-infoLabel.BackgroundTransparency = 1; infoLabel.TextColor3 = Color3.fromRGB(220, 220, 255); infoLabel.Text = "Vector Predict | Dynamic Hitbox | Clash"
+infoLabel.BackgroundTransparency = 1; infoLabel.TextColor3 = Color3.fromRGB(220, 220, 255); infoLabel.Text = "Stable Build | Safe Move | Hard Lock"
 infoLabel.Font = Enum.Font.Gotham; infoLabel.TextSize = 11; infoLabel.ZIndex = 3; infoLabel.Parent = mainFrame
 local infoTextStroke = Instance.new("UIStroke"); infoTextStroke.Color = Color3.fromRGB(0, 0, 0); infoTextStroke.Thickness = 1.2; infoTextStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual; infoTextStroke.Parent = infoLabel
 
@@ -126,13 +113,13 @@ local camBtnGradient = Instance.new("UIGradient"); camBtnGradient.Color = ColorS
 local camToggleTextStroke = Instance.new("UIStroke"); camToggleTextStroke.Color = Color3.fromRGB(0, 0, 0); camToggleTextStroke.Thickness = 1.5; camToggleTextStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual; camToggleTextStroke.Parent = camToggleBtn
 
 ---
--- 2. MANAGEMENT VISUAL AURA & APPLY STATE
+-- 2. VISUAL AURA & STATE MANAGEMENT
 local function destroyVisualAura() if isAlive(visualAuraPart) then pcall(function() visualAuraPart:Destroy() end) end; visualAuraPart = nil end
 local function updateVisualAura()
     if not isParryEnabled then destroyVisualAura() return end
     local char = player.Character; if not isAlive(char) then destroyVisualAura() return end  
     local hrp = char:FindFirstChild("HumanoidRootPart"); if not isAlive(hrp) then destroyVisualAura() return end  
-    local diameter = 12 * 2 -- Visual size fixed
+    local diameter = BASE_RADIUS * 2 
     if not isAlive(visualAuraPart) then  
         pcall(function()  
             local sphere = Instance.new("Part"); sphere.Name = "ParryRangeAura"; sphere.Shape = Enum.PartType.Ball; sphere.Material = Enum.Material.ForceField  
@@ -148,12 +135,12 @@ local function applyParryState()
     if isParryEnabled then
         toggleBtn.Text = "AUTO PARRY: ON"; toggleBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 150)
         btnGradient.Color = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 220, 240)), ColorSequenceKeypoint.new(1, Color3.fromRGB(150, 40, 240))})
-        statusLabel.Text = "Status: AKTIF (Advanced Sync)"; statusLabel.TextColor3 = COLOR_CYAN; updateVisualAura()
+        statusLabel.Text = "Status: AKTIF (Stable Build)"; statusLabel.TextColor3 = COLOR_CYAN; updateVisualAura()
     else
         toggleBtn.Text = "AUTO PARRY: OFF"; toggleBtn.BackgroundColor3 = Color3.fromRGB(100, 20, 60)
         btnGradient.Color = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(140, 30, 80)), ColorSequenceKeypoint.new(1, Color3.fromRGB(60, 15, 90))})
         statusLabel.Text = "Status: NONAKTIF (Hard Lock)"; statusLabel.TextColor3 = Color3.fromRGB(255, 90, 140); destroyVisualAura()
-        parriedBalls = {}; isClashSpamming = false -- Reset total
+        parriedBalls = {} -- Reset total saat OFF
     end
 end
 
@@ -176,39 +163,73 @@ toggleBtn.MouseButton1Click:Connect(function() if isParryEnabled then isParryEna
 camToggleBtn.MouseButton1Click:Connect(function() if isCameraEnabled then isCameraEnabled = false else isCameraEnabled = true end; applyCameraState() end)
 
 ---
--- 3. ADVANCED LOGIC: TARGETING, VECTOR, DYNAMIC HITBOX
-local function getBallData(ball)
-    local target = ball:GetAttribute("Target") or ball:GetAttribute("target")
-    local lastStriker = ball:GetAttribute("LastStruckBy") or ball:GetAttribute("Owner") or ball:GetAttribute("LastHit") or ball:GetAttribute("Striker")
-    if not target then local tVal = ball:FindFirstChild("Target") or ball:FindFirstChild("target"); if tVal and tVal:IsA("ObjectValue") then target = tVal.Value elseif tVal and tVal:IsA("StringValue") then target = tVal.Value end end
-    if not lastStriker then local sVal = ball:FindFirstChild("LastStruckBy") or ball:FindFirstChild("Owner") or ball:FindFirstChild("Striker"); if sVal and sVal:IsA("ObjectValue") then lastStriker = sVal.Value elseif sVal and sVal:IsA("StringValue") then lastStriker = sVal.Value end end
-    return target, lastStriker
-end
-
-local function isHeadingToPlayer(ball, hrpPos)
-    local vel = ball.AssemblyLinearVelocity; if vel.Magnitude < 10 then return false end 
-    local dirToPlayer = (hrpPos - ball.Position).Unit; local velDir = vel.Unit
-    return velDir:Dot(dirToPlayer) > 0.25 -- Disesuaikan untuk latensi 30 FPS
-end
-
-local function getDynamicRadius(velMag)
-    local V = velMag; local P_sec = CONFIG.PING_MS / 1000
-    local R = (V * P_sec) + CONFIG.SAFETY_BUFFER
-    return math.clamp(R, 6, 25) 
-end
-
-local function getWorkspaceBall()
-    if isBallInWorkspace(cachedBall) then return cachedBall end; cachedBall = nil  
-    local ballsFolder = Workspace:FindFirstChild("Balls") or Workspace:FindFirstChild("BallFolder")  
-    if isAlive(ballsFolder) then for _, child in ipairs(ballsFolder:GetChildren()) do if child:IsA("BasePart") or child:IsA("Model") then cachedBall = child; if isCameraEnabled then camera.CameraSubject = child end; return cachedBall end end end  
-    for _, child in ipairs(Workspace:GetChildren()) do if child:IsA("BasePart") or child:IsA("Model") then cachedBall = child; if isCameraEnabled then camera.CameraSubject = child end; return cachedBall end end  
+-- 3. DETEKSI BOLA YANG AKURAT (KEMBALI KE VERSI STABIL)
+local function isBallPart(obj)
+    if not isBallInWorkspace(obj) then return nil end
+    local targetPart = nil  
+    if obj:IsA("BasePart") then targetPart = obj  
+    elseif obj:IsA("Model") then targetPart = obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart") end  
+    if not isBallInWorkspace(targetPart) then return nil end  
+    
+    -- Cek bentuk bola
+    local isShapeBall = false  
+    pcall(function() if targetPart:IsA("Part") and targetPart.Shape == Enum.PartType.Ball then isShapeBall = true end end)  
+    if isShapeBall then return targetPart end  
+    
+    -- Cek nama (termasuk "Part" karena banyak game memakai nama ini)
+    local nameLower = targetPart.Name:lower()  
+    if nameLower == "ball" or nameLower:find("ball") or nameLower:find("blade") or nameLower:find("realball") or nameLower == "part" then return targetPart end  
+    
     return nil
 end
 
+local function getWorkspaceBall()
+    if isBallInWorkspace(cachedBall) then return cachedBall end
+    cachedBall = nil  
+    
+    -- Cari di folder khusus dulu
+    local ballsFolder = Workspace:FindFirstChild("Balls") or Workspace:FindFirstChild("BallFolder") or Workspace:FindFirstChild("Projectiles")
+    if isAlive(ballsFolder) then  
+        for _, child in ipairs(ballsFolder:GetChildren()) do  
+            local valid = isBallPart(child)  
+            if valid then 
+                cachedBall = valid 
+                if isCameraEnabled then camera.CameraSubject = valid end 
+                return cachedBall 
+            end  
+        end  
+    end  
+
+    -- Fallback: Cari di Workspace
+    for _, child in ipairs(Workspace:GetChildren()) do  
+        if child:IsA("BasePart") or child:IsA("Model") then
+            local valid = isBallPart(child)  
+            if valid then 
+                cachedBall = valid 
+                if isCameraEnabled then camera.CameraSubject = valid end 
+                return cachedBall 
+            end  
+        end  
+    end  
+    return nil
+end
+
+Workspace.DescendantAdded:Connect(function(descendant)
+    if isBallInWorkspace(descendant) then
+        local valid = isBallPart(descendant)
+        if valid then cachedBall = valid; if isCameraEnabled then camera.CameraSubject = valid end end
+    end
+end)
+
+Workspace.DescendantRemoving:Connect(function(descendant)
+    if cachedBall and (descendant == cachedBall or descendant == cachedBall.Parent or not isBallInWorkspace(cachedBall)) then cachedBall = nil end
+    if parriedBalls[descendant] then parriedBalls[descendant] = nil end
+end)
+
 ---
--- 4. CLASH ENGINE & EKSEKUSI
+-- 4. FUNGSI EKSEKUSI (HARD LOCK)
 local function fireGameParryRemotes()
-    if not isParryEnabled then return end 
+    if not isParryEnabled then return end -- HARD LOCK
     pcall(function()
         local remotes = ReplicatedStorage:FindFirstChild("Remotes") or ReplicatedStorage:FindFirstChild("Net")
         if remotes then
@@ -226,28 +247,13 @@ local function clickGuiObject(btn)
 end
 
 local function executeAutoClick()
-    if not isParryEnabled then return end
+    if not isParryEnabled then return end -- HARD LOCK
     if VirtualInputManager then pcall(function() VirtualInputManager:SendKeyEvent(Enum.KeyCode.F, true, false, game); task.wait(0.0001); VirtualInputManager:SendKeyEvent(Enum.KeyCode.F, false, false, game) end) end  
     local curPlayerGui = player:FindFirstChild("PlayerGui"); if isAlive(curPlayerGui) then local ib = curPlayerGui:FindFirstChild("INPUT_BUTTONS") or curPlayerGui:FindFirstChild("MobileUI"); if isAlive(ib) then local tf = ib:FindFirstChild("TouchFrame") or ib; local db = tf:FindFirstChild("Deflect_Button") or tf:FindFirstChild("ParryButton"); if isAlive(db) then clickGuiObject(db); local ibtn = db:FindFirstChild("Button") or db:FindFirstChildWhichIsA("GuiButton"); if ibtn then clickGuiObject(ibtn) end end end end
 end
 
-local function runClashSpam(targetCPS)
-    if isClashSpamming then return end
-    isClashSpamming = true
-    task.spawn(function()
-        local interval = 1 / targetCPS
-        while isClashSpamming and isParryEnabled do
-            fireGameParryRemotes()
-            executeAutoClick()
-            task.wait(interval)
-        end
-        isClashSpamming = false
-    end)
-end
-local function stopClashSpam() isClashSpamming = false end
-
 ---
--- 5. MAIN LOOP (30 FPS OPTIMIZED)
+-- 5. MAIN LOOP (STABIL & AMAN)
 player.CharacterAdded:Connect(function(newCharacter) character = newCharacter; humanoid = newCharacter:WaitForChild("Humanoid"); task.wait(0.2); applyParryState(); applyCameraState() end)
 
 RunService.PreRender:Connect(function()
@@ -257,65 +263,39 @@ RunService.PreRender:Connect(function()
 end)
 
 RunService.Heartbeat:Connect(function()
-    if not isParryEnabled then return end  
+    if not isParryEnabled then return end -- HARD LOCK UTAMA
     local char = player.Character; if not isAlive(char) then return end  
     local hrp = char:FindFirstChild("HumanoidRootPart"); if not isAlive(hrp) then return end  
     if not isAlive(visualAuraPart) then updateVisualAura() end  
     
-    local ball = getWorkspaceBall(); if not isBallInWorkspace(ball) then return end  
-    
-    -- 1. TARGETING FILTER
-    local target, lastStriker = getBallData(ball)
-    if target and target ~= player and target ~= player.Character then return end -- Idle jika bukan target
+    local ball = getWorkspaceBall(); if not isBallInWorkspace(ball) then 
+        if isAlive(visualAuraPart) then visualAuraPart.Color = COLOR_CYAN:Lerp(COLOR_PURPLE, (math.sin(tick() * 1.5) + 1) / 2) end
+        return 
+    end  
     
     local ballPos = safeGetPosition(ball); local hrpPos = safeGetPosition(hrp); if not ballPos or not hrpPos then return end  
-
-    -- 2. VECTOR PREDICTION
-    if not isHeadingToPlayer(ball, hrpPos) then return end
-    
-    -- 3. DYNAMIC HITBOX SCALER
-    local velMag = ball.AssemblyLinearVelocity.Magnitude
-    local dynamicRadius = getDynamicRadius(velMag)
     local distance = (ballPos - hrpPos).Magnitude  
 
-    -- 4. CLASH SYNC & EXECUTION
-    local lastStrikerChar = nil
-    if lastStriker then
-        if typeof(lastStriker) == "Instance" and lastStriker:IsA("Player") then lastStrikerChar = lastStriker.Character
-        elseif typeof(lastStriker) == "string" then local p = Players:FindFirstChild(lastStriker); if p then lastStrikerChar = p.Character end end
-    end
-    local lastStrikerHRP = lastStrikerChar and lastStrikerChar:FindFirstChild("HumanoidRootPart")
-    
-    local isClashing = false
-    if lastStrikerHRP and distance < CONFIG.CLASH_BALL_DIST then
-        if (lastStrikerHRP.Position - hrpPos).Magnitude < CONFIG.CLASH_PLAYER_DIST then isClashing = true end
-    end
-    
-    if isClashing then
-        -- Track CPS via ball deflection (pantulan)
-        local currentDir = ball.AssemblyLinearVelocity.Unit
-        if lastBallDir and currentDir:Dot(lastBallDir) < -0.5 then
-            local now = tick(); local dt = now - lastDeflectTime
-            if dt > 0.05 and dt < 1.0 then detectedOpponentCPS = 1 / dt; lastDeflectTime = now end
+    -- 🔥 RADIUS DINAMIS SEDERHANA (KOMPENSASI 30 FPS & PING) 🔥
+    -- Jika bola cepat, radius membesar. Jika lambat, radius mengecil.
+    local velMag = ball.AssemblyLinearVelocity.Magnitude
+    local dynamicRadius = BASE_RADIUS + (velMag * SPEED_COMPENSATION)
+    dynamicRadius = math.clamp(dynamicRadius, BASE_RADIUS, MAX_RADIUS)
+
+    if distance <= dynamicRadius then  
+        if not parriedBalls[ball] then
+            parriedBalls[ball] = true
+            if isAlive(visualAuraPart) then visualAuraPart.Color = PARRY_FLASH_COLOR end  
+            
+            task.spawn(function()
+                if not isParryEnabled then return end -- CEK ULANG DI DALAM THREAD
+                fireGameParryRemotes()
+                executeAutoClick()
+            end)
         end
-        lastBallDir = currentDir
-        
-        local targetCPS = math.min(detectedOpponentCPS + CONFIG.CPS_COMPENSATION, CONFIG.MAX_CPS)
-        targetCPS = math.max(targetCPS, CONFIG.MIN_CLASH_CPS)
-        runClashSpam(targetCPS)
     else
-        stopClashSpam(); lastBallDir = nil
-        
-        if distance <= dynamicRadius then
-            if not parriedBalls[ball] then
-                parriedBalls[ball] = true
-                if isAlive(visualAuraPart) then visualAuraPart.Color = PARRY_FLASH_COLOR end
-                task.spawn(function() if not isParryEnabled then return end; fireGameParryRemotes(); executeAutoClick() end)
-            end
-        else
-            if parriedBalls[ball] then parriedBalls[ball] = nil end
-            if isAlive(visualAuraPart) then visualAuraPart.Color = COLOR_CYAN:Lerp(COLOR_PURPLE, (math.sin(tick() * 1.5) + 1) / 2) end
-        end
+        if parriedBalls[ball] then parriedBalls[ball] = nil end
+        if isAlive(visualAuraPart) then visualAuraPart.Color = COLOR_CYAN:Lerp(COLOR_PURPLE, (math.sin(tick() * 1.5) + 1) / 2) end
     end
 end)
 
